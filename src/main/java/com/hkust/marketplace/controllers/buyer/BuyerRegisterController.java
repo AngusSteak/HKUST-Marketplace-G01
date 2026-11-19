@@ -1,5 +1,6 @@
 package com.hkust.marketplace.controllers.buyer;
 
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
@@ -61,7 +62,7 @@ public class BuyerRegisterController {
             return;
         }
 
-        User user = new User(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.BUYER);
+        User user = new Buyer(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.BUYER);
         if (residence != null) {
             user.setResidenceHall(residence);
         }
