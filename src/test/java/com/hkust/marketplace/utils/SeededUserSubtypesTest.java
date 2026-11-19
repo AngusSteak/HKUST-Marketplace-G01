@@ -34,18 +34,18 @@ class SeededUserSubtypesTest {
     }
 
     @Test
-    void seededRoleDataIsReadableThroughTheUserBaseReference() {
-        User alice = store.findUser("alice");
+    void seededRoleDataIsReadableThroughSubtypeReferences() {
+        Buyer alice = assertInstanceOf(Buyer.class, store.findUser("alice"));
         assertEquals("Hall 3", alice.getResidenceHall());
 
-        User bob = store.findUser("bob");
+        Buyer bob = assertInstanceOf(Buyer.class, store.findUser("bob"));
         assertEquals("Off-campus", bob.getResidenceHall());
 
-        User charlie = store.findUser("charlie");
+        Seller charlie = assertInstanceOf(Seller.class, store.findUser("charlie"));
         assertEquals("Final year CSE student selling textbooks and gadgets.", charlie.getBio());
         assertEquals("Library", charlie.getPreferredMeetup());
 
-        User diana = store.findUser("diana");
+        Seller diana = assertInstanceOf(Seller.class, store.findUser("diana"));
         assertEquals("Selling furniture and kitchen items before graduation.", diana.getBio());
         assertEquals("Hall 5 Lobby", diana.getPreferredMeetup());
     }

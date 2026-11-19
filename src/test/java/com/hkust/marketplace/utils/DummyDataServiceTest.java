@@ -1,6 +1,6 @@
 package com.hkust.marketplace.utils;
 
-import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.UserRole;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +18,7 @@ class DummyDataServiceTest {
         assertTrue(store.getAllDeals().isEmpty());
         assertTrue(store.getAllReviews().isEmpty());
 
-        store.registerUser(new User("carol", "Carol Cheung", PasswordHasher.hash("Password1"), UserRole.BUYER));
+        store.registerUser(new Buyer("carol", "Carol Cheung", PasswordHasher.hash("Password1"), UserRole.BUYER));
 
         assertTrue(store.usernameExists("carol"));
         assertTrue(otherStore.getAllUsers().isEmpty());

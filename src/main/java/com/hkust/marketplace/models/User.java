@@ -1,34 +1,33 @@
 package com.hkust.marketplace.models;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
+ * Abstract base for every marketplace account. Carries only the identity and credential
+ * state common to Buyer, Seller and Admin, plus the role discriminator used for portal
+ * routing (ADR-0001). Role-specific state lives on the subtypes.
  * Simple in-memory user model (no persistence).
  * TODO: Replace with real entity + repository when backend is added.
  */
-public class User {
+public abstract class User {
     private String username;
     private String fullName;
     private String passwordHash; // BCrypt hash produced by PasswordHasher; plaintext is never stored
-    private UserRole role;
-    private String residenceHall;   // Buyer optional
-    private String bio;             // Seller optional
-    private String preferredMeetup; // Seller optional
+    private final UserRole role;
+    // Activity 1: isActive
     private boolean active = true;
+    // Activity 1: registeredDate
     private LocalDateTime createdAt;
     private double averageRating;   // For sellers
     private int ratingCount;
 
-    public User() {
-        this.createdAt = LocalDateTime.now();
-    }
-
-    public User(String username, String fullName, String password, UserRole role) {
-        this();
+    protected User(String username, String fullName, String password, UserRole role) {
         this.username = username;
         this.fullName = fullName;
         this.passwordHash = password; // Callers pass an already-hashed password (see PasswordHasher)
-        this.role = role;
+        this.role = Objects.requireNonNull(role, "role must not be null");
+        this.createdAt = LocalDateTime.now();
     }
 
     // Getters & Setters
@@ -42,16 +41,6 @@ public class User {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 
     public UserRole getRole() { return role; }
-    public void setRole(UserRole role) { this.role = role; }
-
-    public String getResidenceHall() { return residenceHall; }
-    public void setResidenceHall(String residenceHall) { this.residenceHall = residenceHall; }
-
-    public String getBio() { return bio; }
-    public void setBio(String bio) { this.bio = bio; }
-
-    public String getPreferredMeetup() { return preferredMeetup; }
-    public void setPreferredMeetup(String preferredMeetup) { this.preferredMeetup = preferredMeetup; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

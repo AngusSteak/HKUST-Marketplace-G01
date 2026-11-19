@@ -17,29 +17,27 @@ class UserRegistrationSubtypeTest {
     @Test
     void registeringABuyerStoresABuyerRetrievableThroughTheUserBaseType() {
         DummyDataService store = new DummyDataService();
-        User buyer = new Buyer("alice", "Alice Chan", PASSWORD_HASH, UserRole.BUYER);
+        Buyer buyer = new Buyer("alice", "Alice Chan", PASSWORD_HASH, UserRole.BUYER);
         buyer.setResidenceHall("Hall 3");
 
         store.registerUser(buyer);
 
-        User stored = store.findUser("ALICE");
+        Buyer stored = assertInstanceOf(Buyer.class, store.findUser("ALICE"));
         assertSame(buyer, stored);
-        assertInstanceOf(Buyer.class, stored);
         assertEquals("Hall 3", stored.getResidenceHall());
     }
 
     @Test
     void registeringASellerStoresASellerRetrievableThroughTheUserBaseType() {
         DummyDataService store = new DummyDataService();
-        User seller = new Seller("charlie", "Charlie Lee", PASSWORD_HASH, UserRole.SELLER);
+        Seller seller = new Seller("charlie", "Charlie Lee", PASSWORD_HASH, UserRole.SELLER);
         seller.setBio("Final year CSE student.");
         seller.setPreferredMeetup("Library");
 
         store.registerUser(seller);
 
-        User stored = store.findUser("CHARLIE");
+        Seller stored = assertInstanceOf(Seller.class, store.findUser("CHARLIE"));
         assertSame(seller, stored);
-        assertInstanceOf(Seller.class, stored);
         assertEquals("Final year CSE student.", stored.getBio());
         assertEquals("Library", stored.getPreferredMeetup());
     }

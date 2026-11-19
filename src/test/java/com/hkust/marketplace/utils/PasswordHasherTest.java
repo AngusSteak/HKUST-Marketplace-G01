@@ -1,5 +1,6 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ class PasswordHasherTest {
     @Test
     void registeredUserStoresOnlyABcryptHashThatVerifiesTheRightPassword() {
         DummyDataService store = new DummyDataService();
-        store.registerUser(new User("carol", "Carol Cheung",
+        store.registerUser(new Buyer("carol", "Carol Cheung",
                 PasswordHasher.hash("Password1"), UserRole.BUYER));
 
         User stored = store.findUser("carol");

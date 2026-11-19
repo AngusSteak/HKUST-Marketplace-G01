@@ -6,11 +6,14 @@ package com.hkust.marketplace.models;
  */
 public class Admin extends User {
 
-    public Admin() {
-        super();
+    public Admin(String username, String fullName, String passwordHash, UserRole role) {
+        super(username, fullName, passwordHash, requireAdminRole(role));
     }
 
-    public Admin(String username, String fullName, String passwordHash, UserRole role) {
-        super(username, fullName, passwordHash, role);
+    private static UserRole requireAdminRole(UserRole role) {
+        if (role != UserRole.ADMIN) {
+            throw new IllegalArgumentException("Admin accounts require role ADMIN, got " + role);
+        }
+        return UserRole.ADMIN;
     }
 }
