@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
  */
 public class DummyDataService {
 
-    private static final DummyDataService INSTANCE = new DummyDataService();
+    private static final DummyDataService INSTANCE = createSeededInstance();
 
     private final Map<String, User> users = new LinkedHashMap<>();
     private final Map<String, Listing> listings = new LinkedHashMap<>();
@@ -60,8 +60,17 @@ public class DummyDataService {
             "New", "Like New", "Used", "For Parts"
     );
 
-    private DummyDataService() {
-        seedData();
+    /**
+     * Creates an empty store with no demo data. Visible for tests so each test can
+     * work on an isolated instance; application code must use {@link #getInstance()}.
+     */
+    DummyDataService() {
+    }
+
+    private static DummyDataService createSeededInstance() {
+        DummyDataService store = new DummyDataService();
+        store.seedData();
+        return store;
     }
 
     public static DummyDataService getInstance() {
