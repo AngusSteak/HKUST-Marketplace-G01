@@ -1,5 +1,6 @@
 package com.hkust.marketplace.controllers.buyer;
 
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Notification;
@@ -360,8 +361,8 @@ public class BuyerDashboardController {
         ComboBox<String> residence = new ComboBox<>(FXCollections.observableArrayList(
                 "Hall 1", "Hall 2", "Hall 3", "Hall 4", "Hall 5",
                 "Hall 6", "Hall 7", "Hall 8", "Hall 9", "UG Hall 1", "UG Hall 2", "Off-campus"));
-        if (user != null && user.getResidenceHall() != null) {
-            residence.setValue(user.getResidenceHall());
+        if (user instanceof Buyer buyer && buyer.getResidenceHall() != null) {
+            residence.setValue(buyer.getResidenceHall());
         }
 
         Button saveBtn = new Button("Save Changes");

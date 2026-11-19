@@ -1,7 +1,7 @@
-# HKUST Marketplace — Frontend Demo / Skeleton
+# HKUST Marketplace — JavaFX Demo
 
-A complete **JavaFX + Maven** frontend-only demo of the HKUST Campus Marketplace platform.  
-Designed as a **skeleton / starter code** for students to implement the full project requirements (backend, persistence, real business logic, etc.).
+A **JavaFX + Maven** desktop demo of the HKUST Campus Marketplace platform.  
+All data is in-memory (no database, no network) and resets on restart. The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
 
 ## Prerequisites
 
@@ -55,9 +55,26 @@ mvn clean javafx:run
 | Seller | `charlie` | `password1`|
 | Seller | `diana`   | `password1`|
 
-## Features Implemented (UI Only)
+## Security State (Demo)
+
+- Passwords are stored only as **BCrypt hashes** (jBCrypt, cost factor 12), produced by `PasswordHasher`. `User.passwordHash` is the only credential field; plaintext passwords are never stored in a `User`, logged, or compared directly. Seeding hashes the demo passwords at startup, buyer/seller registration hashes the chosen password, and every login verifies through `PasswordHasher.verify`.
+- Buyer and Seller registration enforces exactly these password-strength rules:
+  - The password is not empty.
+  - The password is at least 8 characters long.
+  - The password contains at least one uppercase letter, at least one lowercase letter, and at least one digit.
+- Deactivated accounts (`active = false`) are refused at the login gate of all three portals with an explicit account-deactivated message. The Admin dashboard's activate/deactivate toggle flips the same flag.
+- Portal access checks run in the UI layer only. There is no backend in this demo, so API-layer RBAC is still to be built.
+
+> **Demo-only credentials:** `admin / admin123` and the buyer/seller accounts use `password1`. These are hashed at seed time like any other credential, and they exist solely for the demo walkthrough — they bypass registration validation and must not be reused in a real deployment.
+
+## Features Implemented (Demo)
+
+All state lives in `DummyDataService` and is lost when the application closes.
 
 ### Shared
+- Abstract `User` base with `Buyer` / `Seller` / `Admin` subtypes; each account holds exactly one fixed role, and usernames are unique across all roles
+- BCrypt-hashed credentials and a shared login gate that refuses wrong-portal and deactivated accounts on every portal
+- Seller ratings derived from non-hidden reviews; "No rating yet" is shown when no visible reviews exist
 - Welcome screen with role selection (Buyer / Seller / Admin)
 - HKUST branding (logo + colour palette: deep blue `#003974` + gold `#A68137`)
 - Modern card-based UI, icons (Ikonli), consistent sidebars & top bars
@@ -115,13 +132,12 @@ You need a normal desktop session (not a headless server). On Windows this is us
 ```
 Copy the lines that start with `Exception in thread` or `Caused by`.
 
-## For Students — Next Steps (Backend)
+## Next Steps (Backend)
 
-1. Replace `DummyDataService` with real repositories / REST clients
-2. Hash passwords (BCrypt) — never store plaintext
-3. Add JWT / session auth and enforce RBAC on the API
-4. Persist data in a database
-5. Photo upload, chat, auto-return for borrowed items, etc.
+1. Replace `DummyDataService` with real repositories / REST clients backed by a database — the current store is in-memory only
+2. Keep credentials BCrypt-hashed through `PasswordHasher` when persistence lands; the demo seed hashes the demo passwords at startup
+3. Replace the in-memory `SessionManager` with real session tokens and enforce RBAC at the API layer (the current portal checks are demo-only UI gates)
+4. Photo upload, chat, auto-return for borrowed items, etc.
 
 ## Licence
 

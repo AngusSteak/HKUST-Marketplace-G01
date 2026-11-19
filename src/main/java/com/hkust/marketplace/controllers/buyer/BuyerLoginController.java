@@ -3,6 +3,7 @@ package com.hkust.marketplace.controllers.buyer;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.LoginGate;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.fxml.FXML;
@@ -30,26 +31,16 @@ public class BuyerLoginController {
         }
 
         User user = DummyDataService.getInstance().findUser(username);
-        if (user == null) {
-            showError("User not found. Please check your username.");
-            return;
+        switch (LoginGate.check(user, UserRole.BUYER, password)) {
+            case USER_NOT_FOUND -> showError("User not found. Please check your username.");
+            case WRONG_PORTAL -> showError("This account is not a Buyer account. Please use the correct portal.");
+            case WRONG_PASSWORD -> showError("Incorrect password. Please try again.");
+            case DISABLED -> showError("This account has been deactivated. Contact admin.");
+            case OK -> {
+                SessionManager.login(user);
+                SceneManager.showBuyerDashboard();
+            }
         }
-        if (user.getRole() != UserRole.BUYER) {
-            showError("This account is not a Buyer account. Please use the correct portal.");
-            return;
-        }
-        // Demo: plaintext comparison. TODO: use hashed password verification
-        if (!user.getPasswordHash().equals(password)) {
-            showError("Incorrect password. Please try again.");
-            return;
-        }
-        if (!user.isActive()) {
-            showError("This account has been deactivated. Contact admin.");
-            return;
-        }
-
-        SessionManager.login(user);
-        SceneManager.showBuyerDashboard();
     }
 
     private void showError(String msg) {

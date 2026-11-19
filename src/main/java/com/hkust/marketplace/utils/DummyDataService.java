@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
  */
 public class DummyDataService {
 
-    private static final DummyDataService INSTANCE = new DummyDataService();
+    private static final DummyDataService INSTANCE = createSeededInstance();
 
     private final Map<String, User> users = new LinkedHashMap<>();
     private final Map<String, Listing> listings = new LinkedHashMap<>();
@@ -60,42 +60,51 @@ public class DummyDataService {
             "New", "Like New", "Used", "For Parts"
     );
 
-    private DummyDataService() {
-        seedData();
+    /**
+     * Creates an empty store with no demo data. Visible for tests so each test can
+     * work on an isolated instance; application code must use {@link #getInstance()}.
+     */
+    DummyDataService() {
+    }
+
+    private static DummyDataService createSeededInstance() {
+        DummyDataService store = new DummyDataService();
+        store.seedData();
+        return store;
     }
 
     public static DummyDataService getInstance() {
         return INSTANCE;
     }
 
-    private void seedData() {
+    /**
+     * Populates this store with the demo users, listings, deals and reviews. Visible for
+     * tests so they can seed an isolated instance instead of sharing the singleton.
+     */
+    void seedData() {
         // Admin
-        User admin = new User("admin", "System Admin", "admin123", UserRole.ADMIN);
+        Admin admin = new Admin("admin", "System Admin", PasswordHasher.hash("admin123"), UserRole.ADMIN);
         admin.setFullName("HKUST Marketplace Admin");
         users.put("admin", admin);
 
         // Sample buyers
-        User buyer1 = new User("alice", "Alice Chan", "password1", UserRole.BUYER);
+        Buyer buyer1 = new Buyer("alice", "Alice Chan", PasswordHasher.hash("password1"), UserRole.BUYER);
         buyer1.setResidenceHall("Hall 3");
         users.put("alice", buyer1);
 
-        User buyer2 = new User("bob", "Bob Wong", "password1", UserRole.BUYER);
+        Buyer buyer2 = new Buyer("bob", "Bob Wong", PasswordHasher.hash("password1"), UserRole.BUYER);
         buyer2.setResidenceHall("Off-campus");
         users.put("bob", buyer2);
 
         // Sample sellers
-        User seller1 = new User("charlie", "Charlie Lee", "password1", UserRole.SELLER);
+        Seller seller1 = new Seller("charlie", "Charlie Lee", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller1.setBio("Final year CSE student selling textbooks and gadgets.");
         seller1.setPreferredMeetup("Library");
-        seller1.setAverageRating(4.7);
-        seller1.setRatingCount(12);
         users.put("charlie", seller1);
 
-        User seller2 = new User("diana", "Diana Ng", "password1", UserRole.SELLER);
+        Seller seller2 = new Seller("diana", "Diana Ng", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller2.setBio("Selling furniture and kitchen items before graduation.");
         seller2.setPreferredMeetup("Hall 5 Lobby");
-        seller2.setAverageRating(4.3);
-        seller2.setRatingCount(8);
         users.put("diana", seller2);
 
         // Sample listings
@@ -186,7 +195,9 @@ public class DummyDataService {
     }
 
     public void registerUser(User user) {
-        users.put(user.getUsername().toLowerCase(), user);
+        // Usernames are unique across roles (ADR-0003): first registration wins, so a
+        // duplicate can never replace the existing account.
+        users.putIfAbsent(user.getUsername().toLowerCase(), user);
     }
 
     public Collection<User> getAllUsers() {
@@ -279,6 +290,22 @@ public class DummyDataService {
         return reviews.stream()
                 .filter(r -> r.getSellerUsername().equalsIgnoreCase(username) && !r.isHidden())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Average rating over the seller's visible (non-hidden) reviews. Derived at read time
+     * (ADR-0002); empty when there are no visible reviews, so "no rating yet" stays
+     * distinguishable from a real 0.0 rating.
+     */
+    public OptionalDouble getSellerAverageRating(String sellerUsername) {
+        return getReviewsForSeller(sellerUsername).stream()
+                .mapToInt(Review::getRating)
+                .average();
+    }
+
+    /** Number of visible (non-hidden) reviews backing {@link #getSellerAverageRating}. */
+    public int getSellerVisibleReviewCount(String sellerUsername) {
+        return getReviewsForSeller(sellerUsername).size();
     }
 
     public List<Review> getAllReviews() {
