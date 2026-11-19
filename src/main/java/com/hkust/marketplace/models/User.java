@@ -19,8 +19,6 @@ public abstract class User {
     private boolean active = true;
     // Activity 1: registeredDate
     private LocalDateTime createdAt;
-    private double averageRating;   // For sellers
-    private int ratingCount;
 
     protected User(String username, String fullName, String password, UserRole role) {
         this.username = username;
@@ -47,12 +45,6 @@ public abstract class User {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    public double getAverageRating() { return averageRating; }
-    public void setAverageRating(double averageRating) { this.averageRating = averageRating; }
-
-    public int getRatingCount() { return ratingCount; }
-    public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
 
     @Override
     public String toString() {

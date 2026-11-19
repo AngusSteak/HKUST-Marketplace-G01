@@ -18,6 +18,7 @@ import javafx.scene.layout.*;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.OptionalDouble;
 
 public class SellerDashboardController {
 
@@ -228,15 +229,21 @@ public class SellerDashboardController {
         root.setPadding(new Insets(4));
 
         User user = SessionManager.getCurrentUser();
+        String sellerUsername = user != null ? user.getUsername() : "";
         List<Listing> myListings = DummyDataService.getInstance()
-                .getListingsBySeller(user != null ? user.getUsername() : "");
+                .getListingsBySeller(sellerUsername);
 
         // Metric cards
+        OptionalDouble average = DummyDataService.getInstance().getSellerAverageRating(sellerUsername);
+        int reviewCount = DummyDataService.getInstance().getSellerVisibleReviewCount(sellerUsername);
+        String averageRating = average.isPresent()
+                ? String.format("%.1f", average.getAsDouble())
+                : "No rating yet";
         HBox metrics = new HBox(16);
         metrics.getChildren().addAll(
                 metricCard("Listings", String.valueOf(myListings.size()), "#003974"),
-                metricCard("Avg Rating", String.format("%.1f", user != null ? user.getAverageRating() : 0), "#A68137"),
-                metricCard("Reviews", String.valueOf(user != null ? user.getRatingCount() : 0), "#2e7d32"),
+                metricCard("Avg Rating", averageRating, "#A68137"),
+                metricCard("Reviews", String.valueOf(reviewCount), "#2e7d32"),
                 metricCard("Views (demo)", "128", "#1565c0")
         );
         root.getChildren().add(metrics);

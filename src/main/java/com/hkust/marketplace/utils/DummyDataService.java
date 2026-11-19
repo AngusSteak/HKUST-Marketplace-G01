@@ -100,15 +100,11 @@ public class DummyDataService {
         Seller seller1 = new Seller("charlie", "Charlie Lee", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller1.setBio("Final year CSE student selling textbooks and gadgets.");
         seller1.setPreferredMeetup("Library");
-        seller1.setAverageRating(4.7);
-        seller1.setRatingCount(12);
         users.put("charlie", seller1);
 
         Seller seller2 = new Seller("diana", "Diana Ng", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller2.setBio("Selling furniture and kitchen items before graduation.");
         seller2.setPreferredMeetup("Hall 5 Lobby");
-        seller2.setAverageRating(4.3);
-        seller2.setRatingCount(8);
         users.put("diana", seller2);
 
         // Sample listings
@@ -294,6 +290,22 @@ public class DummyDataService {
         return reviews.stream()
                 .filter(r -> r.getSellerUsername().equalsIgnoreCase(username) && !r.isHidden())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Average rating over the seller's visible (non-hidden) reviews. Derived at read time
+     * (ADR-0002); empty when there are no visible reviews, so "no rating yet" stays
+     * distinguishable from a real 0.0 rating.
+     */
+    public OptionalDouble getSellerAverageRating(String sellerUsername) {
+        return getReviewsForSeller(sellerUsername).stream()
+                .mapToInt(Review::getRating)
+                .average();
+    }
+
+    /** Number of visible (non-hidden) reviews backing {@link #getSellerAverageRating}. */
+    public int getSellerVisibleReviewCount(String sellerUsername) {
+        return getReviewsForSeller(sellerUsername).size();
     }
 
     public List<Review> getAllReviews() {
