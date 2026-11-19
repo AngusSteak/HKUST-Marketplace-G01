@@ -368,10 +368,10 @@ public class SellerDashboardController {
         TextField name = new TextField(user != null ? user.getFullName() : "");
         PasswordField pass = new PasswordField();
         pass.setPromptText("New password (optional)");
-        TextArea bio = new TextArea(user != null && user.getBio() != null ? user.getBio() : "");
+        TextArea bio = new TextArea(user instanceof Seller seller && seller.getBio() != null ? seller.getBio() : "");
         bio.setPrefRowCount(3);
         ComboBox<String> meetup = new ComboBox<>(FXCollections.observableArrayList(DummyDataService.HKUST_LOCATIONS));
-        if (user != null && user.getPreferredMeetup() != null) meetup.setValue(user.getPreferredMeetup());
+        if (user instanceof Seller seller && seller.getPreferredMeetup() != null) meetup.setValue(seller.getPreferredMeetup());
         meetup.setMaxWidth(Double.MAX_VALUE);
 
         Button save = new Button("Save Changes");

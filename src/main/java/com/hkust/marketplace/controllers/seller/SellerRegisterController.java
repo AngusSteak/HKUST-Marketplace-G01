@@ -1,7 +1,6 @@
 package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.models.Seller;
-import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.PasswordHasher;
@@ -43,7 +42,7 @@ public class SellerRegisterController {
         if (!"OK".equals(pwdCheck)) { showError(pwdCheck); return; }
         if (!password.equals(confirm)) { showError("Passwords do not match."); return; }
 
-        User user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);
+        Seller user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);
         if (meetupCombo.getValue() != null) user.setPreferredMeetup(meetupCombo.getValue());
         if (bioArea.getText() != null && !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());
         DummyDataService.getInstance().registerUser(user);
