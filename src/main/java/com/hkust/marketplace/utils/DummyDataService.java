@@ -77,30 +77,34 @@ public class DummyDataService {
         return INSTANCE;
     }
 
-    private void seedData() {
+    /**
+     * Populates this store with the demo users, listings, deals and reviews. Visible for
+     * tests so they can seed an isolated instance instead of sharing the singleton.
+     */
+    void seedData() {
         // Admin
-        User admin = new User("admin", "System Admin", "admin123", UserRole.ADMIN);
+        User admin = new User("admin", "System Admin", PasswordHasher.hash("admin123"), UserRole.ADMIN);
         admin.setFullName("HKUST Marketplace Admin");
         users.put("admin", admin);
 
         // Sample buyers
-        User buyer1 = new User("alice", "Alice Chan", "password1", UserRole.BUYER);
+        User buyer1 = new User("alice", "Alice Chan", PasswordHasher.hash("password1"), UserRole.BUYER);
         buyer1.setResidenceHall("Hall 3");
         users.put("alice", buyer1);
 
-        User buyer2 = new User("bob", "Bob Wong", "password1", UserRole.BUYER);
+        User buyer2 = new User("bob", "Bob Wong", PasswordHasher.hash("password1"), UserRole.BUYER);
         buyer2.setResidenceHall("Off-campus");
         users.put("bob", buyer2);
 
         // Sample sellers
-        User seller1 = new User("charlie", "Charlie Lee", "password1", UserRole.SELLER);
+        User seller1 = new User("charlie", "Charlie Lee", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller1.setBio("Final year CSE student selling textbooks and gadgets.");
         seller1.setPreferredMeetup("Library");
         seller1.setAverageRating(4.7);
         seller1.setRatingCount(12);
         users.put("charlie", seller1);
 
-        User seller2 = new User("diana", "Diana Ng", "password1", UserRole.SELLER);
+        User seller2 = new User("diana", "Diana Ng", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller2.setBio("Selling furniture and kitchen items before graduation.");
         seller2.setPreferredMeetup("Hall 5 Lobby");
         seller2.setAverageRating(4.3);

@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 public class User {
     private String username;
     private String fullName;
-    private String passwordHash; // In real app: never store plaintext
+    private String passwordHash; // BCrypt hash produced by PasswordHasher; plaintext is never stored
     private UserRole role;
     private String residenceHall;   // Buyer optional
     private String bio;             // Seller optional
@@ -27,7 +27,7 @@ public class User {
         this();
         this.username = username;
         this.fullName = fullName;
-        this.passwordHash = password; // Demo only – in production hash it!
+        this.passwordHash = password; // Callers pass an already-hashed password (see PasswordHasher)
         this.role = role;
     }
 

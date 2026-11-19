@@ -55,6 +55,18 @@ mvn clean javafx:run
 | Seller | `charlie` | `password1`|
 | Seller | `diana`   | `password1`|
 
+### Password Strength Rules
+
+Buyer and Seller registration enforces these rules (unchanged from the skeleton):
+
+- The password is not empty.
+- The password is at least 8 characters long.
+- The password contains at least one uppercase letter, at least one lowercase letter, and at least one digit.
+
+Passwords are hashed with BCrypt (jBCrypt, cost factor 12) by `PasswordHasher`; only the hash is stored in `User.passwordHash`, and every login verifies through `PasswordHasher.verify`. Plaintext passwords are never stored or compared.
+
+> The seeded demo passwords (`password1`, `admin123`) are for demo login and bypass registration validation.
+
 ## Features Implemented (UI Only)
 
 ### Shared
@@ -118,7 +130,7 @@ Copy the lines that start with `Exception in thread` or `Caused by`.
 ## For Students — Next Steps (Backend)
 
 1. Replace `DummyDataService` with real repositories / REST clients
-2. Hash passwords (BCrypt) — never store plaintext
+2. Persist users in a database (passwords are already BCrypt-hashed via `PasswordHasher`)
 3. Add JWT / session auth and enforce RBAC on the API
 4. Persist data in a database
 5. Photo upload, chat, auto-return for borrowed items, etc.

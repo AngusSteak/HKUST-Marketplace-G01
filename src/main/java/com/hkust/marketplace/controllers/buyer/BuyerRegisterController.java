@@ -3,6 +3,7 @@ package com.hkust.marketplace.controllers.buyer;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.PasswordHasher;
 import com.hkust.marketplace.utils.SceneManager;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -60,8 +61,7 @@ public class BuyerRegisterController {
             return;
         }
 
-        // Create user (demo – password stored as-is)
-        User user = new User(username.toLowerCase(), fullName, password, UserRole.BUYER);
+        User user = new User(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.BUYER);
         if (residence != null) {
             user.setResidenceHall(residence);
         }
