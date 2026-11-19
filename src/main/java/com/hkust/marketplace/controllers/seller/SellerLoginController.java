@@ -3,7 +3,7 @@ package com.hkust.marketplace.controllers.seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
-import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.LoginGate;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.fxml.FXML;
@@ -29,24 +29,16 @@ public class SellerLoginController {
             return;
         }
         User user = DummyDataService.getInstance().findUser(username);
-        if (user == null) {
-            showError("User not found.");
-            return;
+        switch (LoginGate.check(user, UserRole.SELLER, password)) {
+            case USER_NOT_FOUND -> showError("User not found.");
+            case WRONG_PORTAL -> showError("This account is not a Seller account. Use the correct portal.");
+            case WRONG_PASSWORD -> showError("Incorrect password.");
+            case DISABLED -> showError("Account deactivated.");
+            case OK -> {
+                SessionManager.login(user);
+                SceneManager.showSellerDashboard();
+            }
         }
-        if (user.getRole() != UserRole.SELLER) {
-            showError("This account is not a Seller account. Use the correct portal.");
-            return;
-        }
-        if (!PasswordHasher.verify(password, user.getPasswordHash())) {
-            showError("Incorrect password.");
-            return;
-        }
-        if (!user.isActive()) {
-            showError("Account deactivated.");
-            return;
-        }
-        SessionManager.login(user);
-        SceneManager.showSellerDashboard();
     }
 
     private void showError(String msg) {

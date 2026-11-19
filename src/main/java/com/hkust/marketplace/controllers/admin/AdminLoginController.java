@@ -3,7 +3,7 @@ package com.hkust.marketplace.controllers.admin;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
-import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.LoginGate;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.fxml.FXML;
@@ -29,16 +29,15 @@ public class AdminLoginController {
             return;
         }
         User user = DummyDataService.getInstance().findUser(username);
-        if (user == null || user.getRole() != UserRole.ADMIN) {
-            showError("Invalid admin credentials.");
-            return;
+        switch (LoginGate.check(user, UserRole.ADMIN, password)) {
+            case USER_NOT_FOUND, WRONG_PORTAL -> showError("Invalid admin credentials.");
+            case WRONG_PASSWORD -> showError("Incorrect password.");
+            case DISABLED -> showError("This account has been deactivated. Contact admin.");
+            case OK -> {
+                SessionManager.login(user);
+                SceneManager.showAdminDashboard();
+            }
         }
-        if (!PasswordHasher.verify(password, user.getPasswordHash())) {
-            showError("Incorrect password.");
-            return;
-        }
-        SessionManager.login(user);
-        SceneManager.showAdminDashboard();
     }
 
     private void showError(String msg) {
