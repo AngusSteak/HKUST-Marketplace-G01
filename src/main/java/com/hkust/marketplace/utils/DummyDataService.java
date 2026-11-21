@@ -50,8 +50,9 @@ public class DummyDataService {
     void seedData() {
         users.seed();
         List<Listing> seededListings = listings.seed();
-        // alice's accepted offer on the first listing (Calculus Textbook), which becomes RESERVED
-        deals.seed((Buyer) users.find("alice"), seededListings.get(0));
+        // Requests and deals on L100 (textbook), L102 (lamp) and L103 (calculator); see DealStore.seed
+        deals.seed((Buyer) users.find("alice"), (Buyer) users.find("bob"),
+                seededListings.get(0), seededListings.get(2), seededListings.get(3));
         notifications.seed();
         reviews.seed();
     }
