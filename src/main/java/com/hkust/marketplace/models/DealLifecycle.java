@@ -1,6 +1,12 @@
 package com.hkust.marketplace.models;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,179 +18,248 @@ import java.util.Optional;
  * Single source of truth for request, deal and listing status transitions, so the
  * buyer, seller and admin portals all agree on what is allowed.
  *
- * <p>Every transition checks the current state first and throws
- * {@link IllegalStateException} on an illegal move, without changing any state.
- * A listing can carry at most one active deal; accepting a request reserves the
- * listing (or marks it lent) and declines the other pending requests.
+ * <p>Every transition validates first and changes nothing when it fails: invalid input
+ * (a non-positive price, a bad borrow period, the wrong listing type) throws
+ * {@link IllegalArgumentException}; an illegal move for the current state throws
+ * {@link IllegalStateException}.
+ *
+ * <p>A listing carries at most one active deal. Accepting a request reserves the listing
+ * (or marks it lent) and declines the other open requests on it. A giveaway claim is
+ * recorded as pending and reserves the listing at once, so only the first claim succeeds
+ * while the seller accepts or declines it (SRS UC-1.4 S3, UC-2.5).
  */
 public final class DealLifecycle {
 
-    /** A buyer's request for a listing, e.g. an offer, borrow request or giveaway claim. */
-    public static final class Request {
-        private final String id;
-        private final Listing listing;
-        private final DealType type;
-        private RequestStatus status;
+    /** Shortest borrow period allowed; 5 seconds so loans can be tested (SRS UC-1.4). */
+    public static final Duration MIN_BORROW_PERIOD = Duration.ofSeconds(5);
 
-        private Request(String id, Listing listing, DealType type) {
-            this.id = id;
-            this.listing = listing;
-            this.type = type;
-            this.status = RequestStatus.PENDING;
-        }
-
-        public String getId() { return id; }
-        public Listing getListing() { return listing; }
-        public DealType getType() { return type; }
-        public RequestStatus getStatus() { return status; }
-    }
-
-    /** An accepted request and its own lifecycle. */
-    public static final class DealRecord {
-        private final String id;
-        private final Request request;
-        private DealStatus status;
-
-        private DealRecord(String id, Request request) {
-            this.id = id;
-            this.request = request;
-            this.status = DealStatus.ACTIVE;
-        }
-
-        public String getId() { return id; }
-        public Request getRequest() { return request; }
-        public DealStatus getStatus() { return status; }
-    }
-
-    private final Map<String, Request> requests = new LinkedHashMap<>();
-    private final Map<String, DealRecord> deals = new LinkedHashMap<>();
+    private final Clock clock;
+    private final Map<String, DealRequest> requests = new LinkedHashMap<>();
+    private final Map<String, Deal> deals = new LinkedHashMap<>();
     /** listing id -> id of its one active deal */
     private final Map<String, String> activeDealByListing = new HashMap<>();
+    /** giveaway listing id -> id of the pending claim holding its reservation */
+    private final Map<String, String> pendingClaimByListing = new HashMap<>();
     private int nextRequestId = 1;
     private int nextDealId = 1;
 
-    /**
-     * Submits a request for a live, for-sale or for-lending listing. Giveaways go
-     * through {@link #claim(Listing)} because a claim must be accepted atomically.
-     */
-    public Request submit(Listing listing) {
+    public DealLifecycle() {
+        this(Clock.systemDefaultZone());
+    }
+
+    /** Uses {@code clock} for "now", so tests can fix the time. */
+    public DealLifecycle(Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    // ---------- Submit ----------
+
+    /** Records a pending price offer on a live Sale listing. */
+    public synchronized PriceOffer submitOffer(Buyer buyer, Listing listing, BigDecimal price) {
         Objects.requireNonNull(listing, "listing");
-        if (listing.getType() == ListingType.GIVEAWAY) {
-            throw new IllegalStateException("Giveaway listings are claimed, not offered");
-        }
+        BigDecimal money = requirePositiveMoney(price, "Offer");
+        PriceOffer offer = new PriceOffer(nextRequestId(), buyer, listing, money, now());
         requireLiveAndNotDealt(listing);
-        Request request = new Request("Q" + nextRequestId++, listing, dealTypeFor(listing));
-        requests.put(request.id, request);
-        return request;
+        return register(offer);
+    }
+
+    /** Records a pending borrow request on a live Lend listing. */
+    public synchronized BorrowRequest submitBorrow(Buyer buyer, Listing listing,
+                                                   LocalDateTime start, LocalDateTime end) {
+        Objects.requireNonNull(listing, "listing");
+        BorrowRequest request = new BorrowRequest(nextRequestId(), buyer, listing, start, end, now());
+        validateBorrowPeriod(listing, start, end);
+        requireLiveAndNotDealt(listing);
+        return register(request);
     }
 
     /**
-     * First claim wins: the request is accepted and the giveaway is reserved in one
-     * step. A second claim on the same listing throws.
+     * Records a pending claim on a live Giveaway listing and reserves it, so a second
+     * claim fails until the seller declines this one. Synchronized: first claim wins.
      */
-    public Request claim(Listing listing) {
+    public synchronized Claim submitClaim(Buyer buyer, Listing listing) {
         Objects.requireNonNull(listing, "listing");
-        if (listing.getType() != ListingType.GIVEAWAY) {
-            throw new IllegalStateException("Only giveaway listings can be claimed");
-        }
+        Claim claim = new Claim(nextRequestId(), buyer, listing, now());
         requireLiveAndNotDealt(listing);
-        Request request = new Request("Q" + nextRequestId++, listing, DealType.GIVEN);
-        request.status = RequestStatus.ACCEPTED;
-        requests.put(request.id, request);
-        openDeal(request);
+        register(claim);
+        listing.setStatus(ListingStatus.RESERVED);
+        pendingClaimByListing.put(listing.getId(), claim.getId());
+        return claim;
+    }
+
+    // ---------- Counter / accept / decline ----------
+
+    /** Seller counters a price offer; repeatable while the offer is countered. */
+    public synchronized PriceOffer counterOffer(PriceOffer offer, BigDecimal counterPrice) {
+        requireOpen(offer, "counter");
+        BigDecimal money = requirePositiveMoney(counterPrice, "Counter price");
+        offer.setCounterPrice(money);
+        offer.setStatus(RequestStatus.COUNTERED);
+        return offer;
+    }
+
+    /** Seller counters a borrow request with another period; repeatable while countered. */
+    public synchronized BorrowRequest counterBorrow(BorrowRequest request,
+                                                    LocalDateTime start, LocalDateTime end) {
+        requireOpen(request, "counter");
+        validateBorrowPeriod(request.getListing(), start, end);
+        request.setCounterPeriod(start, end);
+        request.setStatus(RequestStatus.COUNTERED);
         return request;
     }
 
-    public Request counter(Request request) {
-        Objects.requireNonNull(request, "request");
-        if (request.status != RequestStatus.PENDING && request.status != RequestStatus.COUNTERED) {
-            throw new IllegalStateException("Cannot counter a " + request.status + " request");
-        }
-        request.status = RequestStatus.COUNTERED;
-        return request;
-    }
-
-    /** Accepts a pending request. A countered request must use {@link #acceptCounter}. */
-    public DealRecord accept(Request request) {
+    /** Seller accepts a pending request. A countered request is accepted by the buyer via {@link #acceptCounter}. */
+    public synchronized Deal accept(DealRequest request) {
         requireStatus(request, RequestStatus.PENDING);
         return acceptAsDeal(request);
     }
 
-    public DealRecord acceptCounter(Request request) {
+    /** Buyer accepts the seller's counter on their request. */
+    public synchronized Deal acceptCounter(DealRequest request) {
         requireStatus(request, RequestStatus.COUNTERED);
         return acceptAsDeal(request);
     }
 
-    public Request decline(Request request) {
-        Objects.requireNonNull(request, "request");
-        if (request.status != RequestStatus.PENDING && request.status != RequestStatus.COUNTERED) {
-            throw new IllegalStateException("Cannot decline a " + request.status + " request");
+    /** Declines a pending or countered request. Declining a pending claim relists the giveaway. */
+    public synchronized DealRequest decline(DealRequest request) {
+        requireOpen(request, "decline");
+        request.setStatus(RequestStatus.DECLINED);
+        if (request instanceof Claim) {
+            String listingId = request.getListing().getId();
+            if (pendingClaimByListing.remove(listingId, request.getId())) {
+                request.getListing().setStatus(ListingStatus.LIVE);
+            }
         }
-        request.status = RequestStatus.DECLINED;
         return request;
     }
 
+    // ---------- Return / complete / cancel ----------
+
     /** Buyer returns a borrowed item. Only loans are returned. */
-    public DealRecord returnItem(DealRecord deal) {
+    public synchronized Deal returnItem(Deal deal) {
         requireBorrowedAndActive(deal, "return");
-        deal.status = DealStatus.RETURNED;
+        close(deal, DealStatus.RETURNED);
         releaseListing(deal);
         return deal;
     }
 
     /** Due date passed and the item was recorded as returned automatically. */
-    public DealRecord autoReturn(DealRecord deal) {
+    public synchronized Deal autoReturn(Deal deal) {
         requireBorrowedAndActive(deal, "auto-return");
-        deal.status = DealStatus.AUTO_RETURNED;
+        close(deal, DealStatus.AUTO_RETURNED);
         releaseListing(deal);
         return deal;
     }
 
     /** Completes a sale or giveaway directly; a loan completes after it is returned. */
-    public DealRecord complete(DealRecord deal) {
+    public synchronized Deal complete(Deal deal) {
         Objects.requireNonNull(deal, "deal");
-        boolean returnedLoan = deal.request.type == DealType.LENT
-                && (deal.status == DealStatus.RETURNED || deal.status == DealStatus.AUTO_RETURNED);
-        boolean directSale = deal.status == DealStatus.ACTIVE && deal.request.type != DealType.LENT;
+        boolean returnedLoan = deal.getDealType() == DealType.LENT
+                && (deal.getStatus() == DealStatus.RETURNED || deal.getStatus() == DealStatus.AUTO_RETURNED);
+        boolean directSale = deal.getStatus() == DealStatus.ACTIVE && deal.getDealType() != DealType.LENT;
         if (!returnedLoan && !directSale) {
-            throw new IllegalStateException("Cannot complete a " + deal.status + " deal");
+            throw new IllegalStateException("Cannot complete a " + deal.getStatus() + " deal");
         }
-        String listingId = deal.request.listing.getId();
         if (directSale) {
+            String listingId = deal.getListing().getId();
             if (!deal.getId().equals(activeDealByListing.get(listingId))) {
                 throw new IllegalStateException("Deal is not the listing's active deal");
             }
-            deal.request.listing.setStatus(deal.request.type == DealType.SOLD
+            deal.getListing().setStatus(deal.getDealType() == DealType.SOLD
                     ? ListingStatus.SOLD
                     : ListingStatus.GIVEN);
             activeDealByListing.remove(listingId, deal.getId());
+            close(deal, DealStatus.COMPLETED);
+        } else {
+            // A returned loan's listing is already LIVE and its return date is kept;
+            // finalising it must not touch a newer deal on the same listing.
+            deal.setStatus(DealStatus.COMPLETED);
         }
-        // A returned loan's listing is already LIVE; finalising it must not touch a newer deal.
-        deal.status = DealStatus.COMPLETED;
         return deal;
     }
 
-    public DealRecord cancel(DealRecord deal) {
+    public synchronized Deal cancel(Deal deal) {
         requireStatus(deal, DealStatus.ACTIVE);
-        deal.status = DealStatus.CANCELLED;
+        close(deal, DealStatus.CANCELLED);
         releaseListing(deal);
         return deal;
     }
 
+    // ---------- Queries ----------
+
     /** The listing's one active deal, if any. */
-    public Optional<DealRecord> activeDeal(Listing listing) {
+    public synchronized Optional<Deal> activeDeal(Listing listing) {
         Objects.requireNonNull(listing, "listing");
         return Optional.ofNullable(activeDealByListing.get(listing.getId())).map(deals::get);
     }
 
     /** Requests submitted for a listing, in submit order. */
-    public List<Request> requestsFor(Listing listing) {
+    public synchronized List<DealRequest> requestsFor(Listing listing) {
         Objects.requireNonNull(listing, "listing");
-        List<Request> matching = new ArrayList<>();
-        for (Request request : requests.values()) {
-            if (request.listing.getId().equals(listing.getId())) matching.add(request);
+        List<DealRequest> matching = new ArrayList<>();
+        for (DealRequest request : requests.values()) {
+            if (request.getListing().getId().equals(listing.getId())) matching.add(request);
         }
         return matching;
+    }
+
+    /** Every request, in submit order. */
+    public synchronized List<DealRequest> requests() {
+        return Collections.unmodifiableList(new ArrayList<>(requests.values()));
+    }
+
+    /** Every deal, in the order the requests were accepted. */
+    public synchronized List<Deal> deals() {
+        return Collections.unmodifiableList(new ArrayList<>(deals.values()));
+    }
+
+    // ---------- Internals ----------
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(clock);
+    }
+
+    private String nextRequestId() {
+        return "Q" + nextRequestId;
+    }
+
+    private <R extends DealRequest> R register(R request) {
+        requests.put(request.getId(), request);
+        nextRequestId++;
+        return request;
+    }
+
+    private void validateBorrowPeriod(Listing listing, LocalDateTime start, LocalDateTime end) {
+        if (start == null || end == null) {
+            throw new IllegalArgumentException("Borrow start and end are required");
+        }
+        if (start.isBefore(now())) {
+            throw new IllegalArgumentException("Borrow start cannot be in the past");
+        }
+        if (!end.isAfter(start)) {
+            throw new IllegalArgumentException("Borrow end must be after the start");
+        }
+        Duration period = Duration.between(start, end);
+        if (period.compareTo(MIN_BORROW_PERIOD) < 0) {
+            throw new IllegalArgumentException("Borrow period must be at least "
+                    + MIN_BORROW_PERIOD.toSeconds() + " seconds");
+        }
+        // TODO(#10): compare against the listing's Duration once lendingDays is replaced.
+        Integer lendingDays = listing.getLendingDays();
+        if (lendingDays != null && period.compareTo(Duration.ofDays(lendingDays)) > 0) {
+            throw new IllegalArgumentException("Borrow period exceeds the listing's lending duration of "
+                    + lendingDays + " days");
+        }
+    }
+
+    private static BigDecimal requirePositiveMoney(BigDecimal amount, String what) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException(what + " must be a positive amount");
+        }
+        if (amount.stripTrailingZeros().scale() > 2) {
+            throw new IllegalArgumentException(what + " can have at most two decimal places");
+        }
+        return amount.setScale(2, RoundingMode.UNNECESSARY);
     }
 
     private void requireLiveAndNotDealt(Listing listing) {
@@ -197,62 +272,74 @@ public final class DealLifecycle {
         }
     }
 
-    private static void requireBorrowedAndActive(DealRecord deal, String action) {
-        requireStatus(deal, DealStatus.ACTIVE);
-        if (deal.request.type != DealType.LENT) {
-            throw new IllegalStateException("Cannot " + action + " a " + deal.request.type + " deal");
+    private static void requireOpen(DealRequest request, String action) {
+        Objects.requireNonNull(request, "request");
+        if (request.getStatus() != RequestStatus.PENDING && request.getStatus() != RequestStatus.COUNTERED) {
+            throw new IllegalStateException("Cannot " + action + " a " + request.getStatus() + " request");
         }
     }
 
-    private DealRecord acceptAsDeal(Request request) {
-        requireLiveAndNotDealt(request.listing);
-        request.status = RequestStatus.ACCEPTED;
-        for (Request other : requests.values()) {
-            if (other.listing.getId().equals(request.listing.getId())
-                    && (other.status == RequestStatus.PENDING
-                        || other.status == RequestStatus.COUNTERED)) {
-                other.status = RequestStatus.DECLINED;
+    private static void requireBorrowedAndActive(Deal deal, String action) {
+        requireStatus(deal, DealStatus.ACTIVE);
+        if (deal.getDealType() != DealType.LENT) {
+            throw new IllegalStateException("Cannot " + action + " a " + deal.getDealType() + " deal");
+        }
+    }
+
+    private Deal acceptAsDeal(DealRequest request) {
+        Listing listing = request.getListing();
+        if (request instanceof Claim) {
+            if (!request.getId().equals(pendingClaimByListing.get(listing.getId()))) {
+                throw new IllegalStateException("Claim no longer holds the listing's reservation");
+            }
+        } else {
+            requireLiveAndNotDealt(listing);
+        }
+        request.setStatus(RequestStatus.ACCEPTED);
+        for (DealRequest other : requests.values()) {
+            if (other != request
+                    && other.getListing().getId().equals(listing.getId())
+                    && (other.getStatus() == RequestStatus.PENDING
+                        || other.getStatus() == RequestStatus.COUNTERED)) {
+                other.setStatus(RequestStatus.DECLINED);
             }
         }
+        pendingClaimByListing.remove(listing.getId());
         return openDeal(request);
     }
 
-    private DealRecord openDeal(Request request) {
-        request.listing.setStatus(request.type == DealType.LENT
-                ? ListingStatus.LENT
-                : ListingStatus.RESERVED);
-        DealRecord deal = new DealRecord("D" + nextDealId++, request);
-        deals.put(deal.id, deal);
-        activeDealByListing.put(request.listing.getId(), deal.id);
+    private Deal openDeal(DealRequest request) {
+        Listing listing = request.getListing();
+        listing.setStatus(request.dealType() == DealType.LENT ? ListingStatus.LENT : ListingStatus.RESERVED);
+        Deal deal = new Deal("D" + nextDealId++, request, now());
+        deals.put(deal.getId(), deal);
+        activeDealByListing.put(listing.getId(), deal.getId());
         return deal;
     }
 
-    private void releaseListing(DealRecord deal) {
-        deal.request.listing.setStatus(ListingStatus.LIVE);
-        activeDealByListing.remove(deal.request.listing.getId());
+    private void close(Deal deal, DealStatus status) {
+        deal.setStatus(status);
+        deal.setCompletedDate(now());
     }
 
-    private static void requireStatus(Request request, RequestStatus expected) {
+    private void releaseListing(Deal deal) {
+        deal.getListing().setStatus(ListingStatus.LIVE);
+        activeDealByListing.remove(deal.getListing().getId());
+    }
+
+    private static void requireStatus(DealRequest request, RequestStatus expected) {
         Objects.requireNonNull(request, "request");
-        if (request.status != expected) {
+        if (request.getStatus() != expected) {
             throw new IllegalStateException(
-                    "Expected a " + expected + " request but was " + request.status);
+                    "Expected a " + expected + " request but was " + request.getStatus());
         }
     }
 
-    private static void requireStatus(DealRecord deal, DealStatus expected) {
+    private static void requireStatus(Deal deal, DealStatus expected) {
         Objects.requireNonNull(deal, "deal");
-        if (deal.status != expected) {
+        if (deal.getStatus() != expected) {
             throw new IllegalStateException(
-                    "Expected a " + expected + " deal but was " + deal.status);
+                    "Expected a " + expected + " deal but was " + deal.getStatus());
         }
-    }
-
-    private static DealType dealTypeFor(Listing listing) {
-        return switch (listing.getType()) {
-            case SELL -> DealType.SOLD;
-            case LEND -> DealType.LENT;
-            case GIVEAWAY -> DealType.GIVEN;
-        };
     }
 }

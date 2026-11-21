@@ -2,6 +2,10 @@ package com.hkust.marketplace.models;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,26 +16,42 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DealLifecycleTest {
 
-    private final DealLifecycle lifecycle = new DealLifecycle();
+    static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 22, 12, 0);
+    static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+    static final Buyer ALICE = new Buyer("alice", "Alice Chan", "hash", UserRole.BUYER);
+    static final Buyer BOB = new Buyer("bob", "Bob Wong", "hash", UserRole.BUYER);
+
+    private final DealLifecycle lifecycle = new DealLifecycle(CLOCK);
 
     // ---------- Submit / counter / accept / decline ----------
 
     @Test
     void submitCreatesAPendingRequestForTheListingsDealType() {
-        Listing listing = liveListing("L1", ListingType.SELL);
+        Listing sale = liveListing("L1", ListingType.SELL);
+        Listing loan = liveListing("L2", ListingType.LEND);
 
-        DealLifecycle.Request request = lifecycle.submit(listing);
+        PriceOffer offer = offer(sale);
+        BorrowRequest borrow = borrow(loan);
 
-        assertEquals(RequestStatus.PENDING, request.getStatus());
-        assertEquals(DealType.SOLD, request.getType());
-        assertEquals(List.of(request), lifecycle.requestsFor(listing));
-        assertTrue(lifecycle.activeDeal(listing).isEmpty());
+        assertEquals(RequestStatus.PENDING, offer.getStatus());
+        assertEquals(DealType.SOLD, offer.dealType());
+        assertEquals(RequestStatus.PENDING, borrow.getStatus());
+        assertEquals(DealType.LENT, borrow.dealType());
+        assertEquals(NOW, offer.getSubmittedTime());
+        assertEquals(ListingStatus.LIVE, sale.getStatus());
+        assertEquals(List.of(offer), lifecycle.requestsFor(sale));
+        assertEquals(List.of(offer, borrow), lifecycle.requests());
     }
 
     @Test
-    void submitOnGiveawayListingsIsRejected() {
-        assertThrows(IllegalStateException.class,
-                () -> lifecycle.submit(liveListing("L1", ListingType.GIVEAWAY)));
+    void requestTypeMustMatchTheListingType() {
+        Listing giveaway = liveListing("L1", ListingType.GIVEAWAY);
+        Listing sale = liveListing("L2", ListingType.SELL);
+
+        assertThrows(IllegalArgumentException.class, () -> offer(giveaway));
+        assertThrows(IllegalArgumentException.class, () -> borrow(sale));
+        assertThrows(IllegalArgumentException.class, () -> lifecycle.submitClaim(ALICE, sale));
+        assertTrue(lifecycle.requests().isEmpty());
     }
 
     @Test
@@ -39,58 +59,75 @@ class DealLifecycleTest {
         Listing listing = liveListing("L1", ListingType.SELL);
         listing.setStatus(ListingStatus.PENDING_REVIEW);
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.submit(listing));
+        assertThrows(IllegalStateException.class, () -> offer(listing));
+        assertTrue(lifecycle.requests().isEmpty());
     }
 
     @Test
-    void counterMovesPendingToCountered() {
-        DealLifecycle.Request request = lifecycle.submit(liveListing("L1", ListingType.SELL));
+    void counterOfferStoresThePriceAndMovesPendingToCountered() {
+        PriceOffer offer = offer(liveListing("L1", ListingType.SELL));
 
-        lifecycle.counter(request);
+        lifecycle.counterOffer(offer, new BigDecimal("120"));
 
-        assertEquals(RequestStatus.COUNTERED, request.getStatus());
+        assertEquals(RequestStatus.COUNTERED, offer.getStatus());
+        assertEquals(new BigDecimal("120.00"), offer.getCounterPrice());
+        assertEquals(new BigDecimal("120.00"), offer.agreedPrice());
     }
 
     @Test
     void counterCanBeRepeatedWhileCountered() {
-        DealLifecycle.Request request = lifecycle.submit(liveListing("L1", ListingType.SELL));
+        PriceOffer offer = offer(liveListing("L1", ListingType.SELL));
+        lifecycle.counterOffer(offer, new BigDecimal("120"));
 
-        lifecycle.counter(request);
-        lifecycle.counter(request);
+        lifecycle.counterOffer(offer, new BigDecimal("110"));
+
+        assertEquals(RequestStatus.COUNTERED, offer.getStatus());
+        assertEquals(new BigDecimal("110.00"), offer.getCounterPrice());
+    }
+
+    @Test
+    void counterBorrowStoresThePeriod() {
+        BorrowRequest request = borrow(liveListing("L1", ListingType.LEND));
+        LocalDateTime start = NOW.plusHours(2);
+        LocalDateTime end = NOW.plusHours(5);
+
+        lifecycle.counterBorrow(request, start, end);
 
         assertEquals(RequestStatus.COUNTERED, request.getStatus());
+        assertEquals(start, request.getCounterStart());
+        assertEquals(end, request.agreedEnd());
     }
 
     @Test
     void acceptingASaleReservesTheListingAndOpensAnActiveDeal() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.Request request = lifecycle.submit(listing);
+        PriceOffer offer = offer(listing);
 
-        DealLifecycle.DealRecord deal = lifecycle.accept(request);
+        Deal deal = lifecycle.accept(offer);
 
-        assertEquals(RequestStatus.ACCEPTED, request.getStatus());
+        assertEquals(RequestStatus.ACCEPTED, offer.getStatus());
         assertEquals(DealStatus.ACTIVE, deal.getStatus());
-        assertEquals(DealType.SOLD, deal.getRequest().getType());
+        assertSame(offer, deal.getRequest());
         assertEquals(ListingStatus.RESERVED, listing.getStatus());
         assertSame(deal, lifecycle.activeDeal(listing).orElseThrow());
+        assertEquals(List.of(deal), lifecycle.deals());
     }
 
     @Test
     void acceptingABorrowMarksTheListingLent() {
         Listing listing = liveListing("L1", ListingType.LEND);
-        DealLifecycle.Request request = lifecycle.submit(listing);
 
-        DealLifecycle.DealRecord deal = lifecycle.accept(request);
+        Deal deal = lifecycle.accept(borrow(listing));
 
-        assertEquals(DealType.LENT, deal.getRequest().getType());
         assertEquals(ListingStatus.LENT, listing.getStatus());
+        assertEquals(DealType.LENT, deal.getDealType());
     }
 
     @Test
     void acceptingOneRequestDeclinesTheOtherPendingRequests() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.Request accepted = lifecycle.submit(listing);
-        DealLifecycle.Request declined = lifecycle.submit(listing);
+        PriceOffer accepted = offer(listing);
+        PriceOffer declined = lifecycle.submitOffer(BOB, listing, new BigDecimal("90"));
 
         lifecycle.accept(accepted);
 
@@ -101,9 +138,9 @@ class DealLifecycleTest {
     @Test
     void acceptingOneRequestAlsoDeclinesOtherCounteredRequests() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.Request accepted = lifecycle.submit(listing);
-        DealLifecycle.Request countered = lifecycle.submit(listing);
-        lifecycle.counter(countered);
+        PriceOffer accepted = offer(listing);
+        PriceOffer countered = lifecycle.submitOffer(BOB, listing, new BigDecimal("90"));
+        lifecycle.counterOffer(countered, new BigDecimal("95"));
 
         lifecycle.accept(accepted);
 
@@ -113,33 +150,31 @@ class DealLifecycleTest {
     @Test
     void aSecondAcceptanceOnTheSameListingIsRejected() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.Request first = lifecycle.submit(listing);
-        DealLifecycle.Request second = lifecycle.submit(listing);
+        PriceOffer first = offer(listing);
+        PriceOffer second = lifecycle.submitOffer(BOB, listing, new BigDecimal("90"));
         lifecycle.accept(first);
 
         assertThrows(IllegalStateException.class, () -> lifecycle.accept(second));
-        assertEquals(RequestStatus.DECLINED, second.getStatus());
-        assertTrue(lifecycle.activeDeal(listing).isPresent());
     }
 
     @Test
     void acceptCounterAcceptsACounteredRequest() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.Request request = lifecycle.submit(listing);
-        lifecycle.counter(request);
+        PriceOffer offer = offer(listing);
+        lifecycle.counterOffer(offer, new BigDecimal("120"));
 
-        DealLifecycle.DealRecord deal = lifecycle.acceptCounter(request);
+        Deal deal = lifecycle.acceptCounter(offer);
 
-        assertEquals(RequestStatus.ACCEPTED, request.getStatus());
+        assertEquals(RequestStatus.ACCEPTED, offer.getStatus());
         assertEquals(DealStatus.ACTIVE, deal.getStatus());
         assertEquals(ListingStatus.RESERVED, listing.getStatus());
     }
 
     @Test
     void declineWorksFromPendingAndCountered() {
-        DealLifecycle.Request pending = lifecycle.submit(liveListing("L1", ListingType.SELL));
-        DealLifecycle.Request countered = lifecycle.submit(liveListing("L2", ListingType.SELL));
-        lifecycle.counter(countered);
+        PriceOffer pending = offer(liveListing("L1", ListingType.SELL));
+        PriceOffer countered = offer(liveListing("L2", ListingType.SELL));
+        lifecycle.counterOffer(countered, new BigDecimal("120"));
 
         lifecycle.decline(pending);
         lifecycle.decline(countered);
@@ -151,29 +186,51 @@ class DealLifecycleTest {
     // ---------- Giveaway claim ----------
 
     @Test
-    void firstGiveawayClaimWinsAndReservesTheListing() {
+    void claimIsPendingAndReservesTheListing() {
         Listing listing = liveListing("L1", ListingType.GIVEAWAY);
 
-        DealLifecycle.Request claim = lifecycle.claim(listing);
+        Claim claim = lifecycle.submitClaim(ALICE, listing);
+
+        assertEquals(RequestStatus.PENDING, claim.getStatus());
+        assertEquals(DealType.GIVEN, claim.dealType());
+        assertEquals(ListingStatus.RESERVED, listing.getStatus());
+        assertTrue(lifecycle.activeDeal(listing).isEmpty());
+    }
+
+    @Test
+    void secondClaimFailsWhileTheFirstIsPending() {
+        Listing listing = liveListing("L1", ListingType.GIVEAWAY);
+        lifecycle.submitClaim(ALICE, listing);
+
+        assertThrows(IllegalStateException.class, () -> lifecycle.submitClaim(BOB, listing));
+        assertEquals(1, lifecycle.requestsFor(listing).size());
+    }
+
+    @Test
+    void acceptingAClaimOpensAGivenDeal() {
+        Listing listing = liveListing("L1", ListingType.GIVEAWAY);
+        Claim claim = lifecycle.submitClaim(ALICE, listing);
+
+        Deal deal = lifecycle.accept(claim);
 
         assertEquals(RequestStatus.ACCEPTED, claim.getStatus());
-        assertEquals(DealType.GIVEN, claim.getType());
+        assertEquals(DealType.GIVEN, deal.getDealType());
         assertEquals(ListingStatus.RESERVED, listing.getStatus());
-        assertEquals(DealStatus.ACTIVE, lifecycle.activeDeal(listing).orElseThrow().getStatus());
+        assertSame(deal, lifecycle.activeDeal(listing).orElseThrow());
     }
 
     @Test
-    void secondGiveawayClaimThrows() {
+    void decliningAClaimRelistsTheGiveawaySoAnotherBuyerCanClaim() {
         Listing listing = liveListing("L1", ListingType.GIVEAWAY);
-        lifecycle.claim(listing);
+        Claim first = lifecycle.submitClaim(ALICE, listing);
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.claim(listing));
-    }
+        lifecycle.decline(first);
 
-    @Test
-    void claimingANonGiveawayListingThrows() {
-        assertThrows(IllegalStateException.class,
-                () -> lifecycle.claim(liveListing("L1", ListingType.SELL)));
+        assertEquals(RequestStatus.DECLINED, first.getStatus());
+        assertEquals(ListingStatus.LIVE, listing.getStatus());
+        Claim second = lifecycle.submitClaim(BOB, listing);
+        assertEquals(RequestStatus.PENDING, second.getStatus());
+        assertThrows(IllegalStateException.class, () -> lifecycle.accept(first));
     }
 
     // ---------- Return / complete / cancel ----------
@@ -181,11 +238,12 @@ class DealLifecycleTest {
     @Test
     void returningABorrowedItemReleasesTheListing() {
         Listing listing = liveListing("L1", ListingType.LEND);
-        DealLifecycle.DealRecord deal = lifecycle.accept(lifecycle.submit(listing));
+        Deal deal = lifecycle.accept(borrow(listing));
 
         lifecycle.returnItem(deal);
 
         assertEquals(DealStatus.RETURNED, deal.getStatus());
+        assertEquals(NOW, deal.getCompletedDate());
         assertEquals(ListingStatus.LIVE, listing.getStatus());
         assertTrue(lifecycle.activeDeal(listing).isEmpty());
     }
@@ -193,7 +251,7 @@ class DealLifecycleTest {
     @Test
     void autoReturnReleasesTheListing() {
         Listing listing = liveListing("L1", ListingType.LEND);
-        DealLifecycle.DealRecord deal = lifecycle.accept(lifecycle.submit(listing));
+        Deal deal = lifecycle.accept(borrow(listing));
 
         lifecycle.autoReturn(deal);
 
@@ -204,11 +262,12 @@ class DealLifecycleTest {
     @Test
     void completingASaleMarksTheListingSold() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.DealRecord deal = lifecycle.accept(lifecycle.submit(listing));
+        Deal deal = lifecycle.accept(offer(listing));
 
         lifecycle.complete(deal);
 
         assertEquals(DealStatus.COMPLETED, deal.getStatus());
+        assertEquals(NOW, deal.getCompletedDate());
         assertEquals(ListingStatus.SOLD, listing.getStatus());
         assertTrue(lifecycle.activeDeal(listing).isEmpty());
     }
@@ -216,9 +275,7 @@ class DealLifecycleTest {
     @Test
     void completingAGiveawayMarksTheListingGiven() {
         Listing listing = liveListing("L1", ListingType.GIVEAWAY);
-        DealLifecycle.Request claim = lifecycle.claim(listing);
-        DealLifecycle.DealRecord deal = lifecycle.activeDeal(listing).orElseThrow();
-        assertSame(claim, deal.getRequest());
+        Deal deal = lifecycle.accept(lifecycle.submitClaim(ALICE, listing));
 
         lifecycle.complete(deal);
 
@@ -229,7 +286,7 @@ class DealLifecycleTest {
     @Test
     void completingALoanAfterReturnFinalisesIt() {
         Listing listing = liveListing("L1", ListingType.LEND);
-        DealLifecycle.DealRecord deal = lifecycle.accept(lifecycle.submit(listing));
+        Deal deal = lifecycle.accept(borrow(listing));
         lifecycle.returnItem(deal);
 
         lifecycle.complete(deal);
@@ -241,7 +298,7 @@ class DealLifecycleTest {
     @Test
     void completingALoanAfterAutoReturnFinalisesIt() {
         Listing listing = liveListing("L1", ListingType.LEND);
-        DealLifecycle.DealRecord deal = lifecycle.accept(lifecycle.submit(listing));
+        Deal deal = lifecycle.accept(borrow(listing));
         lifecycle.autoReturn(deal);
 
         lifecycle.complete(deal);
@@ -253,9 +310,9 @@ class DealLifecycleTest {
     @Test
     void completingAStaleReturnedLoanLeavesTheRelentDealActive() {
         Listing listing = liveListing("L1", ListingType.LEND);
-        DealLifecycle.DealRecord first = lifecycle.accept(lifecycle.submit(listing));
+        Deal first = lifecycle.accept(borrow(listing));
         lifecycle.returnItem(first);
-        DealLifecycle.DealRecord second = lifecycle.accept(lifecycle.submit(listing));
+        Deal second = lifecycle.accept(borrow(listing));
 
         lifecycle.complete(first);
 
@@ -268,11 +325,11 @@ class DealLifecycleTest {
     @Test
     void acceptingARequestForANonLiveListingThrows() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.Request request = lifecycle.submit(listing);
+        PriceOffer offer = offer(listing);
         listing.setStatus(ListingStatus.SOLD);
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.accept(request));
-        assertEquals(RequestStatus.PENDING, request.getStatus());
+        assertThrows(IllegalStateException.class, () -> lifecycle.accept(offer));
+        assertEquals(RequestStatus.PENDING, offer.getStatus());
         assertEquals(ListingStatus.SOLD, listing.getStatus());
         assertTrue(lifecycle.activeDeal(listing).isEmpty());
     }
@@ -280,7 +337,7 @@ class DealLifecycleTest {
     @Test
     void cancellingAnActiveDealReleasesTheListing() {
         Listing listing = liveListing("L1", ListingType.SELL);
-        DealLifecycle.DealRecord deal = lifecycle.accept(lifecycle.submit(listing));
+        Deal deal = lifecycle.accept(offer(listing));
 
         lifecycle.cancel(deal);
 
@@ -293,34 +350,33 @@ class DealLifecycleTest {
 
     @Test
     void pendingRequestCannotAcceptACounter() {
-        DealLifecycle.Request pending = lifecycle.submit(liveListing("L1", ListingType.SELL));
+        PriceOffer pending = offer(liveListing("L1", ListingType.SELL));
 
         assertThrows(IllegalStateException.class, () -> lifecycle.acceptCounter(pending));
     }
 
     @Test
     void counteredRequestCannotBeAcceptedDirectly() {
-        DealLifecycle.Request countered = lifecycle.submit(liveListing("L1", ListingType.SELL));
-        lifecycle.counter(countered);
+        PriceOffer countered = offer(liveListing("L1", ListingType.SELL));
+        lifecycle.counterOffer(countered, new BigDecimal("120"));
 
         assertThrows(IllegalStateException.class, () -> lifecycle.accept(countered));
     }
 
     @Test
     void acceptedRequestCannotBeCounteredOrDeclined() {
-        DealLifecycle.Request accepted =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.SELL))).getRequest();
+        PriceOffer accepted = (PriceOffer) lifecycle.accept(offer(liveListing("L1", ListingType.SELL))).getRequest();
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.counter(accepted));
+        assertThrows(IllegalStateException.class, () -> lifecycle.counterOffer(accepted, BigDecimal.TEN));
         assertThrows(IllegalStateException.class, () -> lifecycle.decline(accepted));
     }
 
     @Test
     void declinedRequestCannotMoveAgain() {
-        DealLifecycle.Request declined = lifecycle.submit(liveListing("L1", ListingType.SELL));
+        PriceOffer declined = offer(liveListing("L1", ListingType.SELL));
         lifecycle.decline(declined);
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.counter(declined));
+        assertThrows(IllegalStateException.class, () -> lifecycle.counterOffer(declined, BigDecimal.TEN));
         assertThrows(IllegalStateException.class, () -> lifecycle.decline(declined));
         assertThrows(IllegalStateException.class, () -> lifecycle.accept(declined));
         assertThrows(IllegalStateException.class, () -> lifecycle.acceptCounter(declined));
@@ -328,8 +384,7 @@ class DealLifecycleTest {
 
     @Test
     void activeSaleCannotBeReturned() {
-        DealLifecycle.DealRecord sale =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.SELL)));
+        Deal sale = lifecycle.accept(offer(liveListing("L1", ListingType.SELL)));
 
         assertThrows(IllegalStateException.class, () -> lifecycle.returnItem(sale));
         assertThrows(IllegalStateException.class, () -> lifecycle.autoReturn(sale));
@@ -337,16 +392,14 @@ class DealLifecycleTest {
 
     @Test
     void activeLoanCannotBeCompletedBeforeReturn() {
-        DealLifecycle.DealRecord loan =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.LEND)));
+        Deal loan = lifecycle.accept(borrow(liveListing("L1", ListingType.LEND)));
 
         assertThrows(IllegalStateException.class, () -> lifecycle.complete(loan));
     }
 
     @Test
     void returnedDealCannotBeReturnedOrCancelledAgain() {
-        DealLifecycle.DealRecord loan =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.LEND)));
+        Deal loan = lifecycle.accept(borrow(liveListing("L1", ListingType.LEND)));
         lifecycle.returnItem(loan);
 
         assertThrows(IllegalStateException.class, () -> lifecycle.returnItem(loan));
@@ -356,8 +409,7 @@ class DealLifecycleTest {
 
     @Test
     void autoReturnedDealCannotBeReturnedOrCancelledAgain() {
-        DealLifecycle.DealRecord loan =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.LEND)));
+        Deal loan = lifecycle.accept(borrow(liveListing("L1", ListingType.LEND)));
         lifecycle.autoReturn(loan);
 
         assertThrows(IllegalStateException.class, () -> lifecycle.returnItem(loan));
@@ -366,21 +418,19 @@ class DealLifecycleTest {
 
     @Test
     void completedDealCannotMoveAgain() {
-        DealLifecycle.DealRecord sale =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.SELL)));
+        Deal sale = lifecycle.accept(offer(liveListing("L1", ListingType.SELL)));
         lifecycle.complete(sale);
 
         assertThrows(IllegalStateException.class, () -> lifecycle.complete(sale));
         assertThrows(IllegalStateException.class, () -> lifecycle.cancel(sale));
         assertThrows(IllegalStateException.class, () -> lifecycle.returnItem(sale));
         assertThrows(IllegalStateException.class, () -> lifecycle.autoReturn(sale));
-        assertFalse(lifecycle.activeDeal(sale.getRequest().getListing()).isPresent());
+        assertFalse(lifecycle.activeDeal(sale.getListing()).isPresent());
     }
 
     @Test
     void cancelledDealCannotMoveAgain() {
-        DealLifecycle.DealRecord sale =
-                lifecycle.accept(lifecycle.submit(liveListing("L1", ListingType.SELL)));
+        Deal sale = lifecycle.accept(offer(liveListing("L1", ListingType.SELL)));
         lifecycle.cancel(sale);
 
         assertThrows(IllegalStateException.class, () -> lifecycle.complete(sale));
@@ -391,10 +441,19 @@ class DealLifecycleTest {
 
     // ---------- Helpers ----------
 
-    private static Listing liveListing(String id, ListingType type) {
+    private PriceOffer offer(Listing listing) {
+        return lifecycle.submitOffer(ALICE, listing, new BigDecimal("100"));
+    }
+
+    private BorrowRequest borrow(Listing listing) {
+        return lifecycle.submitBorrow(ALICE, listing, NOW.plusHours(1), NOW.plusDays(1));
+    }
+
+    static Listing liveListing(String id, ListingType type) {
         Listing listing = new Listing();
         listing.setId(id);
         listing.setType(type);
+        listing.setSellerUsername("charlie");
         listing.setStatus(ListingStatus.LIVE);
         return listing;
     }

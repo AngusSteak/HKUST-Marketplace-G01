@@ -1,5 +1,6 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
 
 import java.util.List;
@@ -49,7 +50,8 @@ public class DummyDataService {
     void seedData() {
         users.seed();
         List<Listing> seededListings = listings.seed();
-        deals.seed(seededListings.get(0)); // D500 references the first listing (Calculus Textbook)
+        // alice's accepted offer on the first listing (Calculus Textbook), which becomes RESERVED
+        deals.seed((Buyer) users.find("alice"), seededListings.get(0));
         notifications.seed();
         reviews.seed();
     }
