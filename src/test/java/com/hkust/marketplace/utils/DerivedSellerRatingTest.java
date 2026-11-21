@@ -16,63 +16,63 @@ class DerivedSellerRatingTest {
     void seededCharlieRatingIsDerivedFromTheSeededReview() {
         DummyDataService store = seededStore();
 
-        OptionalDouble average = store.getSellerAverageRating("charlie");
+        OptionalDouble average = store.reviews().averageRating("charlie");
 
         assertTrue(average.isPresent());
         assertEquals(5.0, average.getAsDouble());
-        assertEquals(1, store.getSellerVisibleReviewCount("charlie"));
+        assertEquals(1, store.reviews().visibleCount("charlie"));
     }
 
     @Test
     void addingAReviewUpdatesTheDerivedAverage() {
         DummyDataService store = seededStore();
-        store.addReview(reviewBy("bob", "charlie", 4));
+        store.reviews().add(reviewBy("bob", "charlie", 4));
 
-        assertEquals(4.5, store.getSellerAverageRating("charlie").getAsDouble());
-        assertEquals(2, store.getSellerVisibleReviewCount("charlie"));
+        assertEquals(4.5, store.reviews().averageRating("charlie").getAsDouble());
+        assertEquals(2, store.reviews().visibleCount("charlie"));
     }
 
     @Test
     void hidingAReviewExcludesItFromTheDerivedAverage() {
         DummyDataService store = seededStore();
-        store.addReview(reviewBy("bob", "charlie", 4));
+        store.reviews().add(reviewBy("bob", "charlie", 4));
 
         reviewByRating(store, "charlie", 5).setHidden(true);
 
-        assertEquals(4.0, store.getSellerAverageRating("charlie").getAsDouble());
-        assertEquals(1, store.getSellerVisibleReviewCount("charlie"));
+        assertEquals(4.0, store.reviews().averageRating("charlie").getAsDouble());
+        assertEquals(1, store.reviews().visibleCount("charlie"));
     }
 
     @Test
     void hidingAllReviewsLeavesNoRatingYet() {
         DummyDataService store = seededStore();
-        for (Review review : store.getReviewsForSeller("charlie")) {
+        for (Review review : store.reviews().forSeller("charlie")) {
             review.setHidden(true);
         }
 
-        assertFalse(store.getSellerAverageRating("charlie").isPresent());
-        assertEquals(0, store.getSellerVisibleReviewCount("charlie"));
+        assertFalse(store.reviews().averageRating("charlie").isPresent());
+        assertEquals(0, store.reviews().visibleCount("charlie"));
     }
 
     @Test
     void unhidingAReviewRestoresTheDerivedAverage() {
         DummyDataService store = seededStore();
-        store.addReview(reviewBy("bob", "charlie", 4));
+        store.reviews().add(reviewBy("bob", "charlie", 4));
         Review seededReview = reviewByRating(store, "charlie", 5);
         seededReview.setHidden(true);
 
         seededReview.setHidden(false);
 
-        assertEquals(4.5, store.getSellerAverageRating("charlie").getAsDouble());
-        assertEquals(2, store.getSellerVisibleReviewCount("charlie"));
+        assertEquals(4.5, store.reviews().averageRating("charlie").getAsDouble());
+        assertEquals(2, store.reviews().visibleCount("charlie"));
     }
 
     @Test
     void sellerWithoutReviewsHasNoRatingYet() {
         DummyDataService store = seededStore();
 
-        assertFalse(store.getSellerAverageRating("diana").isPresent());
-        assertEquals(0, store.getSellerVisibleReviewCount("diana"));
+        assertFalse(store.reviews().averageRating("diana").isPresent());
+        assertEquals(0, store.reviews().visibleCount("diana"));
     }
 
     private DummyDataService seededStore() {
@@ -90,7 +90,7 @@ class DerivedSellerRatingTest {
     }
 
     private Review reviewByRating(DummyDataService store, String sellerUsername, int rating) {
-        List<Review> visible = store.getReviewsForSeller(sellerUsername);
+        List<Review> visible = store.reviews().forSeller(sellerUsername);
         return visible.stream()
                 .filter(r -> r.getRating() == rating)
                 .findFirst()

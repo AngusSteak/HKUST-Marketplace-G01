@@ -5,6 +5,7 @@ import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.PasswordHasher;
 import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
@@ -43,7 +44,7 @@ public class BuyerRegisterController {
             showError("Username is required.");
             return;
         }
-        if (DummyDataService.getInstance().usernameExists(username)) {
+        if (DummyDataService.getInstance().users().usernameExists(username)) {
             showError("Username already taken. Please choose another.");
             return;
         }
@@ -51,7 +52,7 @@ public class BuyerRegisterController {
             showError("Full Name cannot be empty.");
             return;
         }
-        String pwdCheck = DummyDataService.checkPasswordStrength(password);
+        String pwdCheck = UserStore.checkPasswordStrength(password);
         if (!"OK".equals(pwdCheck)) {
             showError(pwdCheck);
             return;
@@ -65,7 +66,7 @@ public class BuyerRegisterController {
         if (residence != null) {
             user.setResidenceHall(residence);
         }
-        DummyDataService.getInstance().registerUser(user);
+        DummyDataService.getInstance().users().register(user);
 
         showSuccess("Registration successful! You can now login.");
         // Clear form

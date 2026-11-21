@@ -47,7 +47,7 @@ public class AdminDashboardController {
         VBox root = new VBox(14);
         root.setPadding(new Insets(4));
 
-        List<Listing> pending = DummyDataService.getInstance().getPendingListings();
+        List<Listing> pending = DummyDataService.getInstance().listings().pending();
         if (pending.isEmpty()) {
             Label empty = new Label("No listings awaiting review.");
             empty.setStyle("-fx-text-fill: #2e7d32; -fx-font-size: 15px;");
@@ -88,8 +88,8 @@ public class AdminDashboardController {
                 if (r == ButtonType.OK) {
                     l.setStatus(ListingStatus.LIVE);
                     l.setReviewedAt(LocalDateTime.now());
-                    DummyDataService.getInstance().updateListing(l);
-                    DummyDataService.getInstance().addNotification(new Notification(
+                    DummyDataService.getInstance().listings().update(l);
+                    DummyDataService.getInstance().notifications().add(new Notification(
                             l.getSellerUsername(), "Listing Approved",
                             "Your listing '" + l.getTitle() + "' is now live!", "System"));
                     showReview();
@@ -112,8 +112,8 @@ public class AdminDashboardController {
                 l.setStatus(ListingStatus.REJECTED);
                 l.setRejectionReason(reason);
                 l.setReviewedAt(LocalDateTime.now());
-                DummyDataService.getInstance().updateListing(l);
-                DummyDataService.getInstance().addNotification(new Notification(
+                DummyDataService.getInstance().listings().update(l);
+                DummyDataService.getInstance().notifications().add(new Notification(
                         l.getSellerUsername(), "Listing Rejected",
                         "Your listing '" + l.getTitle() + "' was rejected. Reason: " + reason, "System"));
                 showReview();
@@ -139,7 +139,7 @@ public class AdminDashboardController {
                 "Admin can create a listing on behalf of a seller here.\nSame form fields as Seller Create Listing.\n(UI placeholder)").showAndWait());
         root.getChildren().add(addBtn);
 
-        for (Listing l : DummyDataService.getInstance().getAllListings()) {
+        for (Listing l : DummyDataService.getInstance().listings().all()) {
             HBox row = new HBox(12);
             row.getStyleClass().add("card");
             row.setAlignment(Pos.CENTER_LEFT);
@@ -163,7 +163,7 @@ public class AdminDashboardController {
                 Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Permanently remove this listing?");
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
-                        DummyDataService.getInstance().removeListing(l.getId());
+                        DummyDataService.getInstance().listings().remove(l.getId());
                         showAllListings();
                     }
                 });
@@ -185,7 +185,7 @@ public class AdminDashboardController {
         VBox root = new VBox(12);
         root.setPadding(new Insets(4));
 
-        for (User u : DummyDataService.getInstance().getAllUsers()) {
+        for (User u : DummyDataService.getInstance().users().all()) {
             if (u.getRole() == UserRole.ADMIN) continue;
 
             HBox row = new HBox(12);
@@ -285,7 +285,7 @@ public class AdminDashboardController {
         filters.getChildren().addAll(userFilter, scoreFilter);
         root.getChildren().add(filters);
 
-        for (Review r : DummyDataService.getInstance().getAllReviews()) {
+        for (Review r : DummyDataService.getInstance().reviews().all()) {
             HBox row = new HBox(12);
             row.getStyleClass().add("card");
             row.setAlignment(Pos.CENTER_LEFT);
@@ -321,7 +321,7 @@ public class AdminDashboardController {
         contentPane.getChildren().clear();
         VBox root = new VBox(12);
         root.setPadding(new Insets(4));
-        List<Notification> notifs = DummyDataService.getInstance().getNotificationsFor("admin");
+        List<Notification> notifs = DummyDataService.getInstance().notifications().forUser("admin");
         if (notifs.isEmpty()) {
             root.getChildren().add(new Label("No notifications."));
         } else {

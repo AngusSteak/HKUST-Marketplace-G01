@@ -28,7 +28,7 @@ public class AdminLoginController {
             showError("Please enter credentials.");
             return;
         }
-        User user = DummyDataService.getInstance().findUser(username);
+        User user = DummyDataService.getInstance().users().find(username);
         switch (LoginGate.check(user, UserRole.ADMIN, password)) {
             case USER_NOT_FOUND, WRONG_PORTAL -> showError("Invalid admin credentials.");
             case WRONG_PASSWORD -> showError("Incorrect password.");

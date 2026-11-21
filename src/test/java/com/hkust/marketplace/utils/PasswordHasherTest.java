@@ -15,10 +15,10 @@ class PasswordHasherTest {
     @Test
     void registeredUserStoresOnlyABcryptHashThatVerifiesTheRightPassword() {
         DummyDataService store = new DummyDataService();
-        store.registerUser(new Buyer("carol", "Carol Cheung",
+        store.users().register(new Buyer("carol", "Carol Cheung",
                 PasswordHasher.hash("Password1"), UserRole.BUYER));
 
-        User stored = store.findUser("carol");
+        User stored = store.users().find("carol");
         assertNotNull(stored);
         assertNotEquals("Password1", stored.getPasswordHash());
         assertTrue(stored.getPasswordHash().startsWith("$2"));
@@ -39,7 +39,7 @@ class PasswordHasherTest {
     }
 
     private static void assertSeededCredential(DummyDataService store, String username, String password) {
-        User user = store.findUser(username);
+        User user = store.users().find(username);
         assertNotNull(user, "seeded user " + username + " should exist");
         assertNotEquals(password, user.getPasswordHash(), username + " must not store plaintext");
         assertTrue(PasswordHasher.verify(password, user.getPasswordHash()),

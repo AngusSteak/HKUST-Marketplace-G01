@@ -30,7 +30,7 @@ public class BuyerLoginController {
             return;
         }
 
-        User user = DummyDataService.getInstance().findUser(username);
+        User user = DummyDataService.getInstance().users().find(username);
         switch (LoginGate.check(user, UserRole.BUYER, password)) {
             case USER_NOT_FOUND -> showError("User not found. Please check your username.");
             case WRONG_PORTAL -> showError("This account is not a Buyer account. Please use the correct portal.");

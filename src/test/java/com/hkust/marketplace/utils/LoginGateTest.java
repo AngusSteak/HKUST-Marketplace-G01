@@ -31,7 +31,7 @@ class LoginGateTest {
     @Test
     void deactivatedSeedUsersAreRefusedOnTheirOwnPortal() {
         for (String username : new String[]{"alice", "bob", "charlie", "diana", "admin"}) {
-            store.findUser(username).setActive(false);
+            store.users().find(username).setActive(false);
         }
 
         assertEquals(LoginGate.Outcome.DISABLED, check("alice", UserRole.BUYER, "password1"));
@@ -43,7 +43,7 @@ class LoginGateTest {
 
     @Test
     void reactivatingAnAccountRestoresLogin() {
-        User alice = store.findUser("alice");
+        User alice = store.users().find("alice");
 
         alice.setActive(false);
         assertEquals(LoginGate.Outcome.DISABLED, check("alice", UserRole.BUYER, "password1"));
@@ -70,26 +70,26 @@ class LoginGateTest {
 
     @Test
     void passwordIsCheckedBeforeDisabledFlag() {
-        store.findUser("alice").setActive(false);
+        store.users().find("alice").setActive(false);
 
         assertEquals(LoginGate.Outcome.WRONG_PASSWORD, check("alice", UserRole.BUYER, "not-the-password"));
     }
 
     @Test
     void deactivatedUsersRemainQueryableInTheStore() {
-        User alice = store.findUser("alice");
+        User alice = store.users().find("alice");
         alice.setActive(false);
 
-        assertSame(alice, store.findUser("alice"));
-        assertFalse(store.findUser("alice").isActive());
-        assertNotNull(store.getAllUsers().stream()
+        assertSame(alice, store.users().find("alice"));
+        assertFalse(store.users().find("alice").isActive());
+        assertNotNull(store.users().all().stream()
                 .filter(u -> u.getUsername().equals("alice"))
                 .findFirst()
                 .orElse(null));
-        assertTrue(store.getAllUsers().size() >= 5);
+        assertTrue(store.users().all().size() >= 5);
     }
 
     private LoginGate.Outcome check(String username, UserRole role, String password) {
-        return LoginGate.check(store.findUser(username), role, password);
+        return LoginGate.check(store.users().find(username), role, password);
     }
 }

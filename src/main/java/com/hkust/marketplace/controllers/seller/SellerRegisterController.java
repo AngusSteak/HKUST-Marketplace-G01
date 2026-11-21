@@ -3,8 +3,10 @@ package com.hkust.marketplace.controllers.seller;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.PasswordHasher;
 import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
@@ -22,7 +24,7 @@ public class SellerRegisterController {
 
     @FXML
     public void initialize() {
-        meetupCombo.setItems(FXCollections.observableArrayList(DummyDataService.HKUST_LOCATIONS));
+        meetupCombo.setItems(FXCollections.observableArrayList(ListingStore.HKUST_LOCATIONS));
     }
 
     @FXML
@@ -34,18 +36,18 @@ public class SellerRegisterController {
         String confirm = confirmPasswordField.getText();
 
         if (username.isEmpty()) { showError("Username is required."); return; }
-        if (DummyDataService.getInstance().usernameExists(username)) {
+        if (DummyDataService.getInstance().users().usernameExists(username)) {
             showError("Username already taken."); return;
         }
         if (fullName.isEmpty()) { showError("Full Name cannot be empty."); return; }
-        String pwdCheck = DummyDataService.checkPasswordStrength(password);
+        String pwdCheck = UserStore.checkPasswordStrength(password);
         if (!"OK".equals(pwdCheck)) { showError(pwdCheck); return; }
         if (!password.equals(confirm)) { showError("Passwords do not match."); return; }
 
         Seller user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);
         if (meetupCombo.getValue() != null) user.setPreferredMeetup(meetupCombo.getValue());
         if (bioArea.getText() != null && !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());
-        DummyDataService.getInstance().registerUser(user);
+        DummyDataService.getInstance().users().register(user);
 
         showSuccess("Seller account created! You can now login.");
         usernameField.clear(); fullNameField.clear(); passwordField.clear();

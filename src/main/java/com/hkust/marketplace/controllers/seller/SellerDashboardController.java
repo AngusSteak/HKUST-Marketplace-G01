@@ -2,6 +2,7 @@ package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -54,7 +55,7 @@ public class SellerDashboardController {
 
         User user = SessionManager.getCurrentUser();
         List<Listing> myListings = DummyDataService.getInstance()
-                .getListingsBySeller(user != null ? user.getUsername() : "");
+                .listings().bySeller(user != null ? user.getUsername() : "");
 
         if (myListings.isEmpty()) {
             Label empty = new Label("You have not posted any listings yet.");
@@ -104,7 +105,7 @@ public class SellerDashboardController {
             Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Delete this listing?");
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
-                    DummyDataService.getInstance().removeListing(l.getId());
+                    DummyDataService.getInstance().listings().remove(l.getId());
                     showMyListings();
                 }
             });
@@ -133,10 +134,10 @@ public class SellerDashboardController {
 
         TextField nameField = new TextField();
         nameField.setPromptText("Item name *");
-        ComboBox<String> catCombo = new ComboBox<>(FXCollections.observableArrayList(DummyDataService.CATEGORIES));
+        ComboBox<String> catCombo = new ComboBox<>(FXCollections.observableArrayList(ListingStore.CATEGORIES));
         catCombo.setPromptText("Category *");
         catCombo.setMaxWidth(Double.MAX_VALUE);
-        ComboBox<String> condCombo = new ComboBox<>(FXCollections.observableArrayList(DummyDataService.CONDITIONS));
+        ComboBox<String> condCombo = new ComboBox<>(FXCollections.observableArrayList(ListingStore.CONDITIONS));
         condCombo.setPromptText("Condition *");
         condCombo.setMaxWidth(Double.MAX_VALUE);
         TextArea descArea = new TextArea();
@@ -148,7 +149,7 @@ public class SellerDashboardController {
         TextField daysField = new TextField();
         daysField.setPromptText("Lending duration (days) – required for Lend");
 
-        ComboBox<String> meetupCombo = new ComboBox<>(FXCollections.observableArrayList(DummyDataService.HKUST_LOCATIONS));
+        ComboBox<String> meetupCombo = new ComboBox<>(FXCollections.observableArrayList(ListingStore.HKUST_LOCATIONS));
         meetupCombo.setPromptText("Meet-up location *");
         meetupCombo.setMaxWidth(Double.MAX_VALUE);
 
@@ -194,9 +195,9 @@ public class SellerDashboardController {
                 }
                 default -> listing.setType(ListingType.GIVEAWAY);
             }
-            DummyDataService.getInstance().addListing(listing);
+            DummyDataService.getInstance().listings().add(listing);
             // Notify admin
-            DummyDataService.getInstance().addNotification(new Notification(
+            DummyDataService.getInstance().notifications().add(new Notification(
                     "admin", "New Listing Submitted",
                     user.getFullName() + " submitted '" + listing.getTitle() + "' for review.", "System"));
             new Alert(Alert.AlertType.INFORMATION,
@@ -231,11 +232,11 @@ public class SellerDashboardController {
         User user = SessionManager.getCurrentUser();
         String sellerUsername = user != null ? user.getUsername() : "";
         List<Listing> myListings = DummyDataService.getInstance()
-                .getListingsBySeller(sellerUsername);
+                .listings().bySeller(sellerUsername);
 
         // Metric cards
-        OptionalDouble average = DummyDataService.getInstance().getSellerAverageRating(sellerUsername);
-        int reviewCount = DummyDataService.getInstance().getSellerVisibleReviewCount(sellerUsername);
+        OptionalDouble average = DummyDataService.getInstance().reviews().averageRating(sellerUsername);
+        int reviewCount = DummyDataService.getInstance().reviews().visibleCount(sellerUsername);
         String averageRating = average.isPresent()
                 ? String.format("%.1f", average.getAsDouble())
                 : "No rating yet";
@@ -302,7 +303,7 @@ public class SellerDashboardController {
 
         User user = SessionManager.getCurrentUser();
         List<Review> reviews = DummyDataService.getInstance()
-                .getReviewsForSeller(user != null ? user.getUsername() : "");
+                .reviews().forSeller(user != null ? user.getUsername() : "");
 
         if (reviews.isEmpty()) {
             root.getChildren().add(new Label("No reviews yet."));
@@ -339,7 +340,7 @@ public class SellerDashboardController {
         root.setPadding(new Insets(4));
         User user = SessionManager.getCurrentUser();
         List<Notification> notifs = DummyDataService.getInstance()
-                .getNotificationsFor(user != null ? user.getUsername() : "");
+                .notifications().forUser(user != null ? user.getUsername() : "");
         if (notifs.isEmpty()) {
             root.getChildren().add(new Label("No notifications."));
         } else {
@@ -377,7 +378,7 @@ public class SellerDashboardController {
         pass.setPromptText("New password (optional)");
         TextArea bio = new TextArea(user instanceof Seller seller && seller.getBio() != null ? seller.getBio() : "");
         bio.setPrefRowCount(3);
-        ComboBox<String> meetup = new ComboBox<>(FXCollections.observableArrayList(DummyDataService.HKUST_LOCATIONS));
+        ComboBox<String> meetup = new ComboBox<>(FXCollections.observableArrayList(ListingStore.HKUST_LOCATIONS));
         if (user instanceof Seller seller && seller.getPreferredMeetup() != null) meetup.setValue(seller.getPreferredMeetup());
         meetup.setMaxWidth(Double.MAX_VALUE);
 

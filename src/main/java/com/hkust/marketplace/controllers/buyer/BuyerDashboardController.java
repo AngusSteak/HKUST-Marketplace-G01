@@ -6,6 +6,7 @@ import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -60,7 +61,7 @@ public class BuyerDashboardController {
         HBox filterBar = new HBox(12);
         filterBar.setAlignment(Pos.CENTER_LEFT);
         ComboBox<String> categoryFilter = new ComboBox<>(FXCollections.observableArrayList("All Categories"));
-        categoryFilter.getItems().addAll(DummyDataService.CATEGORIES);
+        categoryFilter.getItems().addAll(ListingStore.CATEGORIES);
         categoryFilter.getSelectionModel().selectFirst();
         ComboBox<String> typeFilter = new ComboBox<>(FXCollections.observableArrayList("All Types", "Sell", "Lend", "Giveaway"));
         typeFilter.getSelectionModel().selectFirst();
@@ -80,7 +81,7 @@ public class BuyerDashboardController {
         FlowPane grid = new FlowPane(16, 16);
         grid.setPrefWrapLength(900);
 
-        List<Listing> live = DummyDataService.getInstance().getLiveListings();
+        List<Listing> live = DummyDataService.getInstance().listings().live();
         if (live.isEmpty()) {
             Label empty = new Label("No live listings at the moment.");
             empty.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 15px;");
@@ -310,7 +311,7 @@ public class BuyerDashboardController {
 
         User user = SessionManager.getCurrentUser();
         List<Notification> notifs = DummyDataService.getInstance()
-                .getNotificationsFor(user != null ? user.getUsername() : "");
+                .notifications().forUser(user != null ? user.getUsername() : "");
 
         if (notifs.isEmpty()) {
             Label empty = new Label("No notifications yet.");

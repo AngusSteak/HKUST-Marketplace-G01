@@ -20,9 +20,9 @@ class UserRegistrationSubtypeTest {
         Buyer buyer = new Buyer("alice", "Alice Chan", PASSWORD_HASH, UserRole.BUYER);
         buyer.setResidenceHall("Hall 3");
 
-        store.registerUser(buyer);
+        store.users().register(buyer);
 
-        Buyer stored = assertInstanceOf(Buyer.class, store.findUser("ALICE"));
+        Buyer stored = assertInstanceOf(Buyer.class, store.users().find("ALICE"));
         assertSame(buyer, stored);
         assertEquals("Hall 3", stored.getResidenceHall());
     }
@@ -34,9 +34,9 @@ class UserRegistrationSubtypeTest {
         seller.setBio("Final year CSE student.");
         seller.setPreferredMeetup("Library");
 
-        store.registerUser(seller);
+        store.users().register(seller);
 
-        Seller stored = assertInstanceOf(Seller.class, store.findUser("CHARLIE"));
+        Seller stored = assertInstanceOf(Seller.class, store.users().find("CHARLIE"));
         assertSame(seller, stored);
         assertEquals("Final year CSE student.", stored.getBio());
         assertEquals("Library", stored.getPreferredMeetup());
@@ -46,14 +46,14 @@ class UserRegistrationSubtypeTest {
     void duplicateUsernameIsRejectedAcrossRolesAndKeepsTheFirstAccount() {
         DummyDataService store = new DummyDataService();
         User buyer = new Buyer("alice", "Alice Chan", PASSWORD_HASH, UserRole.BUYER);
-        store.registerUser(buyer);
+        store.users().register(buyer);
 
         User seller = new Seller("ALICE", "Impostor Seller", PASSWORD_HASH, UserRole.SELLER);
-        store.registerUser(seller);
+        store.users().register(seller);
 
-        User stored = store.findUser("alice");
+        User stored = store.users().find("alice");
         assertSame(buyer, stored);
         assertInstanceOf(Buyer.class, stored);
-        assertEquals(1, store.getAllUsers().size());
+        assertEquals(1, store.users().all().size());
     }
 }

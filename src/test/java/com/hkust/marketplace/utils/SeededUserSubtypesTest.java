@@ -35,23 +35,23 @@ class SeededUserSubtypesTest {
 
     @Test
     void seededRoleDataIsReadableThroughSubtypeReferences() {
-        Buyer alice = assertInstanceOf(Buyer.class, store.findUser("alice"));
+        Buyer alice = assertInstanceOf(Buyer.class, store.users().find("alice"));
         assertEquals("Hall 3", alice.getResidenceHall());
 
-        Buyer bob = assertInstanceOf(Buyer.class, store.findUser("bob"));
+        Buyer bob = assertInstanceOf(Buyer.class, store.users().find("bob"));
         assertEquals("Off-campus", bob.getResidenceHall());
 
-        Seller charlie = assertInstanceOf(Seller.class, store.findUser("charlie"));
+        Seller charlie = assertInstanceOf(Seller.class, store.users().find("charlie"));
         assertEquals("Final year CSE student selling textbooks and gadgets.", charlie.getBio());
         assertEquals("Library", charlie.getPreferredMeetup());
 
-        Seller diana = assertInstanceOf(Seller.class, store.findUser("diana"));
+        Seller diana = assertInstanceOf(Seller.class, store.users().find("diana"));
         assertEquals("Selling furniture and kitchen items before graduation.", diana.getBio());
         assertEquals("Hall 5 Lobby", diana.getPreferredMeetup());
     }
 
     private void assertSeededSubtype(String username, Class<? extends User> expectedType, UserRole expectedRole) {
-        User user = store.findUser(username);
+        User user = store.users().find(username);
         assertNotNull(user, username + " should be seeded");
         assertInstanceOf(expectedType, user, username + " should be a " + expectedType.getSimpleName());
         assertEquals(expectedRole, user.getRole(), username + " role should match its subtype");

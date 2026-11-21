@@ -1,64 +1,23 @@
 package com.hkust.marketplace.utils;
 
-import com.hkust.marketplace.models.*;
+import com.hkust.marketplace.models.Listing;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
+import java.util.List;
 
 /**
- * In-memory data store for the frontend demo.
+ * In-memory data store for the frontend demo, split into per-area stores.
  * All data is lost when the application closes.
- * TODO: Replace this service with real repositories / API clients.
+ * TODO: Replace these stores with real repositories / API clients.
  */
 public class DummyDataService {
 
     private static final DummyDataService INSTANCE = createSeededInstance();
 
-    private final Map<String, User> users = new LinkedHashMap<>();
-    private final Map<String, Listing> listings = new LinkedHashMap<>();
-    private final List<Deal> deals = new ArrayList<>();
-    private final List<Notification> notifications = new ArrayList<>();
-    private final List<Review> reviews = new ArrayList<>();
-
-    private final AtomicInteger listingIdCounter = new AtomicInteger(100);
-    private final AtomicInteger dealIdCounter = new AtomicInteger(500);
-    private final AtomicInteger notifIdCounter = new AtomicInteger(1);
-    private final AtomicInteger reviewIdCounter = new AtomicInteger(1);
-
-    // Predefined HKUST locations
-    public static final List<String> HKUST_LOCATIONS = List.of(
-            "Academic Building (LG1)",
-            "Library",
-            "Student Centre",
-            "Hall 1 Lobby",
-            "Hall 2 Lobby",
-            "Hall 3 Lobby",
-            "Hall 4 Lobby",
-            "Hall 5 Lobby",
-            "Hall 6 Lobby",
-            "Hall 7 Lobby",
-            "Hall 8 Lobby",
-            "Hall 9 Lobby",
-            "UG Hall 1",
-            "UG Hall 2",
-            "North Gate",
-            "South Gate",
-            "Shaw Auditorium",
-            "Coffee Shop (LG5)",
-            "Sports Hall"
-    );
-
-    public static final List<String> CATEGORIES = List.of(
-            "Textbooks", "Electronics", "Furniture", "Clothing",
-            "Stationery", "Sports Equipment", "Kitchenware", "Others"
-    );
-
-    public static final List<String> CONDITIONS = List.of(
-            "New", "Like New", "Used", "For Parts"
-    );
+    private final UserStore users = new UserStore();
+    private final ListingStore listings = new ListingStore();
+    private final DealStore deals = new DealStore();
+    private final NotificationStore notifications = new NotificationStore();
+    private final ReviewStore reviews = new ReviewStore();
 
     /**
      * Creates an empty store with no demo data. Visible for tests so each test can
@@ -77,258 +36,21 @@ public class DummyDataService {
         return INSTANCE;
     }
 
+    public UserStore users() { return users; }
+    public ListingStore listings() { return listings; }
+    public DealStore deals() { return deals; }
+    public NotificationStore notifications() { return notifications; }
+    public ReviewStore reviews() { return reviews; }
+
     /**
-     * Populates this store with the demo users, listings, deals and reviews. Visible for
-     * tests so they can seed an isolated instance instead of sharing the singleton.
+     * Populates this store with the demo data. Visible for tests so they can seed an
+     * isolated instance instead of sharing the singleton.
      */
     void seedData() {
-        // Admin
-        Admin admin = new Admin("admin", "System Admin", PasswordHasher.hash("admin123"), UserRole.ADMIN);
-        admin.setFullName("HKUST Marketplace Admin");
-        users.put("admin", admin);
-
-        // Sample buyers
-        Buyer buyer1 = new Buyer("alice", "Alice Chan", PasswordHasher.hash("password1"), UserRole.BUYER);
-        buyer1.setResidenceHall("Hall 3");
-        users.put("alice", buyer1);
-
-        Buyer buyer2 = new Buyer("bob", "Bob Wong", PasswordHasher.hash("password1"), UserRole.BUYER);
-        buyer2.setResidenceHall("Off-campus");
-        users.put("bob", buyer2);
-
-        // Sample sellers
-        Seller seller1 = new Seller("charlie", "Charlie Lee", PasswordHasher.hash("password1"), UserRole.SELLER);
-        seller1.setBio("Final year CSE student selling textbooks and gadgets.");
-        seller1.setPreferredMeetup("Library");
-        users.put("charlie", seller1);
-
-        Seller seller2 = new Seller("diana", "Diana Ng", PasswordHasher.hash("password1"), UserRole.SELLER);
-        seller2.setBio("Selling furniture and kitchen items before graduation.");
-        seller2.setPreferredMeetup("Hall 5 Lobby");
-        users.put("diana", seller2);
-
-        // Sample listings
-        Listing l1 = createListing("Calculus Textbook (Stewart)", "Barely used, 8th edition. Perfect for MATH 1013.",
-                "Textbooks", ListingType.SELL, "Like New", 180.0, null, "Library", "charlie", "Charlie Lee");
-        l1.setStatus(ListingStatus.LIVE);
-        listings.put(l1.getId(), l1);
-
-        Listing l2 = createListing("MacBook Pro Charger 61W", "Original Apple charger, works perfectly.",
-                "Electronics", ListingType.SELL, "Used", 250.0, null, "Academic Building (LG1)", "charlie", "Charlie Lee");
-        l2.setStatus(ListingStatus.LIVE);
-        listings.put(l2.getId(), l2);
-
-        Listing l3 = createListing("IKEA Desk Lamp", "Good condition, LED bulb included.",
-                "Furniture", ListingType.GIVEAWAY, "Used", null, null, "Hall 5 Lobby", "diana", "Diana Ng");
-        l3.setStatus(ListingStatus.LIVE);
-        listings.put(l3.getId(), l3);
-
-        Listing l4 = createListing("Graphing Calculator TI-84", "Can lend for one semester.",
-                "Electronics", ListingType.LEND, "Like New", null, 90, "Student Centre", "diana", "Diana Ng");
-        l4.setStatus(ListingStatus.LIVE);
-        listings.put(l4.getId(), l4);
-
-        Listing l5 = createListing("Mini Fridge", "Works well, cleaning required.",
-                "Furniture", ListingType.SELL, "Used", 400.0, null, "Hall 2 Lobby", "diana", "Diana Ng");
-        l5.setStatus(ListingStatus.PENDING_REVIEW);
-        listings.put(l5.getId(), l5);
-
-        // Sample deals
-        Deal d1 = new Deal();
-        d1.setId("D" + dealIdCounter.getAndIncrement());
-        d1.setListingId(l1.getId());
-        d1.setListingTitle(l1.getTitle());
-        d1.setBuyerUsername("alice");
-        d1.setSellerUsername("charlie");
-        d1.setDealType(ListingType.SELL);
-        d1.setStatus("Accepted");
-        d1.setOfferPrice(160.0);
-        deals.add(d1);
-
-        // Sample notifications
-        notifications.add(new Notification("alice", "Offer Accepted",
-                "Charlie accepted your offer of HK$160 for Calculus Textbook.", "Offer"));
-        notifications.add(new Notification("charlie", "New Offer Received",
-                "Alice offered HK$160 for your Calculus Textbook.", "Offer"));
-        notifications.add(new Notification("diana", "Listing Pending",
-                "Your Mini Fridge listing is awaiting admin review.", "System"));
-        notifications.add(new Notification("admin", "New Listing Submitted",
-                "Diana submitted 'Mini Fridge' for review.", "System"));
-
-        // Sample review
-        Review r1 = new Review();
-        r1.setId("R" + reviewIdCounter.getAndIncrement());
-        r1.setSellerUsername("charlie");
-        r1.setBuyerUsername("bob");
-        r1.setListingTitle("Old Chemistry Book");
-        r1.setRating(5);
-        r1.setComment("Very smooth transaction, book in excellent condition!");
-        reviews.add(r1);
-    }
-
-    private Listing createListing(String title, String desc, String cat, ListingType type,
-                                  String condition, Double price, Integer days,
-                                  String meetup, String sellerUser, String sellerName) {
-        Listing l = new Listing();
-        l.setId("L" + listingIdCounter.getAndIncrement());
-        l.setTitle(title);
-        l.setDescription(desc);
-        l.setCategory(cat);
-        l.setType(type);
-        l.setCondition(condition);
-        l.setPrice(price);
-        l.setLendingDays(days);
-        l.setMeetupLocation(meetup);
-        l.setSellerUsername(sellerUser);
-        l.setSellerFullName(sellerName);
-        l.setPostedAt(LocalDateTime.now().minusDays(new Random().nextInt(10)));
-        return l;
-    }
-
-    // ========== User methods ==========
-    public boolean usernameExists(String username) {
-        return users.containsKey(username.toLowerCase());
-    }
-
-    public User findUser(String username) {
-        return users.get(username.toLowerCase());
-    }
-
-    public void registerUser(User user) {
-        // Usernames are unique across roles (ADR-0003): first registration wins, so a
-        // duplicate can never replace the existing account.
-        users.putIfAbsent(user.getUsername().toLowerCase(), user);
-    }
-
-    public Collection<User> getAllUsers() {
-        return users.values();
-    }
-
-    public List<User> getUsersByRole(UserRole role) {
-        return users.values().stream()
-                .filter(u -> u.getRole() == role)
-                .collect(Collectors.toList());
-    }
-
-    // ========== Listing methods ==========
-    public Collection<Listing> getAllListings() {
-        return listings.values();
-    }
-
-    public List<Listing> getLiveListings() {
-        return listings.values().stream()
-                .filter(l -> l.getStatus() == ListingStatus.LIVE)
-                .collect(Collectors.toList());
-    }
-
-    public List<Listing> getPendingListings() {
-        return listings.values().stream()
-                .filter(l -> l.getStatus() == ListingStatus.PENDING_REVIEW)
-                .collect(Collectors.toList());
-    }
-
-    public List<Listing> getListingsBySeller(String username) {
-        return listings.values().stream()
-                .filter(l -> l.getSellerUsername().equalsIgnoreCase(username))
-                .collect(Collectors.toList());
-    }
-
-    public Listing findListing(String id) {
-        return listings.get(id);
-    }
-
-    public void addListing(Listing listing) {
-        if (listing.getId() == null) {
-            listing.setId("L" + listingIdCounter.getAndIncrement());
-        }
-        listings.put(listing.getId(), listing);
-    }
-
-    public void updateListing(Listing listing) {
-        listings.put(listing.getId(), listing);
-    }
-
-    public void removeListing(String id) {
-        listings.remove(id);
-    }
-
-    // ========== Deal methods ==========
-    public List<Deal> getDealsForBuyer(String username) {
-        return deals.stream()
-                .filter(d -> d.getBuyerUsername().equalsIgnoreCase(username))
-                .collect(Collectors.toList());
-    }
-
-    public List<Deal> getAllDeals() {
-        return new ArrayList<>(deals);
-    }
-
-    public void addDeal(Deal deal) {
-        if (deal.getId() == null) {
-            deal.setId("D" + dealIdCounter.getAndIncrement());
-        }
-        deals.add(deal);
-    }
-
-    // ========== Notification methods ==========
-    public List<Notification> getNotificationsFor(String username) {
-        return notifications.stream()
-                .filter(n -> n.getUsername().equalsIgnoreCase(username))
-                .sorted(Comparator.comparing(Notification::getTimestamp).reversed())
-                .collect(Collectors.toList());
-    }
-
-    public void addNotification(Notification n) {
-        if (n.getId() == null) {
-            n.setId("N" + notifIdCounter.getAndIncrement());
-        }
-        notifications.add(n);
-    }
-
-    // ========== Review methods ==========
-    public List<Review> getReviewsForSeller(String username) {
-        return reviews.stream()
-                .filter(r -> r.getSellerUsername().equalsIgnoreCase(username) && !r.isHidden())
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Average rating over the seller's visible (non-hidden) reviews. Derived at read time
-     * (ADR-0002); empty when there are no visible reviews, so "no rating yet" stays
-     * distinguishable from a real 0.0 rating.
-     */
-    public OptionalDouble getSellerAverageRating(String sellerUsername) {
-        return getReviewsForSeller(sellerUsername).stream()
-                .mapToInt(Review::getRating)
-                .average();
-    }
-
-    /** Number of visible (non-hidden) reviews backing {@link #getSellerAverageRating}. */
-    public int getSellerVisibleReviewCount(String sellerUsername) {
-        return getReviewsForSeller(sellerUsername).size();
-    }
-
-    public List<Review> getAllReviews() {
-        return new ArrayList<>(reviews);
-    }
-
-    public void addReview(Review r) {
-        if (r.getId() == null) {
-            r.setId("R" + reviewIdCounter.getAndIncrement());
-        }
-        reviews.add(r);
-    }
-
-    // Password strength helper (demo)
-    public static String checkPasswordStrength(String password) {
-        if (password == null || password.isEmpty()) return "Password cannot be empty.";
-        if (password.length() < 8) return "Password must be at least 8 characters.";
-        boolean hasUpper = password.chars().anyMatch(Character::isUpperCase);
-        boolean hasLower = password.chars().anyMatch(Character::isLowerCase);
-        boolean hasDigit = password.chars().anyMatch(Character::isDigit);
-        if (!hasUpper || !hasLower || !hasDigit) {
-            return "Password should contain uppercase, lowercase and a digit.";
-        }
-        return "OK";
+        users.seed();
+        List<Listing> seededListings = listings.seed();
+        deals.seed(seededListings.get(0)); // D500 references the first listing (Calculus Textbook)
+        notifications.seed();
+        reviews.seed();
     }
 }

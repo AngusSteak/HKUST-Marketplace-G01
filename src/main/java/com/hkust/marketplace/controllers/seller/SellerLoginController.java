@@ -28,7 +28,7 @@ public class SellerLoginController {
             showError("Please enter both username and password.");
             return;
         }
-        User user = DummyDataService.getInstance().findUser(username);
+        User user = DummyDataService.getInstance().users().find(username);
         switch (LoginGate.check(user, UserRole.SELLER, password)) {
             case USER_NOT_FOUND -> showError("User not found.");
             case WRONG_PORTAL -> showError("This account is not a Seller account. Use the correct portal.");
