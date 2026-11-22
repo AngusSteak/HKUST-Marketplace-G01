@@ -2,6 +2,7 @@ package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -87,7 +88,7 @@ public class SellerDashboardController {
         Label price = new Label(l.getPriceDisplay());
         price.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 13px;");
         if (l instanceof LendListing lend) {
-            price.setText(price.getText() + " · " + lend.getLendingDuration().toDays() + " days");
+            price.setText(price.getText() + " · " + DurationText.format(lend.getLendingDuration()));
         }
         info.getChildren().addAll(title, meta, price);
 
@@ -153,7 +154,14 @@ public class SellerDashboardController {
         TextField priceField = new TextField();
         priceField.setPromptText("Price (HK$) – required for Sell");
         TextField daysField = new TextField();
-        daysField.setPromptText("Lending duration (days) – required for Lend");
+        daysField.setPromptText("Days");
+        TextField hoursField = new TextField();
+        hoursField.setPromptText("Hours (0–23)");
+        HBox durationRow = new HBox(8, daysField, hoursField);
+        HBox.setHgrow(daysField, Priority.ALWAYS);
+        HBox.setHgrow(hoursField, Priority.ALWAYS);
+        daysField.setMaxWidth(Double.MAX_VALUE);
+        hoursField.setMaxWidth(Double.MAX_VALUE);
 
         ComboBox<Location> meetupCombo = new ComboBox<>(FXCollections.observableArrayList(Location.values()));
         meetupCombo.setPromptText("Meet-up location *");
@@ -194,14 +202,14 @@ public class SellerDashboardController {
                     listing = new SaleListing(seller, name, desc, cat, cond, meetup, price);
                 }
                 case "Lend" -> {
-                    Duration duration = parseDuration(daysField);
+                    Duration duration = parseDuration(daysField, hoursField);
                     if (duration == null) {
                         return;
                     }
                     try {
                         listing = new LendListing(seller, name, desc, cat, cond, meetup, duration);
                     } catch (IllegalArgumentException ex) {
-                        new Alert(Alert.AlertType.WARNING, "Valid lending days required.").showAndWait();
+                        new Alert(Alert.AlertType.WARNING, "Valid lending duration required (at least 5 seconds).").showAndWait();
                         return;
                     }
                 }
@@ -224,7 +232,7 @@ public class SellerDashboardController {
                 new Label("Condition *"), condCombo,
                 new Label("Description"), descArea,
                 new Label("Price (Sell only)"), priceField,
-                new Label("Lending Days (Lend only)"), daysField,
+                new Label("Lending Duration (Lend only)"), durationRow,
                 new Label("Meet-up Location *"), meetupCombo,
                 photoNote, submitBtn);
 
@@ -233,11 +241,22 @@ public class SellerDashboardController {
         contentPane.getChildren().add(scroll);
     }
 
-    private Duration parseDuration(TextField f) {
+    private Duration parseDuration(TextField daysField, TextField hoursField) {
+        String daysText = daysField.getText().trim();
+        String hoursText = hoursField.getText().trim();
+        if (daysText.isEmpty() && hoursText.isEmpty()) {
+            new Alert(Alert.AlertType.WARNING, "Lending duration is required for Lend listings.").showAndWait();
+            return null;
+        }
         try {
-            return Duration.ofDays(Long.parseLong(f.getText().trim()));
+            long days = daysText.isEmpty() ? 0 : Long.parseLong(daysText);
+            long hours = hoursText.isEmpty() ? 0 : Long.parseLong(hoursText);
+            if (days < 0 || hours < 0) {
+                throw new NumberFormatException("negative");
+            }
+            return Duration.ofDays(days).plusHours(hours);
         } catch (NumberFormatException ex) {
-            new Alert(Alert.AlertType.WARNING, "Valid lending days required.").showAndWait();
+            new Alert(Alert.AlertType.WARNING, "Lending days and hours must be whole, non-negative numbers.").showAndWait();
             return null;
         }
     }
