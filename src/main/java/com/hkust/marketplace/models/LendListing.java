@@ -8,14 +8,7 @@ public final class LendListing extends Listing {
     public LendListing(Seller seller, String title, String description, Category category,
                        Condition condition, Location meetupLocation, Duration lendingDuration) {
         super(seller, title, description, category, condition, meetupLocation);
-        if (lendingDuration == null) {
-            throw new IllegalArgumentException("Lending duration is required");
-        }
-        if (lendingDuration.isZero() || lendingDuration.isNegative()
-                || lendingDuration.getSeconds() < 5) {
-            throw new IllegalArgumentException("Lending duration must be at least 5 seconds");
-        }
-        this.lendingDuration = lendingDuration;
+        this.lendingDuration = LendingRules.requireLendingDuration(lendingDuration);
     }
 
     public Duration getLendingDuration() {

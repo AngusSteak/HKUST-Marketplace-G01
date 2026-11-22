@@ -9,6 +9,7 @@ import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -191,7 +192,7 @@ public class BuyerDashboardController {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Borrow Request");
         alert.setHeaderText("Request to borrow: " + listing.getTitle());
-        alert.setContentText("Proposed duration: " + lend.getLendingDuration().toDays() + " days" +
+        alert.setContentText("Proposed duration: " + DurationText.format(lend.getLendingDuration()) +
                 "\n\nSend borrow request to seller?");
         alert.showAndWait().ifPresent(resp -> {
             if (resp == ButtonType.OK) {

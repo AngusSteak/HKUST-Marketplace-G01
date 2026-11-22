@@ -13,15 +13,37 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LendingDurationTest {
 
-    private static LendListing ninetyDayLoan() {
+    private static LendListing listingWithDuration(Duration duration) {
         return new LendListing(CHARLIE, "Test item", "", Category.ELECTRONICS, Condition.USED,
-                Location.LIBRARY, Duration.ofDays(90));
+                Location.LIBRARY, duration);
+    }
+
+    private static LendListing ninetyDayLoan() {
+        return listingWithDuration(Duration.ofDays(90));
     }
 
     @Test
     void aDurationShorterThanFiveSecondsIsRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new LendListing(CHARLIE, "Test item", "",
-                Category.ELECTRONICS, Condition.USED, Location.LIBRARY, Duration.ofSeconds(4)));
+        assertThrows(IllegalArgumentException.class,
+                () -> listingWithDuration(Duration.ofSeconds(4)));
+    }
+
+    @Test
+    void aMissingDurationIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> listingWithDuration(null));
+    }
+
+    @Test
+    void zeroAndNegativeDurationsAreRejected() {
+        assertThrows(IllegalArgumentException.class, () -> listingWithDuration(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class,
+                () -> listingWithDuration(Duration.ofSeconds(-5)));
+    }
+
+    @Test
+    void exactlyFiveSecondsIsAccepted() {
+        assertEquals(Duration.ofSeconds(5),
+                listingWithDuration(Duration.ofSeconds(5)).getLendingDuration());
     }
 
     @Test

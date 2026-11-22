@@ -30,9 +30,6 @@ import java.util.Optional;
  */
 public final class DealLifecycle {
 
-    /** Shortest borrow period allowed; 5 seconds so loans can be tested (SRS UC-1.4). */
-    public static final Duration MIN_BORROW_PERIOD = Duration.ofSeconds(5);
-
     private final Clock clock;
     private final Map<String, DealRequest> requests = new LinkedHashMap<>();
     private final Map<String, Deal> deals = new LinkedHashMap<>();
@@ -239,18 +236,10 @@ public final class DealLifecycle {
         if (!end.isAfter(start)) {
             throw new IllegalArgumentException("Borrow end must be after the start");
         }
-        Duration period = Duration.between(start, end);
-        if (period.compareTo(MIN_BORROW_PERIOD) < 0) {
-            throw new IllegalArgumentException("Borrow period must be at least "
-                    + MIN_BORROW_PERIOD.toSeconds() + " seconds");
-        }
         if (!(listing instanceof LendListing lend)) {
             throw new IllegalArgumentException("Not a lending listing");
         }
-        if (period.compareTo(lend.getLendingDuration()) > 0) {
-            throw new IllegalArgumentException("Borrow period exceeds the listing's lending duration of "
-                    + lend.getLendingDuration().toSeconds() + " seconds");
-        }
+        LendingRules.requireBorrowPeriod(Duration.between(start, end), lend.getLendingDuration());
     }
 
     private static BigDecimal requirePositiveMoney(BigDecimal amount, String what) {
