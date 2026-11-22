@@ -1,7 +1,11 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Condition;
+import com.hkust.marketplace.models.GiveawayListing;
 import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
 import org.junit.jupiter.api.Test;
@@ -94,7 +98,8 @@ class FavouriteStoreTest {
     @Test
     void favouriteNeedsABuyerAndAListingWithAnId() {
         assertThrows(NullPointerException.class, () -> store.toggleFavourite(null, listing("L1")));
-        assertThrows(NullPointerException.class, () -> store.toggleFavourite(ALICE, new Listing()));
+        assertThrows(NullPointerException.class, () -> store.toggleFavourite(ALICE, new GiveawayListing(
+                CHARLIE, "Test item", "", Category.ELECTRONICS, Condition.USED, Location.LIBRARY)));
     }
 
     @Test
@@ -107,7 +112,8 @@ class FavouriteStoreTest {
     }
 
     private static Listing listing(String id) {
-        Listing listing = new Listing();
+        Listing listing = new GiveawayListing(CHARLIE, "Test item", "", Category.ELECTRONICS,
+                Condition.USED, Location.LIBRARY);
         listing.setId(id);
         return listing;
     }

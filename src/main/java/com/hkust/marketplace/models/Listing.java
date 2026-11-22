@@ -5,32 +5,55 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * In-memory listing model.
- * TODO: Persist to database and add photo storage when backend is ready.
+ * Abstract base for a listing. Concrete kinds are {@link SaleListing},
+ * {@link LendListing} and {@link GiveawayListing}; each supplies its type and
+ * price display. TODO: Persist to database and add photo storage when backend is ready.
  */
-public class Listing {
+public abstract class Listing {
+    private static final int MAX_PHOTOS = 6;
+
     private String id;
     private String title;
     private String description;
     private Category category;
-    private ListingType type;
     private ListingStatus status;
     private Condition condition;          // New / Like New / Used / For Parts
-    private Double price;              // Only for SELL
-    private Integer lendingDays;       // Only for LEND
     private Location meetupLocation;
-    private String sellerUsername;
-    private String sellerFullName;
-    private LocalDateTime postedAt;
+    private final Seller seller;
+    private LocalDateTime submittedDate;
     private LocalDateTime reviewedAt;
     private String rejectionReason;
+    private String takedownReason;
     private int viewCount;
-    private List<String> photoPaths = new ArrayList<>(); // Demo: placeholder paths
+    private List<String> photoPaths;
 
-    public Listing() {
-        this.postedAt = LocalDateTime.now();
+    protected Listing(Seller seller, String title, String description, Category category,
+                      Condition condition, Location meetupLocation) {
+        if (seller == null) {
+            throw new IllegalArgumentException("Seller must not be null");
+        }
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("Title must not be blank");
+        }
+        if (category == null) {
+            throw new IllegalArgumentException("Category must not be null");
+        }
+        if (condition == null) {
+            throw new IllegalArgumentException("Condition must not be null");
+        }
+        if (meetupLocation == null) {
+            throw new IllegalArgumentException("Meetup location must not be null");
+        }
+        this.seller = seller;
+        this.title = title;
+        this.description = description == null ? "" : description;
+        this.category = category;
+        this.condition = condition;
+        this.meetupLocation = meetupLocation;
         this.status = ListingStatus.PENDING_REVIEW;
+        this.submittedDate = LocalDateTime.now();
         this.viewCount = 0;
+        this.photoPaths = new ArrayList<>();
     }
 
     // Getters & Setters
@@ -46,8 +69,7 @@ public class Listing {
     public Category getCategory() { return category; }
     public void setCategory(Category category) { this.category = category; }
 
-    public ListingType getType() { return type; }
-    public void setType(ListingType type) { this.type = type; }
+    public abstract ListingType getType();
 
     public ListingStatus getStatus() { return status; }
     public void setStatus(ListingStatus status) { this.status = status; }
@@ -55,23 +77,26 @@ public class Listing {
     public Condition getCondition() { return condition; }
     public void setCondition(Condition condition) { this.condition = condition; }
 
-    public Double getPrice() { return price; }
-    public void setPrice(Double price) { this.price = price; }
-
-    public Integer getLendingDays() { return lendingDays; }
-    public void setLendingDays(Integer lendingDays) { this.lendingDays = lendingDays; }
-
     public Location getMeetupLocation() { return meetupLocation; }
     public void setMeetupLocation(Location meetupLocation) { this.meetupLocation = meetupLocation; }
 
-    public String getSellerUsername() { return sellerUsername; }
-    public void setSellerUsername(String sellerUsername) { this.sellerUsername = sellerUsername; }
+    public Seller getSeller() { return seller; }
 
-    public String getSellerFullName() { return sellerFullName; }
-    public void setSellerFullName(String sellerFullName) { this.sellerFullName = sellerFullName; }
+    /**
+     * Derived from {@code seller}. Kept so {@code DealRequest} and all three portals
+     * compile unchanged; do not add setters.
+     */
+    public String getSellerUsername() { return seller.getUsername(); }
 
-    public LocalDateTime getPostedAt() { return postedAt; }
-    public void setPostedAt(LocalDateTime postedAt) { this.postedAt = postedAt; }
+    /**
+     * Derived from {@code seller}. Kept so {@code DealRequest} and all three portals
+     * compile unchanged; do not add setters.
+     */
+    public String getSellerFullName() { return seller.getFullName(); }
+
+    public LocalDateTime getSubmittedDate() { return submittedDate; }
+    /** seed and tests only */
+    public void setSubmittedDate(LocalDateTime submittedDate) { this.submittedDate = submittedDate; }
 
     public LocalDateTime getReviewedAt() { return reviewedAt; }
     public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
@@ -79,24 +104,34 @@ public class Listing {
     public String getRejectionReason() { return rejectionReason; }
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 
+    public String getTakedownReason() { return takedownReason; }
+    public void setTakedownReason(String takedownReason) { this.takedownReason = takedownReason; }
+
     public int getViewCount() { return viewCount; }
     public void setViewCount(int viewCount) { this.viewCount = viewCount; }
 
     public List<String> getPhotoPaths() { return photoPaths; }
-    public void setPhotoPaths(List<String> photoPaths) { this.photoPaths = photoPaths; }
-
-    public String getPriceDisplay() {
-        if (type == ListingType.SELL && price != null) {
-            return String.format("HK$ %.0f", price);
-        } else if (type == ListingType.LEND) {
-            return "Borrow";
-        } else {
-            return "Free";
+    public void setPhotoPaths(List<String> photoPaths) {
+        if (photoPaths != null && photoPaths.size() > MAX_PHOTOS) {
+            throw new IllegalArgumentException("A listing can have at most 6 photos");
         }
+        this.photoPaths = photoPaths == null ? new ArrayList<>() : new ArrayList<>(photoPaths);
     }
 
+    public void addPhoto(String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Photo path must not be blank");
+        }
+        if (photoPaths.size() == MAX_PHOTOS) {
+            throw new IllegalStateException("A listing can have at most 6 photos");
+        }
+        photoPaths.add(path);
+    }
+
+    public abstract String getPriceDisplay();
+
     public String getTypeDisplay() {
-        return switch (type) {
+        return switch (getType()) {
             case SELL -> "For Sale";
             case LEND -> "For Lending";
             case GIVEAWAY -> "Giveaway";

@@ -16,6 +16,7 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
@@ -83,7 +84,12 @@ public class SellerDashboardController {
         title.setStyle("-fx-font-weight: bold; -fx-font-size: 15px;");
         Label meta = new Label(l.getCategory() + " · " + l.getTypeDisplay() + " · " + l.getMeetupLocation());
         meta.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
-        info.getChildren().addAll(title, meta);
+        Label price = new Label(l.getPriceDisplay());
+        price.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 13px;");
+        if (l instanceof LendListing lend) {
+            price.setText(price.getText() + " · " + lend.getLendingDuration().toDays() + " days");
+        }
+        info.getChildren().addAll(title, meta, price);
 
         Label status = new Label(l.getStatus().name().replace('_', ' '));
         status.getStyleClass().add("badge");
@@ -165,41 +171,47 @@ public class SellerDashboardController {
                 new Alert(Alert.AlertType.WARNING, "Please fill all required fields.").showAndWait();
                 return;
             }
-            User user = SessionManager.getCurrentUser();
-            Listing listing = new Listing();
-            listing.setTitle(nameField.getText().trim());
-            listing.setDescription(descArea.getText());
-            listing.setCategory(catCombo.getValue());
-            listing.setCondition(condCombo.getValue());
-            listing.setMeetupLocation(meetupCombo.getValue());
-            listing.setSellerUsername(user.getUsername());
-            listing.setSellerFullName(user.getFullName());
-            listing.setStatus(ListingStatus.PENDING_REVIEW);
+            if (!(SessionManager.getCurrentUser() instanceof Seller seller)) {
+                new Alert(Alert.AlertType.WARNING, "You must be logged in as a seller to post a listing.").showAndWait();
+                return;
+            }
+            String name = nameField.getText().trim();
+            String desc = descArea.getText();
+            Category cat = catCombo.getValue();
+            Condition cond = condCombo.getValue();
+            Location meetup = meetupCombo.getValue();
 
+            Listing listing;
             switch (typeCombo.getValue()) {
                 case "Sell" -> {
-                    listing.setType(ListingType.SELL);
-                    try { listing.setPrice(Double.parseDouble(priceField.getText())); }
-                    catch (Exception ex) {
+                    Money price;
+                    try {
+                        price = Money.of(priceField.getText());
+                    } catch (IllegalArgumentException ex) {
                         new Alert(Alert.AlertType.WARNING, "Valid price required for Sell listings.").showAndWait();
                         return;
                     }
+                    listing = new SaleListing(seller, name, desc, cat, cond, meetup, price);
                 }
                 case "Lend" -> {
-                    listing.setType(ListingType.LEND);
-                    try { listing.setLendingDays(Integer.parseInt(daysField.getText())); }
-                    catch (Exception ex) {
+                    Duration duration = parseDuration(daysField);
+                    if (duration == null) {
+                        return;
+                    }
+                    try {
+                        listing = new LendListing(seller, name, desc, cat, cond, meetup, duration);
+                    } catch (IllegalArgumentException ex) {
                         new Alert(Alert.AlertType.WARNING, "Valid lending days required.").showAndWait();
                         return;
                     }
                 }
-                default -> listing.setType(ListingType.GIVEAWAY);
+                default -> listing = new GiveawayListing(seller, name, desc, cat, cond, meetup);
             }
             DummyDataService.getInstance().listings().add(listing);
             // Notify admin
             DummyDataService.getInstance().notifications().add(new Notification(
                     "admin", "New Listing Submitted",
-                    user.getFullName() + " submitted '" + listing.getTitle() + "' for review.", "System"));
+                    seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.", "System"));
             new Alert(Alert.AlertType.INFORMATION,
                     "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – in-memory only)").showAndWait();
             showMyListings();
@@ -219,6 +231,15 @@ public class SellerDashboardController {
         ScrollPane scroll = new ScrollPane(form);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
+    }
+
+    private Duration parseDuration(TextField f) {
+        try {
+            return Duration.ofDays(Long.parseLong(f.getText().trim()));
+        } catch (NumberFormatException ex) {
+            new Alert(Alert.AlertType.WARNING, "Valid lending days required.").showAndWait();
+            return null;
+        }
     }
 
     @FXML

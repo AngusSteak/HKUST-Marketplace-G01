@@ -3,10 +3,12 @@ package com.hkust.marketplace.models;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import static com.hkust.marketplace.models.DealLifecycleTest.ALICE;
 import static com.hkust.marketplace.models.DealLifecycleTest.CLOCK;
+import static com.hkust.marketplace.models.DealLifecycleTest.CHARLIE;
 import static com.hkust.marketplace.models.DealLifecycleTest.NOW;
 import static com.hkust.marketplace.models.DealLifecycleTest.liveListing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -112,8 +114,10 @@ class DealRequestTest {
 
     @Test
     void borrowPeriodCannotExceedTheListingsLendingDuration() {
-        Listing loan = liveListing("L1", ListingType.LEND);
-        loan.setLendingDays(7);
+        Listing loan = new LendListing(CHARLIE, "Test item", "", Category.ELECTRONICS, Condition.USED,
+                Location.LIBRARY, Duration.ofDays(7));
+        loan.setId("L1");
+        loan.setStatus(ListingStatus.LIVE);
 
         lifecycle.submitBorrow(ALICE, loan, NOW, NOW.plusDays(7));
         assertThrows(IllegalArgumentException.class,

@@ -76,7 +76,7 @@ public class AdminDashboardController {
         meta.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
 
         Label submitted = new Label("Submitted: " +
-                l.getPostedAt().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")));
+                l.getSubmittedDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")));
         submitted.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
 
         HBox actions = new HBox(10);

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -20,6 +21,7 @@ class DealLifecycleTest {
     static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
     static final Buyer ALICE = new Buyer("alice", "Alice Chan", "hash", UserRole.BUYER);
     static final Buyer BOB = new Buyer("bob", "Bob Wong", "hash", UserRole.BUYER);
+    static final Seller CHARLIE = new Seller("charlie", "Charlie Lee", "hash", UserRole.SELLER);
 
     private final DealLifecycle lifecycle = new DealLifecycle(CLOCK);
 
@@ -450,10 +452,15 @@ class DealLifecycleTest {
     }
 
     static Listing liveListing(String id, ListingType type) {
-        Listing listing = new Listing();
+        Listing listing = switch (type) {
+            case SELL -> new SaleListing(CHARLIE, "Test item", "", Category.ELECTRONICS, Condition.USED,
+                    Location.LIBRARY, Money.of("100"));
+            case LEND -> new LendListing(CHARLIE, "Test item", "", Category.ELECTRONICS, Condition.USED,
+                    Location.LIBRARY, Duration.ofDays(30));
+            case GIVEAWAY -> new GiveawayListing(CHARLIE, "Test item", "", Category.ELECTRONICS, Condition.USED,
+                    Location.LIBRARY);
+        };
         listing.setId(id);
-        listing.setType(type);
-        listing.setSellerUsername("charlie");
         listing.setStatus(ListingStatus.LIVE);
         return listing;
     }

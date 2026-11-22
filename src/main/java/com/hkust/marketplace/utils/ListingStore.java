@@ -2,11 +2,16 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Category;
 import com.hkust.marketplace.models.Condition;
+import com.hkust.marketplace.models.GiveawayListing;
+import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
-import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.SaleListing;
+import com.hkust.marketplace.models.Seller;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -65,44 +70,48 @@ public class ListingStore {
     }
 
     /** Returns the seeded listings so related stores can reference them. */
-    List<Listing> seed() {
+    List<Listing> seed(UserStore users) {
         List<Listing> seeded = new ArrayList<>();
-        seeded.add(addAndReturn(createListing("Calculus Textbook (Stewart)", "Barely used, 8th edition. Perfect for MATH 1013.",
-                Category.BOOKS_AND_NOTES, ListingType.SELL, Condition.LIKE_NEW, 180.0, null, Location.LIBRARY, "charlie", "Charlie Lee")));
-        seeded.add(addAndReturn(createListing("MacBook Pro Charger 61W", "Original Apple charger, works perfectly.",
-                Category.ELECTRONICS, ListingType.SELL, Condition.USED, 250.0, null, Location.ACADEMIC_BUILDING, "charlie", "Charlie Lee")));
-        seeded.add(addAndReturn(createListing("IKEA Desk Lamp", "Good condition, LED bulb included.",
-                Category.FURNITURE, ListingType.GIVEAWAY, Condition.USED, null, null, Location.UG_HALL_V, "diana", "Diana Ng")));
-        seeded.add(addAndReturn(createListing("Graphing Calculator TI-84", "Can lend for one semester.",
-                Category.ELECTRONICS, ListingType.LEND, Condition.LIKE_NEW, null, 90, Location.STUDENT_CENTRE, "diana", "Diana Ng")));
-        Listing pending = createListing("Mini Fridge", "Works well, cleaning required.",
-                Category.FURNITURE, ListingType.SELL, Condition.USED, 400.0, null, Location.UG_HALL_II, "diana", "Diana Ng");
-        pending.setStatus(ListingStatus.PENDING_REVIEW);
-        seeded.add(addAndReturn(pending));
+        Seller charlie = (Seller) users.find("charlie");
+        Seller diana = (Seller) users.find("diana");
+        Random random = new Random();
+
+        Listing textbook = new SaleListing(charlie, "Calculus Textbook (Stewart)",
+                "Barely used, 8th edition. Perfect for MATH 1013.",
+                Category.BOOKS_AND_NOTES, Condition.LIKE_NEW, Location.LIBRARY, Money.of("180"));
+        textbook.setStatus(ListingStatus.LIVE);
+        textbook.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));
+        add(textbook);
+        seeded.add(textbook);
+
+        Listing charger = new SaleListing(charlie, "MacBook Pro Charger 61W",
+                "Original Apple charger, works perfectly.",
+                Category.ELECTRONICS, Condition.USED, Location.ACADEMIC_BUILDING, Money.of("250"));
+        charger.setStatus(ListingStatus.LIVE);
+        charger.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));
+        add(charger);
+        seeded.add(charger);
+
+        Listing lamp = new GiveawayListing(diana, "IKEA Desk Lamp", "Good condition, LED bulb included.",
+                Category.FURNITURE, Condition.USED, Location.UG_HALL_V);
+        lamp.setStatus(ListingStatus.LIVE);
+        lamp.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));
+        add(lamp);
+        seeded.add(lamp);
+
+        Listing calculator = new LendListing(diana, "Graphing Calculator TI-84", "Can lend for one semester.",
+                Category.ELECTRONICS, Condition.LIKE_NEW, Location.STUDENT_CENTRE, Duration.ofDays(90));
+        calculator.setStatus(ListingStatus.LIVE);
+        calculator.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));
+        add(calculator);
+        seeded.add(calculator);
+
+        Listing fridge = new SaleListing(diana, "Mini Fridge", "Works well, cleaning required.",
+                Category.FURNITURE, Condition.USED, Location.UG_HALL_II, Money.of("400"));
+        fridge.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));
+        add(fridge);
+        seeded.add(fridge);
+
         return seeded;
-    }
-
-    private Listing addAndReturn(Listing listing) {
-        add(listing);
-        return listing;
-    }
-
-    private Listing createListing(String title, String desc, Category cat, ListingType type,
-                                  Condition condition, Double price, Integer days,
-                                  Location meetup, String sellerUser, String sellerName) {
-        Listing l = new Listing();
-        l.setTitle(title);
-        l.setDescription(desc);
-        l.setCategory(cat);
-        l.setType(type);
-        l.setCondition(condition);
-        l.setPrice(price);
-        l.setLendingDays(days);
-        l.setMeetupLocation(meetup);
-        l.setSellerUsername(sellerUser);
-        l.setSellerFullName(sellerName);
-        l.setPostedAt(LocalDateTime.now().minusDays(new Random().nextInt(10)));
-        l.setStatus(ListingStatus.LIVE);
-        return l;
     }
 }
