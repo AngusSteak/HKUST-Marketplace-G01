@@ -2,6 +2,7 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Seller;
 
 import java.util.List;
 
@@ -19,6 +20,7 @@ public class DummyDataService {
     private final DealStore deals = new DealStore();
     private final NotificationStore notifications = new NotificationStore();
     private final ReviewStore reviews = new ReviewStore();
+    private final FavouriteStore favourites = new FavouriteStore();
 
     /**
      * Creates an empty store with no demo data. Visible for tests so each test can
@@ -42,6 +44,7 @@ public class DummyDataService {
     public DealStore deals() { return deals; }
     public NotificationStore notifications() { return notifications; }
     public ReviewStore reviews() { return reviews; }
+    public FavouriteStore favourites() { return favourites; }
 
     /**
      * Populates this store with the demo data. Visible for tests so they can seed an
@@ -54,5 +57,7 @@ public class DummyDataService {
         deals.seed((Buyer) users.find("alice"), seededListings.get(0));
         notifications.seed();
         reviews.seed();
+        // alice favourites the MacBook charger (L101) and follows its seller charlie
+        favourites.seed((Buyer) users.find("alice"), seededListings.get(1), (Seller) users.find("charlie"));
     }
 }
