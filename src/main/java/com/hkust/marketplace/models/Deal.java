@@ -1,66 +1,64 @@
 package com.hkust.marketplace.models;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
+/**
+ * An accepted {@link DealRequest} and its own lifecycle (SRS class diagram, 0..1 per request).
+ *
+ * <p>The buyer, seller, listing and deal type are derived through the request, so they are
+ * never stored twice. Deals are created and moved between states only by {@link DealLifecycle}.
+ */
 public class Deal {
-    private String id;
-    private String listingId;
-    private String listingTitle;
-    private String buyerUsername;
-    private String sellerUsername;
-    private ListingType dealType;
-    private String status; // Pending, Accepted, Completed, Returned, Cancelled
-    private Double offerPrice;
-    private LocalDate borrowStart;
-    private LocalDate borrowEnd;
-    private LocalDateTime createdAt;
-    private LocalDateTime completedAt;
-    private boolean rated;
+    private final String id;
+    private final DealRequest request;
+    private final LocalDateTime startDate;
+    private final LocalDateTime dueDate;
+    private LocalDateTime completedDate;
+    private DealStatus status = DealStatus.ACTIVE;
+    private Review review;
 
-    public Deal() {
-        this.createdAt = LocalDateTime.now();
-        this.status = "Pending";
-        this.rated = false;
+    Deal(String id, DealRequest request, LocalDateTime startDate) {
+        this.id = Objects.requireNonNull(id, "id");
+        this.request = Objects.requireNonNull(request, "request");
+        this.startDate = Objects.requireNonNull(startDate, "startDate");
+        this.dueDate = request instanceof BorrowRequest borrow ? borrow.agreedEnd() : null;
     }
 
-    // Getters & Setters
     public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public DealRequest getRequest() { return request; }
+    public LocalDateTime getStartDate() { return startDate; }
 
-    public String getListingId() { return listingId; }
-    public void setListingId(String listingId) { this.listingId = listingId; }
+    /** When a borrowed item must be returned; {@code null} for sales and giveaways. */
+    public LocalDateTime getDueDate() { return dueDate; }
 
-    public String getListingTitle() { return listingTitle; }
-    public void setListingTitle(String listingTitle) { this.listingTitle = listingTitle; }
+    /** When the deal was completed, returned, auto-returned or cancelled; {@code null} while active. */
+    public LocalDateTime getCompletedDate() { return completedDate; }
 
-    public String getBuyerUsername() { return buyerUsername; }
-    public void setBuyerUsername(String buyerUsername) { this.buyerUsername = buyerUsername; }
+    public DealStatus getStatus() { return status; }
 
-    public String getSellerUsername() { return sellerUsername; }
-    public void setSellerUsername(String sellerUsername) { this.sellerUsername = sellerUsername; }
+    public Buyer getBuyer() { return request.getBuyer(); }
+    public Listing getListing() { return request.getListing(); }
+    public String getBuyerUsername() { return request.getBuyerUsername(); }
+    public String getSellerUsername() { return request.getSellerUsername(); }
+    public DealType getDealType() { return request.dealType(); }
 
-    public ListingType getDealType() { return dealType; }
-    public void setDealType(ListingType dealType) { this.dealType = dealType; }
+    /** The buyer's review of the seller for this deal, or {@code null} if not reviewed yet. */
+    public Review getReview() { return review; }
+    public boolean isReviewed() { return review != null; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    /** Attaches the buyer's review; at most one review per completed deal (SRS UC-1.9). */
+    public void setReview(Review review) {
+        Objects.requireNonNull(review, "review");
+        if (status != DealStatus.COMPLETED) {
+            throw new IllegalStateException("Only completed deals can be reviewed");
+        }
+        if (this.review != null) {
+            throw new IllegalStateException("Deal " + id + " already has a review");
+        }
+        this.review = review;
+    }
 
-    public Double getOfferPrice() { return offerPrice; }
-    public void setOfferPrice(Double offerPrice) { this.offerPrice = offerPrice; }
-
-    public LocalDate getBorrowStart() { return borrowStart; }
-    public void setBorrowStart(LocalDate borrowStart) { this.borrowStart = borrowStart; }
-
-    public LocalDate getBorrowEnd() { return borrowEnd; }
-    public void setBorrowEnd(LocalDate borrowEnd) { this.borrowEnd = borrowEnd; }
-
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    public LocalDateTime getCompletedAt() { return completedAt; }
-    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
-
-    public boolean isRated() { return rated; }
-    public void setRated(boolean rated) { this.rated = rated; }
+    void setStatus(DealStatus status) { this.status = status; }
+    void setCompletedDate(LocalDateTime completedDate) { this.completedDate = completedDate; }
 }
