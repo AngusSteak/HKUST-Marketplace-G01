@@ -12,13 +12,13 @@ public class Listing {
     private String id;
     private String title;
     private String description;
-    private String category;
+    private Category category;
     private ListingType type;
     private ListingStatus status;
-    private String condition;          // New / Like New / Used / For Parts
+    private Condition condition;          // New / Like New / Used / For Parts
     private Double price;              // Only for SELL
     private Integer lendingDays;       // Only for LEND
-    private String meetupLocation;
+    private Location meetupLocation;
     private String sellerUsername;
     private String sellerFullName;
     private LocalDateTime postedAt;
@@ -43,8 +43,8 @@ public class Listing {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public Category getCategory() { return category; }
+    public void setCategory(Category category) { this.category = category; }
 
     public ListingType getType() { return type; }
     public void setType(ListingType type) { this.type = type; }
@@ -52,8 +52,8 @@ public class Listing {
     public ListingStatus getStatus() { return status; }
     public void setStatus(ListingStatus status) { this.status = status; }
 
-    public String getCondition() { return condition; }
-    public void setCondition(String condition) { this.condition = condition; }
+    public Condition getCondition() { return condition; }
+    public void setCondition(Condition condition) { this.condition = condition; }
 
     public Double getPrice() { return price; }
     public void setPrice(Double price) { this.price = price; }
@@ -61,8 +61,8 @@ public class Listing {
     public Integer getLendingDays() { return lendingDays; }
     public void setLendingDays(Integer lendingDays) { this.lendingDays = lendingDays; }
 
-    public String getMeetupLocation() { return meetupLocation; }
-    public void setMeetupLocation(String meetupLocation) { this.meetupLocation = meetupLocation; }
+    public Location getMeetupLocation() { return meetupLocation; }
+    public void setMeetupLocation(Location meetupLocation) { this.meetupLocation = meetupLocation; }
 
     public String getSellerUsername() { return sellerUsername; }
     public void setSellerUsername(String sellerUsername) { this.sellerUsername = sellerUsername; }

@@ -1,9 +1,9 @@
 package com.hkust.marketplace.controllers.seller;
 
+import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
-import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.PasswordHasher;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.UserStore;
@@ -11,20 +11,22 @@ import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 
+import java.util.EnumSet;
+
 public class SellerRegisterController {
 
     @FXML private TextField usernameField;
     @FXML private TextField fullNameField;
     @FXML private PasswordField passwordField;
     @FXML private PasswordField confirmPasswordField;
-    @FXML private ComboBox<String> meetupCombo;
+    @FXML private ComboBox<Location> meetupCombo;
     @FXML private TextArea bioArea;
     @FXML private Label errorLabel;
     @FXML private Label successLabel;
 
     @FXML
     public void initialize() {
-        meetupCombo.setItems(FXCollections.observableArrayList(ListingStore.HKUST_LOCATIONS));
+        meetupCombo.setItems(FXCollections.observableArrayList(Location.values()));
     }
 
     @FXML
@@ -45,7 +47,8 @@ public class SellerRegisterController {
         if (!password.equals(confirm)) { showError("Passwords do not match."); return; }
 
         Seller user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);
-        if (meetupCombo.getValue() != null) user.setPreferredMeetup(meetupCombo.getValue());
+        Location meetup = meetupCombo.getValue();
+        if (meetup != null) user.setPreferredMeetup(EnumSet.of(meetup));
         if (bioArea.getText() != null && !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());
         DummyDataService.getInstance().users().register(user);
 

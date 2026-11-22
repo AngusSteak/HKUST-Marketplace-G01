@@ -1,12 +1,12 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Category;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.DummyDataService;
-import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -19,6 +19,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.List;
 
 public class BuyerDashboardController {
@@ -61,7 +62,7 @@ public class BuyerDashboardController {
         HBox filterBar = new HBox(12);
         filterBar.setAlignment(Pos.CENTER_LEFT);
         ComboBox<String> categoryFilter = new ComboBox<>(FXCollections.observableArrayList("All Categories"));
-        categoryFilter.getItems().addAll(ListingStore.CATEGORIES);
+        categoryFilter.getItems().addAll(Arrays.stream(Category.values()).map(Category::getLabel).toList());
         categoryFilter.getSelectionModel().selectFirst();
         ComboBox<String> typeFilter = new ComboBox<>(FXCollections.observableArrayList("All Types", "Sell", "Lend", "Giveaway"));
         typeFilter.getSelectionModel().selectFirst();

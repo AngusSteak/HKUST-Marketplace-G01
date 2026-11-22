@@ -2,11 +2,13 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Admin;
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,12 +58,12 @@ public class UserStore {
 
         Seller seller1 = new Seller("charlie", "Charlie Lee", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller1.setBio("Final year CSE student selling textbooks and gadgets.");
-        seller1.setPreferredMeetup("Library");
+        seller1.setPreferredMeetup(EnumSet.of(Location.LIBRARY));
         users.put("charlie", seller1);
 
         Seller seller2 = new Seller("diana", "Diana Ng", PasswordHasher.hash("password1"), UserRole.SELLER);
         seller2.setBio("Selling furniture and kitchen items before graduation.");
-        seller2.setPreferredMeetup("Hall 5 Lobby");
+        seller2.setPreferredMeetup(EnumSet.of(Location.UG_HALL_V));
         users.put("diana", seller2);
     }
 

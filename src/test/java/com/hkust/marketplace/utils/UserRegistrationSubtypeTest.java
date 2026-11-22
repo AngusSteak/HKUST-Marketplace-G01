@@ -1,10 +1,13 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import org.junit.jupiter.api.Test;
+
+import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -32,14 +35,14 @@ class UserRegistrationSubtypeTest {
         DummyDataService store = new DummyDataService();
         Seller seller = new Seller("charlie", "Charlie Lee", PASSWORD_HASH, UserRole.SELLER);
         seller.setBio("Final year CSE student.");
-        seller.setPreferredMeetup("Library");
+        seller.setPreferredMeetup(EnumSet.of(Location.LIBRARY));
 
         store.users().register(seller);
 
         Seller stored = assertInstanceOf(Seller.class, store.users().find("CHARLIE"));
         assertSame(seller, stored);
         assertEquals("Final year CSE student.", stored.getBio());
-        assertEquals("Library", stored.getPreferredMeetup());
+        assertEquals(EnumSet.of(Location.LIBRARY), stored.getPreferredMeetup());
     }
 
     @Test
