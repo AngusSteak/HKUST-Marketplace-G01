@@ -2,7 +2,6 @@ package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.DummyDataService;
-import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -18,6 +17,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.time.format.DateTimeFormatter;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.OptionalDouble;
 
@@ -134,10 +134,10 @@ public class SellerDashboardController {
 
         TextField nameField = new TextField();
         nameField.setPromptText("Item name *");
-        ComboBox<String> catCombo = new ComboBox<>(FXCollections.observableArrayList(ListingStore.CATEGORIES));
+        ComboBox<Category> catCombo = new ComboBox<>(FXCollections.observableArrayList(Category.values()));
         catCombo.setPromptText("Category *");
         catCombo.setMaxWidth(Double.MAX_VALUE);
-        ComboBox<String> condCombo = new ComboBox<>(FXCollections.observableArrayList(ListingStore.CONDITIONS));
+        ComboBox<Condition> condCombo = new ComboBox<>(FXCollections.observableArrayList(Condition.values()));
         condCombo.setPromptText("Condition *");
         condCombo.setMaxWidth(Double.MAX_VALUE);
         TextArea descArea = new TextArea();
@@ -149,7 +149,7 @@ public class SellerDashboardController {
         TextField daysField = new TextField();
         daysField.setPromptText("Lending duration (days) – required for Lend");
 
-        ComboBox<String> meetupCombo = new ComboBox<>(FXCollections.observableArrayList(ListingStore.HKUST_LOCATIONS));
+        ComboBox<Location> meetupCombo = new ComboBox<>(FXCollections.observableArrayList(Location.values()));
         meetupCombo.setPromptText("Meet-up location *");
         meetupCombo.setMaxWidth(Double.MAX_VALUE);
 
@@ -378,13 +378,20 @@ public class SellerDashboardController {
         pass.setPromptText("New password (optional)");
         TextArea bio = new TextArea(user instanceof Seller seller && seller.getBio() != null ? seller.getBio() : "");
         bio.setPrefRowCount(3);
-        ComboBox<String> meetup = new ComboBox<>(FXCollections.observableArrayList(ListingStore.HKUST_LOCATIONS));
-        if (user instanceof Seller seller && seller.getPreferredMeetup() != null) meetup.setValue(seller.getPreferredMeetup());
+        ComboBox<Location> meetup = new ComboBox<>(FXCollections.observableArrayList(Location.values()));
+        if (user instanceof Seller seller) {
+            seller.getPreferredMeetup().stream().findFirst().ifPresent(meetup::setValue);
+        }
         meetup.setMaxWidth(Double.MAX_VALUE);
 
         Button save = new Button("Save Changes");
         save.getStyleClass().add("btn-gold");
-        save.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Profile saved (demo).").showAndWait());
+        save.setOnAction(e -> {
+            if (user instanceof Seller seller && meetup.getValue() != null) {
+                seller.setPreferredMeetup(EnumSet.of(meetup.getValue()));
+            }
+            new Alert(Alert.AlertType.INFORMATION, "Profile saved (demo).").showAndWait();
+        });
 
         form.getChildren().addAll(
                 new Label("Full Name"), name,

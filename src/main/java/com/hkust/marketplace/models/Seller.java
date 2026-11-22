@@ -1,12 +1,17 @@
 package com.hkust.marketplace.models;
 
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
+
 /**
  * Seller account: posts Sale, Lend and Giveaway listings and replies to reviews.
  * Carries the seller-only bio and preferred meet-up location; see ADR-0001.
  */
 public class Seller extends User {
     private String bio;
-    private String preferredMeetup;
+    /** 0..* preferred meet-up locations (issue #9); the multi-select widget arrives in #31. */
+    private Set<Location> preferredMeetup = EnumSet.noneOf(Location.class);
 
     public Seller(String username, String fullName, String passwordHash, UserRole role) {
         super(username, fullName, passwordHash, requireSellerRole(role));
@@ -22,6 +27,9 @@ public class Seller extends User {
     public String getBio() { return bio; }
     public void setBio(String bio) { this.bio = bio; }
 
-    public String getPreferredMeetup() { return preferredMeetup; }
-    public void setPreferredMeetup(String preferredMeetup) { this.preferredMeetup = preferredMeetup; }
+    public Set<Location> getPreferredMeetup() { return Collections.unmodifiableSet(preferredMeetup); }
+    public void setPreferredMeetup(Set<Location> preferredMeetup) {
+        this.preferredMeetup = preferredMeetup == null || preferredMeetup.isEmpty()
+                ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(preferredMeetup);
+    }
 }

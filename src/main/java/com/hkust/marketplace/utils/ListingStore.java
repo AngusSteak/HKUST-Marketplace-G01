@@ -1,8 +1,11 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Condition;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.ListingType;
+import com.hkust.marketplace.models.Location;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -14,43 +17,11 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-/** In-memory listings plus the fixed choice lists used by the listing forms. */
+/** In-memory listings with their fixed seed data. */
 public class ListingStore {
 
     private final Map<String, Listing> listings = new LinkedHashMap<>();
     private final AtomicInteger idCounter = new AtomicInteger(100);
-
-    // Predefined HKUST locations
-    public static final List<String> HKUST_LOCATIONS = List.of(
-            "Academic Building (LG1)",
-            "Library",
-            "Student Centre",
-            "Hall 1 Lobby",
-            "Hall 2 Lobby",
-            "Hall 3 Lobby",
-            "Hall 4 Lobby",
-            "Hall 5 Lobby",
-            "Hall 6 Lobby",
-            "Hall 7 Lobby",
-            "Hall 8 Lobby",
-            "Hall 9 Lobby",
-            "UG Hall 1",
-            "UG Hall 2",
-            "North Gate",
-            "South Gate",
-            "Shaw Auditorium",
-            "Coffee Shop (LG5)",
-            "Sports Hall"
-    );
-
-    public static final List<String> CATEGORIES = List.of(
-            "Textbooks", "Electronics", "Furniture", "Clothing",
-            "Stationery", "Sports Equipment", "Kitchenware", "Others"
-    );
-
-    public static final List<String> CONDITIONS = List.of(
-            "New", "Like New", "Used", "For Parts"
-    );
 
     public Collection<Listing> all() {
         return listings.values();
@@ -97,15 +68,15 @@ public class ListingStore {
     List<Listing> seed() {
         List<Listing> seeded = new ArrayList<>();
         seeded.add(addAndReturn(createListing("Calculus Textbook (Stewart)", "Barely used, 8th edition. Perfect for MATH 1013.",
-                "Textbooks", ListingType.SELL, "Like New", 180.0, null, "Library", "charlie", "Charlie Lee")));
+                Category.BOOKS_AND_NOTES, ListingType.SELL, Condition.LIKE_NEW, 180.0, null, Location.LIBRARY, "charlie", "Charlie Lee")));
         seeded.add(addAndReturn(createListing("MacBook Pro Charger 61W", "Original Apple charger, works perfectly.",
-                "Electronics", ListingType.SELL, "Used", 250.0, null, "Academic Building (LG1)", "charlie", "Charlie Lee")));
+                Category.ELECTRONICS, ListingType.SELL, Condition.USED, 250.0, null, Location.ACADEMIC_BUILDING, "charlie", "Charlie Lee")));
         seeded.add(addAndReturn(createListing("IKEA Desk Lamp", "Good condition, LED bulb included.",
-                "Furniture", ListingType.GIVEAWAY, "Used", null, null, "Hall 5 Lobby", "diana", "Diana Ng")));
+                Category.FURNITURE, ListingType.GIVEAWAY, Condition.USED, null, null, Location.UG_HALL_V, "diana", "Diana Ng")));
         seeded.add(addAndReturn(createListing("Graphing Calculator TI-84", "Can lend for one semester.",
-                "Electronics", ListingType.LEND, "Like New", null, 90, "Student Centre", "diana", "Diana Ng")));
+                Category.ELECTRONICS, ListingType.LEND, Condition.LIKE_NEW, null, 90, Location.STUDENT_CENTRE, "diana", "Diana Ng")));
         Listing pending = createListing("Mini Fridge", "Works well, cleaning required.",
-                "Furniture", ListingType.SELL, "Used", 400.0, null, "Hall 2 Lobby", "diana", "Diana Ng");
+                Category.FURNITURE, ListingType.SELL, Condition.USED, 400.0, null, Location.UG_HALL_II, "diana", "Diana Ng");
         pending.setStatus(ListingStatus.PENDING_REVIEW);
         seeded.add(addAndReturn(pending));
         return seeded;
@@ -116,9 +87,9 @@ public class ListingStore {
         return listing;
     }
 
-    private Listing createListing(String title, String desc, String cat, ListingType type,
-                                  String condition, Double price, Integer days,
-                                  String meetup, String sellerUser, String sellerName) {
+    private Listing createListing(String title, String desc, Category cat, ListingType type,
+                                  Condition condition, Double price, Integer days,
+                                  Location meetup, String sellerUser, String sellerName) {
         Listing l = new Listing();
         l.setTitle(title);
         l.setDescription(desc);

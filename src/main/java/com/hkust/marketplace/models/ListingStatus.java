@@ -8,5 +8,6 @@ public enum ListingStatus {
     SOLD,
     LENT,
     GIVEN,
-    REMOVED
+    // SRS Appendix A calls an admin-removed listing TAKEN_DOWN. Do not rename it back.
+    TAKEN_DOWN
 }

@@ -2,12 +2,15 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Admin;
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+
+import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -43,11 +46,11 @@ class SeededUserSubtypesTest {
 
         Seller charlie = assertInstanceOf(Seller.class, store.users().find("charlie"));
         assertEquals("Final year CSE student selling textbooks and gadgets.", charlie.getBio());
-        assertEquals("Library", charlie.getPreferredMeetup());
+        assertEquals(EnumSet.of(Location.LIBRARY), charlie.getPreferredMeetup());
 
         Seller diana = assertInstanceOf(Seller.class, store.users().find("diana"));
         assertEquals("Selling furniture and kitchen items before graduation.", diana.getBio());
-        assertEquals("Hall 5 Lobby", diana.getPreferredMeetup());
+        assertEquals(EnumSet.of(Location.UG_HALL_V), diana.getPreferredMeetup());
     }
 
     private void assertSeededSubtype(String username, Class<? extends User> expectedType, UserRole expectedRole) {
