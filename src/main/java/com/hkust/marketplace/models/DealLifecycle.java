@@ -244,11 +244,12 @@ public final class DealLifecycle {
             throw new IllegalArgumentException("Borrow period must be at least "
                     + MIN_BORROW_PERIOD.toSeconds() + " seconds");
         }
-        // TODO(#10): compare against the listing's Duration once lendingDays is replaced.
-        Integer lendingDays = listing.getLendingDays();
-        if (lendingDays != null && period.compareTo(Duration.ofDays(lendingDays)) > 0) {
+        if (!(listing instanceof LendListing lend)) {
+            throw new IllegalArgumentException("Not a lending listing");
+        }
+        if (period.compareTo(lend.getLendingDuration()) > 0) {
             throw new IllegalArgumentException("Borrow period exceeds the listing's lending duration of "
-                    + lendingDays + " days");
+                    + lend.getLendingDuration().toSeconds() + " seconds");
         }
     }
 

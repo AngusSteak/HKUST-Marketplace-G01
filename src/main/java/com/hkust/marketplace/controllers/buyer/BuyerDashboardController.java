@@ -2,9 +2,11 @@ package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Notification;
+import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.SceneManager;
@@ -134,7 +136,7 @@ public class BuyerDashboardController {
         Label location = new Label("📍 " + listing.getMeetupLocation());
         location.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
 
-        Label date = new Label("Posted: " + listing.getPostedAt().format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
+        Label date = new Label("Posted: " + listing.getSubmittedDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
         date.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
 
         Button actionBtn = new Button();
@@ -159,7 +161,11 @@ public class BuyerDashboardController {
     }
 
     private void showOfferDialog(Listing listing) {
-        TextInputDialog dialog = new TextInputDialog(String.valueOf(listing.getPrice() != null ? listing.getPrice() : 0));
+        if (!(listing instanceof SaleListing sale)) {
+            new Alert(Alert.AlertType.WARNING, "This listing is not for sale.").showAndWait();
+            return;
+        }
+        TextInputDialog dialog = new TextInputDialog(sale.getPrice().amount().toPlainString());
         dialog.setTitle("Make an Offer");
         dialog.setHeaderText("Offer for: " + listing.getTitle());
         dialog.setContentText("Your offer price (HK$):");
@@ -178,10 +184,14 @@ public class BuyerDashboardController {
     }
 
     private void showBorrowDialog(Listing listing) {
+        if (!(listing instanceof LendListing lend)) {
+            new Alert(Alert.AlertType.WARNING, "This listing is not available for borrowing.").showAndWait();
+            return;
+        }
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Borrow Request");
         alert.setHeaderText("Request to borrow: " + listing.getTitle());
-        alert.setContentText("Proposed duration: " + (listing.getLendingDays() != null ? listing.getLendingDays() + " days" : "N/A") +
+        alert.setContentText("Proposed duration: " + lend.getLendingDuration().toDays() + " days" +
                 "\n\nSend borrow request to seller?");
         alert.showAndWait().ifPresent(resp -> {
             if (resp == ButtonType.OK) {

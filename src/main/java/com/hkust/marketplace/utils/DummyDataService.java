@@ -52,7 +52,7 @@ public class DummyDataService {
      */
     void seedData() {
         users.seed();
-        List<Listing> seededListings = listings.seed();
+        List<Listing> seededListings = listings.seed(users);
         // alice's accepted offer on the first listing (Calculus Textbook), which becomes RESERVED
         deals.seed((Buyer) users.find("alice"), seededListings.get(0));
         notifications.seed();
