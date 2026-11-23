@@ -23,6 +23,7 @@ import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DealRequestService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingSearch;
 import com.hkust.marketplace.utils.ProfileService;
@@ -39,13 +40,16 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class BuyerDashboardController {
 
@@ -259,7 +263,8 @@ public class BuyerDashboardController {
         title.setOnMouseClicked(e -> showListingDetails(listing));
         title.setStyle(title.getStyle() + " -fx-cursor: hand;");
 
-        HBox actionRow = new HBox(8, actionButton(listing), viewBtn);
+        // Deal requests start from the listing detail screen (SRS UC-1.3 special requirements).
+        HBox actionRow = new HBox(8, viewBtn);
 
         card.getChildren().addAll(photo(firstPhoto(listing), 228, 120), top, title, price, meta, seller,
                 location, date, actionRow);
@@ -417,8 +422,10 @@ public class BuyerDashboardController {
         reportBtn.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION,
                 "Reporting listings is coming soon.").showAndWait());
         actions.getChildren().addAll(chatBtn, reportBtn);
-        if (SessionManager.getCurrentUser() instanceof Buyer buyer
-                && listing.getSeller() instanceof com.hkust.marketplace.models.Seller seller) {
+        if (SessionManager.getCurrentUser() instanceof Buyer buyer) {
+            // A plain variable, not a pattern: getSeller() already returns a Seller, which the
+            // Eclipse/VS Code compiler rejects in an instanceof pattern.
+            com.hkust.marketplace.models.Seller seller = listing.getSeller();
             Button favBtn = new Button();
             favBtn.getStyleClass().addAll("btn-outline", "btn-sm");
             Runnable showFav = () -> favBtn.setText(data.favourites().isFavourite(buyer, listing)
@@ -478,56 +485,149 @@ public class BuyerDashboardController {
         contentPane.getChildren().add(root);
     }
 
+    // ---------- Make Deal Request (SRS UC-1.4) ----------
+
+    private final DealRequestService dealRequests = new DealRequestService(DummyDataService.getInstance());
+
+    /** S1: price offer. The dialog stays open with the reason until the offer is valid (A2) or cancelled (A5). */
     private void showOfferDialog(Listing listing) {
         if (!(listing instanceof SaleListing sale)) {
-            new Alert(Alert.AlertType.WARNING, "This listing is not for sale.").showAndWait();
             return;
         }
-        TextInputDialog dialog = new TextInputDialog(sale.getPrice().amount().toPlainString());
-        dialog.setTitle("Make an Offer");
-        dialog.setHeaderText("Offer for: " + listing.getTitle());
-        dialog.setContentText("Your offer price (HK$):");
-        dialog.showAndWait().ifPresent(priceStr -> {
-            try {
-                double price = Double.parseDouble(priceStr);
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Offer Submitted");
-                alert.setHeaderText(null);
-                alert.setContentText("Your offer of HK$" + price + " has been sent to " + listing.getSellerFullName() + ".\n\n(Demo only – no backend)");
-                alert.showAndWait();
-            } catch (NumberFormatException ex) {
-                new Alert(Alert.AlertType.ERROR, "Invalid price.").showAndWait();
+        TextField priceField = new TextField(sale.getPrice().amount().toPlainString());
+        priceField.setPromptText("e.g. 150 or 150.50");
+        Label error = dialogError();
+        VBox body = new VBox(8,
+                muted("Asking price: " + sale.getPriceDisplay()),
+                new Label("Your offer (HK$)"), priceField, error);
+
+        Dialog<ButtonType> dialog = requestDialog("Make an Offer", "Offer for: " + listing.getTitle(), body, "Send Offer");
+        onConfirm(dialog, error, () -> {
+            BigDecimal price = ListingSearch.parsePrice(priceField.getText());
+            if (price == null || price.signum() <= 0) {
+                throw new IllegalArgumentException("Please enter an offer above HK$0.");
             }
+            return dealRequests.submitOffer(SessionManager.getCurrentUser(), listing, price);
         });
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> requestSent("Your offer was sent to " + listing.getSellerFullName() + "."));
     }
 
+    /** S2: borrow request with a start and end date and time, checked against the listing's limit (A3). */
     private void showBorrowDialog(Listing listing) {
         if (!(listing instanceof LendListing lend)) {
-            new Alert(Alert.AlertType.WARNING, "This listing is not available for borrowing.").showAndWait();
             return;
         }
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Borrow Request");
-        alert.setHeaderText("Request to borrow: " + listing.getTitle());
-        alert.setContentText("Proposed duration: " + DurationText.format(lend.getLendingDuration()) +
-                "\n\nSend borrow request to seller?");
-        alert.showAndWait().ifPresent(resp -> {
-            if (resp == ButtonType.OK) {
-                new Alert(Alert.AlertType.INFORMATION, "Borrow request sent!\n(Demo only)").showAndWait();
+        LocalDateTime defaultStart = LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0);
+        java.time.Duration longest = lend.getLendingDuration();
+        java.time.Duration suggested = longest.compareTo(java.time.Duration.ofDays(7)) < 0 ? longest
+                : java.time.Duration.ofDays(7);
+        LocalDateTime defaultEnd = defaultStart.plus(suggested);
+        DatePicker startDate = new DatePicker(defaultStart.toLocalDate());
+        TextField startTime = timeField(defaultStart);
+        DatePicker endDate = new DatePicker(defaultEnd.toLocalDate());
+        TextField endTime = timeField(defaultEnd);
+        Label error = dialogError();
+        VBox body = new VBox(8,
+                muted("You can borrow this for up to " + DurationText.format(longest) + "."),
+                new Label("Start"), new HBox(8, startDate, startTime),
+                new Label("End"), new HBox(8, endDate, endTime), error);
+
+        Dialog<ButtonType> dialog = requestDialog("Request to Borrow", "Borrow: " + listing.getTitle(), body,
+                "Send Request");
+        onConfirm(dialog, error, () -> dealRequests.submitBorrow(SessionManager.getCurrentUser(), listing,
+                dateTime(startDate, startTime, "start"), dateTime(endDate, endTime, "end")));
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> requestSent("Your borrow request was sent to " + listing.getSellerFullName() + "."));
+    }
+
+    /** S3: claim with one confirmation; only the first claim wins (A4). */
+    private void claimItem(Listing listing) {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Claim '" + listing.getTitle() + "'? The item is reserved for you while "
+                        + listing.getSellerFullName() + " responds.", ButtonType.OK, ButtonType.CANCEL);
+        confirm.setTitle("Claim Item");
+        confirm.setHeaderText(null);
+        if (confirm.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) {
+            return; // A5
+        }
+        try {
+            dealRequests.claim(SessionManager.getCurrentUser(), listing);
+            requestSent("You claimed '" + listing.getTitle() + "'.");
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
+            new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
+            showBrowse();
+        }
+    }
+
+    private static Dialog<ButtonType> requestDialog(String title, String header, VBox body, String confirmText) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(header);
+        body.setPrefWidth(380);
+        dialog.getDialogPane().setContent(body);
+        dialog.getDialogPane().getButtonTypes().addAll(
+                new ButtonType(confirmText, ButtonBar.ButtonData.OK_DONE), ButtonType.CANCEL);
+        return dialog;
+    }
+
+    /**
+     * Submits when the buyer confirms. An invalid entry keeps the dialog open with the reason;
+     * if the listing has meanwhile become unavailable the dialog closes and says so.
+     */
+    private void onConfirm(Dialog<ButtonType> dialog, Label error, Supplier<DealRequest> submit) {
+        Button confirm = (Button) dialog.getDialogPane().getButtonTypes().stream()
+                .filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .map(b -> dialog.getDialogPane().lookupButton(b)).findFirst().orElseThrow();
+        confirm.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            try {
+                submit.get();
+            } catch (IllegalArgumentException e) {
+                showMessage(error, e.getMessage(), true);
+                // Grow the window so the new message doesn't push the buttons out of view.
+                dialog.getDialogPane().getScene().getWindow().sizeToScene();
+                event.consume();
+            } catch (SecurityException | IllegalStateException e) {
+                event.consume();
+                dialog.close();
+                new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
+                showBrowse();
             }
         });
     }
 
-    private void claimItem(Listing listing) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Claim Item");
-        alert.setHeaderText("Claim: " + listing.getTitle());
-        alert.setContentText("Are you sure you want to claim this giveaway item?");
-        alert.showAndWait().ifPresent(resp -> {
-            if (resp == ButtonType.OK) {
-                new Alert(Alert.AlertType.INFORMATION, "Item claimed successfully!\n(Demo only)").showAndWait();
-            }
-        });
+    /** Step 7: confirm, and show the new Pending request in My Deals. */
+    private void requestSent(String message) {
+        new Alert(Alert.AlertType.INFORMATION, message + "\nYou can follow it in My Deals (status: Pending).")
+                .showAndWait();
+        showMyDeals();
+    }
+
+    private static Label dialogError() {
+        Label error = new Label();
+        error.setWrapText(true);
+        error.setManaged(false);
+        error.setVisible(false);
+        return error;
+    }
+
+    private static TextField timeField(LocalDateTime value) {
+        TextField field = new TextField(value.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
+        field.setPromptText("HH:mm");
+        field.setPrefWidth(80);
+        return field;
+    }
+
+    private static LocalDateTime dateTime(DatePicker date, TextField time, String which) {
+        if (date.getValue() == null) {
+            throw new IllegalArgumentException("Please choose a " + which + " date.");
+        }
+        try {
+            return date.getValue().atTime(java.time.LocalTime.parse(time.getText().trim(),
+                    DateTimeFormatter.ofPattern("H:mm")));
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("Enter the " + which + " time as HH:mm, e.g. 14:30.");
+        }
     }
 
     @FXML
