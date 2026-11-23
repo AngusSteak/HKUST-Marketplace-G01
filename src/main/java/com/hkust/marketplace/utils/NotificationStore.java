@@ -1,10 +1,13 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Notification;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -21,6 +24,22 @@ public class NotificationStore {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * The single way the application creates notifications: every one has an SRS category
+     * and, where applicable, a reference to the object an OPEN should navigate to.
+     */
+    public Notification notify(String recipient, NotificationCategory category,
+                               String content, NotificationRef relatedRef) {
+        Objects.requireNonNull(recipient, "recipient");
+        Objects.requireNonNull(category, "category");
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("Notification content must not be blank");
+        }
+        Notification n = new Notification(recipient, category.getLabel(), content, category, relatedRef);
+        add(n);
+        return n;
+    }
+
     public void add(Notification n) {
         if (n.getId() == null) {
             n.setId("N" + idCounter.getAndIncrement());
@@ -29,13 +48,17 @@ public class NotificationStore {
     }
 
     void seed() {
-        add(new Notification("alice", "Offer Accepted",
-                "Charlie accepted your offer of HK$160 for Calculus Textbook.", "Offer"));
-        add(new Notification("charlie", "New Offer Received",
-                "Alice offered HK$160 for your Calculus Textbook.", "Offer"));
-        add(new Notification("diana", "Listing Pending",
-                "Your Mini Fridge listing is awaiting admin review.", "System"));
-        add(new Notification("admin", "New Listing Submitted",
-                "Diana submitted 'Mini Fridge' for review.", "System"));
+        notify("alice", NotificationCategory.OFFER_UPDATE,
+                "Charlie accepted your offer of HK$160 for Calculus Textbook.",
+                new NotificationRef(NotificationRef.Target.DEAL, "D1"));
+        notify("charlie", NotificationCategory.OFFER_UPDATE,
+                "Alice offered HK$160 for your Calculus Textbook.",
+                new NotificationRef(NotificationRef.Target.REQUEST, "Q1"));
+        notify("diana", NotificationCategory.NEW_SUBMISSION,
+                "Your Mini Fridge listing is awaiting admin review.",
+                new NotificationRef(NotificationRef.Target.LISTING, "L104"));
+        notify("admin", NotificationCategory.NEW_SUBMISSION,
+                "Diana submitted 'Mini Fridge' for review.",
+                new NotificationRef(NotificationRef.Target.LISTING, "L104"));
     }
 }

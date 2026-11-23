@@ -89,9 +89,10 @@ public class AdminDashboardController {
                     l.setStatus(ListingStatus.LIVE);
                     l.setReviewedAt(LocalDateTime.now());
                     DummyDataService.getInstance().listings().update(l);
-                    DummyDataService.getInstance().notifications().add(new Notification(
-                            l.getSellerUsername(), "Listing Approved",
-                            "Your listing '" + l.getTitle() + "' is now live!", "System"));
+                    DummyDataService.getInstance().notifications().notify(
+                            l.getSellerUsername(), NotificationCategory.LISTING_APPROVED,
+                            "Your listing '" + l.getTitle() + "' is now live!",
+                            new NotificationRef(NotificationRef.Target.LISTING, l.getId()));
                     showReview();
                 }
             });
@@ -113,9 +114,10 @@ public class AdminDashboardController {
                 l.setRejectionReason(reason);
                 l.setReviewedAt(LocalDateTime.now());
                 DummyDataService.getInstance().listings().update(l);
-                DummyDataService.getInstance().notifications().add(new Notification(
-                        l.getSellerUsername(), "Listing Rejected",
-                        "Your listing '" + l.getTitle() + "' was rejected. Reason: " + reason, "System"));
+                DummyDataService.getInstance().notifications().notify(
+                        l.getSellerUsername(), NotificationCategory.LISTING_REJECTED,
+                        "Your listing '" + l.getTitle() + "' was rejected. Reason: " + reason,
+                        new NotificationRef(NotificationRef.Target.LISTING, l.getId()));
                 showReview();
             });
         });
