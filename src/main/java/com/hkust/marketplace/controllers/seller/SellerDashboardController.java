@@ -5,6 +5,7 @@ import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
+import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -355,7 +356,9 @@ public class SellerDashboardController {
                 stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
                 Label comment = new Label(r.getComment());
                 comment.setWrapText(true);
-                Label meta = new Label("by @" + r.getBuyerUsername() + " · " + r.getListingTitle());
+                UserStore users = DummyDataService.getInstance().users();
+                Label meta = new Label("by " + users.historicalLabel(r.getBuyerUsername())
+                        + " · " + r.getListingTitle());
                 meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
                 HBox actions = new HBox(8);
                 Button reply = new Button("Reply");

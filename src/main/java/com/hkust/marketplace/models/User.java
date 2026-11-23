@@ -17,6 +17,8 @@ public abstract class User {
     private final UserRole role;
     // Activity 1: isActive
     private boolean active = true;
+    // Soft delete: the account cannot log in, but historical records still refer to it.
+    private boolean deleted = false;
     // Activity 1: registeredDate
     private LocalDateTime createdAt;
 
@@ -42,6 +44,12 @@ public abstract class User {
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
+
+    /** How historical deals, reviews and chats label this account after a soft delete. */
+    public String getDisplayName() { return deleted ? "deleted user" : fullName; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

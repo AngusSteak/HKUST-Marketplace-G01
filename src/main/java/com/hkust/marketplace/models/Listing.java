@@ -92,7 +92,7 @@ public abstract class Listing {
      * Derived from {@code seller}. Kept so {@code DealRequest} and all three portals
      * compile unchanged; do not add setters.
      */
-    public String getSellerFullName() { return seller.getFullName(); }
+    public String getSellerFullName() { return seller.getDisplayName(); }
 
     public LocalDateTime getSubmittedDate() { return submittedDate; }
     /** seed and tests only */

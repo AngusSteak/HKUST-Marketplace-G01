@@ -41,6 +41,8 @@ public class Deal {
     public Listing getListing() { return request.getListing(); }
     public String getBuyerUsername() { return request.getBuyerUsername(); }
     public String getSellerUsername() { return request.getSellerUsername(); }
+    public String getBuyerDisplayName() { return request.getBuyerDisplayName(); }
+    public String getSellerDisplayName() { return request.getSellerDisplayName(); }
     public DealType getDealType() { return request.dealType(); }
 
     /** The buyer's review of the seller for this deal, or {@code null} if not reviewed yet. */
