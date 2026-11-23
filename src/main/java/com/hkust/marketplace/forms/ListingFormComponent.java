@@ -13,11 +13,17 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 
+import java.io.File;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -57,6 +63,9 @@ public class ListingFormComponent {
     private final HBox priceRow = new HBox(8);
     private final HBox durationRow = new HBox(8);
     private final VBox photoArea = new VBox(8);
+    private final HBox thumbnailStrip = new HBox(8);
+    private final Button addPhotosButton = new Button("Add photos");
+    private final Label photoHint = new Label();
 
     private final Button submitButton = new Button("Submit for Review");
     private final Button cancelButton = new Button("Cancel");
@@ -162,7 +171,7 @@ public class ListingFormComponent {
         }
         durationRow.getChildren().addAll(daysField, hoursField, secondsField);
 
-        photoArea.getChildren().add(new Label("Photos: up to 6 (JPEG/PNG)"));
+        setupPhotoChooser();
 
         submitButton.getStyleClass().add("btn-gold");
         submitButton.setOnAction(event -> {
@@ -201,6 +210,76 @@ public class ListingFormComponent {
             box.getChildren().add(errorLabel);
         }
         return box;
+    }
+
+    private void setupPhotoChooser() {
+        addPhotosButton.getStyleClass().add("btn-outline");
+        addPhotosButton.setOnAction(event -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Choose photos (JPEG/PNG, up to 6)");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                    "Images", "*.jpg", "*.jpeg", "*.png"));
+            var window = root.getScene() == null ? null : root.getScene().getWindow();
+            List<File> files = chooser.showOpenMultipleDialog(window);
+            if (files == null) {
+                return;
+            }
+            for (File file : files) {
+                if (!state.canAddMorePhotos()) {
+                    break;
+                }
+                if (isSupportedImage(file.getName())) {
+                    state.addChosenPhoto(new PhotoDraft(file.toPath(), file.getName()));
+                }
+            }
+            rebuildThumbnails();
+        });
+
+        photoArea.getChildren().addAll(
+                new Label("Photos (up to 6, JPEG/PNG)"),
+                addPhotosButton,
+                photoHint,
+                thumbnailStrip);
+        rebuildThumbnails();
+    }
+
+    private static boolean isSupportedImage(String filename) {
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0) {
+            return false;
+        }
+        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        return extension.equals("jpg") || extension.equals("jpeg") || extension.equals("png");
+    }
+
+    private void rebuildThumbnails() {
+        thumbnailStrip.getChildren().clear();
+        for (PhotoDraft draft : state.getChosenPhotos()) {
+            VBox thumbnail = new VBox(4);
+            try {
+                Image image = new Image(draft.source().toUri().toString(), 80, 80, true, true);
+                ImageView view = new ImageView(image);
+                view.setFitWidth(80);
+                view.setFitHeight(80);
+                view.setPreserveRatio(true);
+                thumbnail.getChildren().add(view);
+            } catch (RuntimeException ex) {
+                thumbnail.getChildren().add(new Label("Preview unavailable"));
+            }
+            Button remove = new Button("Remove");
+            remove.getStyleClass().addAll("btn-danger", "btn-sm");
+            PhotoDraft target = draft;
+            remove.setOnAction(event -> {
+                state.removeChosenPhoto(target);
+                rebuildThumbnails();
+            });
+            thumbnail.getChildren().add(remove);
+            thumbnailStrip.getChildren().add(thumbnail);
+        }
+        addPhotosButton.setDisable(!state.canAddMorePhotos());
+        photoHint.setText(state.canAddMorePhotos()
+                ? ""
+                : "Maximum of 6 photos reached. Remove one to add another.");
     }
 
     private void bindControls() {
