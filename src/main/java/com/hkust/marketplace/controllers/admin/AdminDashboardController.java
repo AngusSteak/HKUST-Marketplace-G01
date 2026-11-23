@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.admin;
 
 import com.hkust.marketplace.models.*;
+import com.hkust.marketplace.utils.AdminService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
@@ -12,7 +13,6 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -40,9 +40,20 @@ public class AdminDashboardController {
         pageTitle.setText(title);
     }
 
-    private String adminUsername() {
-        User admin = SessionManager.getCurrentUser();
-        return admin == null ? "admin" : admin.getUsername();
+    /** Every admin action goes through the service, which checks the session is an admin (#60). */
+    private final AdminService adminService = new AdminService(DummyDataService.getInstance());
+
+    private static User admin() {
+        return SessionManager.getCurrentUser();
+    }
+
+    /** Runs an admin action, showing any refusal instead of letting it escape to JavaFX. */
+    private static void run(Runnable action) {
+        try {
+            action.run();
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {
+            new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+        }
     }
 
     @FXML
@@ -92,13 +103,7 @@ public class AdminDashboardController {
             Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Approve this listing?");
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
-                    l.setStatus(ListingStatus.LIVE);
-                    l.setReviewedAt(LocalDateTime.now());
-                    DummyDataService.getInstance().listings().update(l);
-                    DummyDataService.getInstance().notifications().notify(
-                            l.getSellerUsername(), NotificationCategory.LISTING_APPROVED,
-                            "Your listing '" + l.getTitle() + "' is now live!",
-                            new NotificationRef(NotificationRef.Target.LISTING, l.getId()));
+                    run(() -> adminService.approveListing(admin(), l));
                     showReview();
                 }
             });
@@ -116,14 +121,7 @@ public class AdminDashboardController {
                     new Alert(Alert.AlertType.WARNING, "Reason is required.").showAndWait();
                     return;
                 }
-                l.setStatus(ListingStatus.REJECTED);
-                l.setRejectionReason(reason);
-                l.setReviewedAt(LocalDateTime.now());
-                DummyDataService.getInstance().listings().update(l);
-                DummyDataService.getInstance().notifications().notify(
-                        l.getSellerUsername(), NotificationCategory.LISTING_REJECTED,
-                        "Your listing '" + l.getTitle() + "' was rejected. Reason: " + reason,
-                        new NotificationRef(NotificationRef.Target.LISTING, l.getId()));
+                run(() -> adminService.rejectListing(admin(), l, reason));
                 showReview();
             });
         });
@@ -172,11 +170,7 @@ public class AdminDashboardController {
                         "Take this listing down? It stays in deal history but leaves the marketplace.");
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
-                        // A taken-down listing keeps its deals, chats and reports (#34 adds the full flow).
-                        l.setStatus(ListingStatus.TAKEN_DOWN);
-                        l.setTakedownReason("Removed by admin");
-                        DummyDataService.getInstance().listings().update(l);
-                        DummyDataService.getInstance().audit().recordTakeDown(adminUsername(), l.getId());
+                        run(() -> adminService.takeDownListing(admin(), l, "Removed by admin"));
                         showAllListings();
                     }
                 });
@@ -221,8 +215,7 @@ public class AdminDashboardController {
             Button toggle = new Button(u.isActive() ? "Deactivate" : "Activate");
             toggle.getStyleClass().addAll(u.isActive() ? "btn-danger" : "btn-success", "btn-sm");
             toggle.setOnAction(e -> {
-                u.setActive(!u.isActive());
-                DummyDataService.getInstance().users().save(u);
+                run(() -> adminService.setActive(admin(), u, !u.isActive()));
                 showUsers();
             });
 
@@ -233,11 +226,10 @@ public class AdminDashboardController {
                         "Permanently delete user @" + u.getUsername() + "?");
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
-                        u.setActive(false);
-                        DummyDataService.getInstance().users().save(u);
-                        DummyDataService.getInstance().audit()
-                                .recordAccountDeletion(adminUsername(), "@" + u.getUsername());
-                        new Alert(Alert.AlertType.INFORMATION, "User deactivated (demo safety).").showAndWait();
+                        run(() -> {
+                            adminService.deactivateAccount(admin(), u);
+                            new Alert(Alert.AlertType.INFORMATION, "User deactivated (demo safety).").showAndWait();
+                        });
                         showUsers();
                     }
                 });
@@ -323,8 +315,7 @@ public class AdminDashboardController {
             Button hide = new Button(r.isHidden() ? "Unhide" : "Hide");
             hide.getStyleClass().addAll("btn-outline", "btn-sm");
             hide.setOnAction(e -> {
-                r.setHidden(!r.isHidden());
-                DummyDataService.getInstance().reviews().save(r);
+                run(() -> adminService.setReviewHidden(admin(), r, !r.isHidden()));
                 showRatings();
             });
             row.getChildren().addAll(info, hide);
