@@ -2,11 +2,11 @@ package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.models.*;
-import com.hkust.marketplace.persistence.DatabaseException;
 import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
@@ -118,10 +118,10 @@ public class SellerDashboardController {
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
                     try {
-                        DummyDataService.getInstance().listings().remove(l.getId());
-                    } catch (DatabaseException ex) {
-                        new Alert(Alert.AlertType.WARNING, "This listing has offers, deals, chats or"
-                                + " reports, so it can't be deleted.").showAndWait();
+                        new SellerService(DummyDataService.getInstance())
+                                .deleteListing(SessionManager.getCurrentUser(), l);
+                    } catch (SecurityException | IllegalStateException ex) {
+                        new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
                     }
                     showMyListings();
                 }
