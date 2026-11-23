@@ -257,6 +257,86 @@
     -fx-border-color: #A68137;
 }
 
+/* ---------- Chat ---------- */
+.chat-banner {
+    -fx-background-color: #fff3e0;
+    -fx-text-fill: #ed6c02;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-color: #ed6c02;
+    -fx-border-width: 0 0 0 4;
+    -fx-padding: 10 14;
+    -fx-font-weight: 600;
+}
+.chat-bubble {
+    -fx-background-radius: 12;
+    -fx-padding: 10 14;
+}
+.chat-bubble-own {
+    -fx-background-color: #003974;
+}
+.chat-bubble-other {
+    -fx-background-color: white;
+    -fx-border-color: #d0d7e2;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+.chat-sender {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+.chat-bubble-own .chat-sender {
+    -fx-text-fill: #c9a55c;
+}
+.chat-bubble-other .chat-sender {
+    -fx-text-fill: #003974;
+}
+.chat-text {
+    -fx-font-size: 13px;
+}
+.chat-bubble-own .chat-text {
+    -fx-text-fill: white;
+}
+.chat-bubble-other .chat-text {
+    -fx-text-fill: #1a1a2e;
+}
+.chat-time {
+    -fx-font-size: 10px;
+}
+.chat-bubble-own .chat-time {
+    -fx-text-fill: #c5d4e8;
+}
+.chat-bubble-other .chat-time {
+    -fx-text-fill: #9aa0b0;
+}
+
+/* ---------- Formal Offer card ---------- */
+.offer-card {
+    -fx-background-color: #f3f7fb;
+    -fx-background-radius: 12;
+    -fx-border-color: #003974;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-padding: 12 14;
+}
+.offer-badge {
+    -fx-background-color: #003974;
+    -fx-text-fill: #c9a55c;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+    -fx-padding: 2 8;
+}
+.offer-terms {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #003974;
+}
+.offer-listing {
+    -fx-font-size: 12px;
+    -fx-text-fill: #5a5a7a;
+}
+
 /* ---------- Misc ---------- */
 .separator *.line {
     -fx-border-style: solid;

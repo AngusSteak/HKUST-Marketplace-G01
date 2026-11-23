@@ -1,8 +1,10 @@
 package com.hkust.marketplace.controllers.buyer;
 
+import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.ChatThread;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.DealStatus;
@@ -15,6 +17,7 @@ import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
@@ -42,6 +45,7 @@ public class BuyerDashboardController {
     @FXML private Button btnBrowse, btnDeals, btnHistory, btnFavourites, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
+    private final ChatService chatService = new ChatService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -166,8 +170,32 @@ public class BuyerDashboardController {
             }
         }
 
-        card.getChildren().addAll(top, title, meta, seller, location, date, actionBtn);
+        Button chatBtn = new Button("Chat");
+        chatBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        chatBtn.setOnAction(e -> openChat(listing));
+
+        HBox actionRow = new HBox(8, actionBtn, chatBtn);
+
+        card.getChildren().addAll(top, title, meta, seller, location, date, actionRow);
         return card;
+    }
+
+    private void openChat(Listing listing) {
+        if (!(SessionManager.getCurrentUser() instanceof Buyer buyer)) {
+            new Alert(Alert.AlertType.WARNING, "You must be logged in as a buyer to chat.").showAndWait();
+            return;
+        }
+        ChatThread thread = chatService.openThread(buyer, listing);
+        pageTitle.setText("Chat: " + listing.getTitle());
+        contentPane.getChildren().clear();
+
+        Button back = new Button("\u2190 Back to Browse Marketplace");
+        back.getStyleClass().addAll("btn-outline", "btn-sm");
+        back.setOnAction(e -> showBrowse());
+
+        VBox root = new VBox(12);
+        root.getChildren().addAll(back, ChatViewBuilder.build(chatService, buyer, thread));
+        contentPane.getChildren().add(root);
     }
 
     private void showOfferDialog(Listing listing) {

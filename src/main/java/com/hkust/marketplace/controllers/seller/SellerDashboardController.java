@@ -1,6 +1,8 @@
 package com.hkust.marketplace.controllers.seller;
 
+import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.models.*;
+import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
@@ -29,9 +31,10 @@ public class SellerDashboardController {
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnListings, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
+    @FXML private Button btnListings, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
+    private final ChatService chatService = new ChatService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -121,6 +124,85 @@ public class SellerDashboardController {
 
         row.getChildren().addAll(info, status, editBtn, delBtn);
         return row;
+    }
+
+    @FXML
+    private void showChats() {
+        setActive(btnChats, "Chats");
+        contentPane.getChildren().clear();
+
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(4));
+
+        if (!(SessionManager.getCurrentUser() instanceof Seller seller)) {
+            root.getChildren().add(new Label("Log in as a seller to see your conversations."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+
+        List<ChatThread> threads = chatService.threadsForSeller(seller);
+        if (threads.isEmpty()) {
+            Label empty = new Label("No buyer conversations yet.");
+            empty.setStyle("-fx-text-fill: #5a5a7a;");
+            root.getChildren().add(empty);
+        } else {
+            for (ChatThread thread : threads) {
+                root.getChildren().add(createThreadRow(thread));
+            }
+        }
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private HBox createThreadRow(ChatThread thread) {
+        HBox row = new HBox(16);
+        row.getStyleClass().add("card");
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(14));
+
+        VBox info = new VBox(4);
+        HBox.setHgrow(info, Priority.ALWAYS);
+        Label title = new Label(thread.getListing().getTitle());
+        title.setStyle("-fx-font-weight: bold; -fx-font-size: 15px;");
+        Label buyer = new Label("Buyer: " + thread.getBuyer().getFullName());
+        buyer.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        List<Message> history = chatService.history(thread);
+        String preview = history.isEmpty()
+                ? "No messages yet"
+                : history.get(history.size() - 1).getContent();
+        Label last = new Label(preview);
+        last.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
+        info.getChildren().addAll(title, buyer, last);
+
+        Label status = new Label(thread.getListing().getStatus().name().replace('_', ' '));
+        status.getStyleClass().add("badge");
+        switch (thread.getListing().getStatus()) {
+            case LIVE -> status.getStyleClass().add("badge-live");
+            case PENDING_REVIEW -> status.getStyleClass().add("badge-pending");
+            case REJECTED -> status.getStyleClass().add("badge-rejected");
+            default -> status.getStyleClass().add("badge-sold");
+        }
+
+        Button open = new Button("Open");
+        open.getStyleClass().addAll("btn-primary", "btn-sm");
+        open.setOnAction(e -> showThread(thread));
+
+        row.getChildren().addAll(info, status, open);
+        return row;
+    }
+
+    private void showThread(ChatThread thread) {
+        contentPane.getChildren().clear();
+
+        Button back = new Button("\u2190 Back to Chats");
+        back.getStyleClass().addAll("btn-outline", "btn-sm");
+        back.setOnAction(e -> showChats());
+
+        VBox root = new VBox(12);
+        root.getChildren().addAll(back,
+                ChatViewBuilder.build(chatService, SessionManager.getCurrentUser(), thread));
+        contentPane.getChildren().add(root);
     }
 
     @FXML
