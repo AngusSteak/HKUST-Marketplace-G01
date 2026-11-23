@@ -99,12 +99,10 @@ class NotificationCategoryTest {
         assertEquals("DEAL:D1", alice.getRelatedRef().toString());
 
         Notification charlie = store.forUser("charlie").get(0);
-        assertEquals(NotificationCategory.OFFER_UPDATE, charlie.getCategory());
+        assertEquals(NotificationCategory.NEW_REQUEST, charlie.getCategory());
         assertEquals("REQUEST:Q1", charlie.getRelatedRef().toString());
 
-        Notification diana = store.forUser("diana").get(0);
-        assertEquals(NotificationCategory.NEW_SUBMISSION, diana.getCategory());
-        assertEquals("LISTING:L104", diana.getRelatedRef().toString());
+        assertTrue(store.forUser("diana").isEmpty(), "New Submission is admin-only");
 
         Notification admin = store.forUser("admin").get(0);
         assertEquals(NotificationCategory.NEW_SUBMISSION, admin.getCategory());

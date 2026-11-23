@@ -51,12 +51,12 @@ public class NotificationStore {
         notify("alice", NotificationCategory.OFFER_UPDATE,
                 "Charlie accepted your offer of HK$160 for Calculus Textbook.",
                 new NotificationRef(NotificationRef.Target.DEAL, "D1"));
-        notify("charlie", NotificationCategory.OFFER_UPDATE,
+        // Sellers get New Request for incoming offers; Offer Update is the buyer-side category (SRS UC-2.7).
+        notify("charlie", NotificationCategory.NEW_REQUEST,
                 "Alice offered HK$160 for your Calculus Textbook.",
                 new NotificationRef(NotificationRef.Target.REQUEST, "Q1"));
-        notify("diana", NotificationCategory.NEW_SUBMISSION,
-                "Your Mini Fridge listing is awaiting admin review.",
-                new NotificationRef(NotificationRef.Target.LISTING, "L104"));
+        // No seller notice for a pending submission: New Submission is admin-only and UC-2.3
+        // only confirms on screen to the seller, so only the admin is notified.
         notify("admin", NotificationCategory.NEW_SUBMISSION,
                 "Diana submitted 'Mini Fridge' for review.",
                 new NotificationRef(NotificationRef.Target.LISTING, "L104"));
