@@ -218,9 +218,10 @@ public class SellerDashboardController {
             }
             DummyDataService.getInstance().listings().add(listing);
             // Notify admin
-            DummyDataService.getInstance().notifications().add(new Notification(
-                    "admin", "New Listing Submitted",
-                    seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.", "System"));
+            DummyDataService.getInstance().notifications().notify(
+                    "admin", NotificationCategory.NEW_SUBMISSION,
+                    seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.",
+                    new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
             new Alert(Alert.AlertType.INFORMATION,
                     "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – in-memory only)").showAndWait();
             showMyListings();

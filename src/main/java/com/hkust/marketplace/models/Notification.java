@@ -7,7 +7,8 @@ public class Notification {
     private String username; // recipient
     private String title;
     private String message;
-    private String category; // Offer, Chat, System, Rating, etc.
+    private NotificationCategory category;
+    private NotificationRef relatedRef; // where OPEN navigates; null for announcements
     private LocalDateTime timestamp;
     private boolean read;
 
@@ -16,12 +17,18 @@ public class Notification {
         this.read = false;
     }
 
-    public Notification(String username, String title, String message, String category) {
+    public Notification(String username, String title, String message, NotificationCategory category) {
+        this(username, title, message, category, null);
+    }
+
+    public Notification(String username, String title, String message,
+                        NotificationCategory category, NotificationRef relatedRef) {
         this();
         this.username = username;
         this.title = title;
         this.message = message;
         this.category = category;
+        this.relatedRef = relatedRef;
     }
 
     // Getters & Setters
@@ -37,8 +44,11 @@ public class Notification {
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
 
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public NotificationCategory getCategory() { return category; }
+    public void setCategory(NotificationCategory category) { this.category = category; }
+
+    public NotificationRef getRelatedRef() { return relatedRef; }
+    public void setRelatedRef(NotificationRef relatedRef) { this.relatedRef = relatedRef; }
 
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
