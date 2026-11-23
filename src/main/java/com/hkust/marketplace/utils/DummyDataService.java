@@ -23,6 +23,7 @@ public class DummyDataService {
     private final FavouriteStore favourites = new FavouriteStore();
     private final AuditStore audit = new AuditStore();
     private final ReportStore reports = new ReportStore();
+    private final ChatStore chats = new ChatStore();
 
     /**
      * Creates an empty store with no demo data. Visible for tests so each test can
@@ -49,6 +50,7 @@ public class DummyDataService {
     public FavouriteStore favourites() { return favourites; }
     public AuditStore audit() { return audit; }
     public ReportStore reports() { return reports; }
+    public ChatStore chats() { return chats; }
 
     /**
      * Populates this store with the demo data. Visible for tests so they can seed an
@@ -64,5 +66,7 @@ public class DummyDataService {
         reviews.seed();
         // alice favourites the MacBook charger (L101) and follows its seller charlie
         favourites.seed((Buyer) users.find("alice"), seededListings.get(1), (Seller) users.find("charlie"));
+        // one live chat on the charger, one read-only chat on alice's already-reserved textbook
+        chats.seed((Buyer) users.find("alice"), seededListings.get(1), seededListings.get(0));
     }
 }
