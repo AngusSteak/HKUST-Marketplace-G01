@@ -12,6 +12,7 @@ import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.persistence.DatabaseException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,14 +38,13 @@ public final class ChatService {
             "This listing is no longer live \u2014 new offers are disabled.";
 
     private final DummyDataService data;
+    /** Formal Offers are deal requests like any other: validated, saved and notified the same way. */
+    private final DealRequestService requests;
 
     public ChatService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
         this.requests = new DealRequestService(data);
     }
-
-    /** Formal Offers are deal requests like any other: validated, saved and notified the same way. */
-    private final DealRequestService requests;
 
     /** Returns the one thread for this (Buyer, Listing) pair, creating it on first use. */
     public ChatThread openThread(Buyer buyer, Listing listing) {
@@ -64,7 +64,12 @@ public final class ChatService {
         Objects.requireNonNull(thread, "thread");
         requireParticipant(sender, thread);
         Message message = data.chats().send(thread, sender, content);
-        notifyOtherParticipant(sender, thread, content);
+        try {
+            notifyOtherParticipant(sender, thread, content);
+        } catch (DatabaseException e) {
+            // The message is already saved and shown. Reporting the send as failed would make the
+            // sender post it again, so a lost notification is the lesser problem.
+        }
         return message;
     }
 

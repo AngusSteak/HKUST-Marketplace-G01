@@ -62,6 +62,18 @@ class ChatNotificationTest {
     }
 
     @Test
+    void aFailedNotificationDoesNotFailAMessageThatWasSent() {
+        ChatThread thread = chat.openThread(bob, charger);
+        data.database().update("CREATE TRIGGER fail_notice BEFORE INSERT ON notifications"
+                + " BEGIN SELECT RAISE(ABORT, 'simulated failure'); END");
+
+        Message sent = chat.sendText(bob, thread, "Still available?");
+
+        assertEquals(List.of(sent), chat.history(thread));
+        assertTrue(data.notifications().forUser("charlie", NotificationCategory.CHAT_MESSAGE).isEmpty());
+    }
+
+    @Test
     void anEmptyMessageIsNotSentAndNobodyIsNotified() {
         ChatThread thread = chat.openThread(bob, charger);
 
