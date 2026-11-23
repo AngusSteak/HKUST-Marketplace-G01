@@ -4,6 +4,7 @@ import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Condition;
 import com.hkust.marketplace.models.ChatThread;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
@@ -21,21 +22,27 @@ import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
+import com.hkust.marketplace.utils.ListingSearch;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Function;
 
 public class BuyerDashboardController {
 
@@ -66,49 +73,115 @@ public class BuyerDashboardController {
         pageTitle.setText(title);
     }
 
+    /** One choice in a filter box; a {@code null} value means "any". */
+    private record Option<T>(String label, T value) {
+        @Override
+        public String toString() { return label; }
+    }
+
+    private static <T> ComboBox<Option<T>> optionBox(String anyLabel, List<T> values,
+                                                     Function<T, String> label) {
+        ComboBox<Option<T>> box = new ComboBox<>();
+        box.getItems().add(new Option<>(anyLabel, null));
+        values.forEach(v -> box.getItems().add(new Option<>(label.apply(v), v)));
+        box.getSelectionModel().selectFirst();
+        return box;
+    }
+
+    private static <T> T selected(ComboBox<Option<T>> box) {
+        Option<T> option = box.getValue();
+        return option == null ? null : option.value();
+    }
+
+    /** Browse Marketplace (SRS UC-1.3): search, filter and sort the live listings. */
     @FXML
     private void showBrowse() {
         setActive(btnBrowse, "Browse Marketplace");
         contentPane.getChildren().clear();
 
-        VBox root = new VBox(16);
+        VBox root = new VBox(12);
         root.setPadding(new Insets(4));
 
-        // Filter bar
-        HBox filterBar = new HBox(12);
-        filterBar.setAlignment(Pos.CENTER_LEFT);
-        ComboBox<String> categoryFilter = new ComboBox<>(FXCollections.observableArrayList("All Categories"));
-        categoryFilter.getItems().addAll(Arrays.stream(Category.values()).map(Category::getLabel).toList());
-        categoryFilter.getSelectionModel().selectFirst();
-        ComboBox<String> typeFilter = new ComboBox<>(FXCollections.observableArrayList("All Types", "Sell", "Lend", "Giveaway"));
-        typeFilter.getSelectionModel().selectFirst();
         TextField searchField = new TextField();
-        searchField.setPromptText("Search listings...");
-        searchField.setPrefWidth(220);
+        searchField.setPromptText("Search title or description...");
+        searchField.setPrefWidth(320);
         Button searchBtn = new Button("Search");
         searchBtn.getStyleClass().addAll("btn-primary", "btn-sm");
-        filterBar.getChildren().addAll(
-                new Label("Category:"), categoryFilter,
-                new Label("Type:"), typeFilter,
-                searchField, searchBtn
-        );
-        root.getChildren().add(filterBar);
+        Button clearBtn = new Button("Clear");
+        clearBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        HBox searchBar = new HBox(10, searchField, searchBtn, clearBtn);
+        searchBar.setAlignment(Pos.CENTER_LEFT);
 
-        // Listing grid
-        FlowPane grid = new FlowPane(16, 16);
-        grid.setPrefWrapLength(900);
+        ComboBox<Option<Category>> categoryFilter =
+                optionBox("All categories", Arrays.asList(Category.values()), Category::getLabel);
+        ComboBox<Option<ListingType>> typeFilter =
+                optionBox("All types", Arrays.asList(ListingType.values()), BuyerDashboardController::typeLabel);
+        ComboBox<Option<Condition>> conditionFilter =
+                optionBox("Any condition", Arrays.asList(Condition.values()), Condition::getLabel);
+        TextField minPrice = priceField("Min HK$");
+        TextField maxPrice = priceField("Max HK$");
+        ComboBox<ListingSearch.SortOrder> sortBox =
+                new ComboBox<>(FXCollections.observableArrayList(ListingSearch.SortOrder.values()));
+        sortBox.getSelectionModel().select(ListingSearch.SortOrder.NEWEST);
+        HBox filterBar = new HBox(10,
+                categoryFilter, typeFilter, conditionFilter,
+                new Label("Price:"), minPrice, new Label("\u2013"), maxPrice,
+                new Label("Sort:"), sortBox);
+        filterBar.setAlignment(Pos.CENTER_LEFT);
 
-        List<Listing> live = DummyDataService.getInstance().listings().live();
-        if (live.isEmpty()) {
-            Label empty = new Label("No live listings at the moment.");
-            empty.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 15px;");
-            root.getChildren().add(empty);
-        } else {
-            for (Listing listing : live) {
-                grid.getChildren().add(createListingCard(listing));
+        Label error = new Label();
+        error.setStyle("-fx-text-fill: #c0392b; -fx-font-size: 13px;");
+        error.setManaged(false);
+        error.setVisible(false);
+        Label resultCount = new Label();
+        resultCount.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+        VBox results = new VBox(12);
+
+        Runnable refresh = () -> {
+            ListingSearch.Criteria criteria;
+            List<Listing> found;
+            try {
+                criteria = new ListingSearch.Criteria(searchField.getText(),
+                        selected(categoryFilter), selected(typeFilter), selected(conditionFilter),
+                        ListingSearch.parsePrice(minPrice.getText()), ListingSearch.parsePrice(maxPrice.getText()), sortBox.getValue());
+                found = ListingSearch.search(DummyDataService.getInstance().listings().all(), criteria);
+            } catch (IllegalArgumentException ex) {
+                // SRS UC-1.3 A2: say why and keep the current results.
+                error.setText(ex.getMessage());
+                error.setManaged(true);
+                error.setVisible(true);
+                return;
             }
-            root.getChildren().add(grid);
-        }
+            error.setManaged(false);
+            error.setVisible(false);
+            results.getChildren().clear();
+            if (found.isEmpty()) {
+                // SRS UC-1.3 A1
+                resultCount.setText("0 listings");
+                Label empty = new Label("No listings found.");
+                empty.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 15px;");
+                results.getChildren().add(empty);
+                return;
+            }
+            resultCount.setText(found.size() + (found.size() == 1 ? " listing" : " listings"));
+            FlowPane grid = new FlowPane(16, 16);
+            grid.setPrefWrapLength(900);
+            found.forEach(listing -> grid.getChildren().add(createListingCard(listing)));
+            results.getChildren().add(grid);
+        };
+
+        searchBtn.setOnAction(e -> refresh.run());
+        searchField.setOnAction(e -> refresh.run());
+        minPrice.setOnAction(e -> refresh.run());
+        maxPrice.setOnAction(e -> refresh.run());
+        categoryFilter.setOnAction(e -> refresh.run());
+        typeFilter.setOnAction(e -> refresh.run());
+        conditionFilter.setOnAction(e -> refresh.run());
+        sortBox.setOnAction(e -> refresh.run());
+        clearBtn.setOnAction(e -> showBrowse());
+
+        root.getChildren().addAll(searchBar, filterBar, error, resultCount, results);
+        refresh.run();
 
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
@@ -116,6 +189,25 @@ public class BuyerDashboardController {
         contentPane.getChildren().add(scroll);
     }
 
+    private static TextField priceField(String prompt) {
+        TextField field = new TextField();
+        field.setPromptText(prompt);
+        field.setPrefWidth(90);
+        return field;
+    }
+
+    private static String typeLabel(ListingType type) {
+        return switch (type) {
+            case SELL -> "For Sale";
+            case LEND -> "For Lending";
+            case GIVEAWAY -> "Giveaway";
+        };
+    }
+
+    /**
+     * One listing in the grid, with the fields SRS UC-1.3 step 2 lists: thumbnail, title, seller
+     * name, category, type, price, condition, meet-up location, posted date and availability.
+     */
     private VBox createListingCard(Listing listing) {
         VBox card = new VBox(8);
         card.getStyleClass().add("listing-card");
@@ -123,34 +215,41 @@ public class BuyerDashboardController {
         card.setMinHeight(200);
 
         // Type badge + price
-        HBox top = new HBox();
+        HBox top = new HBox(6);
         top.setAlignment(Pos.CENTER_LEFT);
         Label typeBadge = new Label(listing.getTypeDisplay());
         typeBadge.getStyleClass().add("badge");
         if (listing.getType() == ListingType.SELL) typeBadge.getStyleClass().add("badge-sold");
         else if (listing.getType() == ListingType.LEND) typeBadge.getStyleClass().add("badge-pending");
         else typeBadge.getStyleClass().add("badge-live");
+        // Browse only lists Live listings, so every card is available.
+        Label status = new Label("Available");
+        status.getStyleClass().addAll("badge", "badge-live");
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Label price = new Label(listing.getPriceDisplay());
-        price.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 16px;");
-        top.getChildren().addAll(typeBadge, spacer, price);
+        top.getChildren().addAll(typeBadge, status);
 
         Label title = new Label(listing.getTitle());
         title.setStyle("-fx-font-weight: bold; -fx-font-size: 15px; -fx-text-fill: #1a1a2e;");
         title.setWrapText(true);
 
-        Label meta = new Label(listing.getCategory() + " · " + listing.getCondition());
+        // Lend listings have no price; show how long they can be borrowed instead.
+        Label price = new Label(listing instanceof LendListing lend
+                ? "Borrow for up to " + DurationText.format(lend.getLendingDuration())
+                : listing.getPriceDisplay());
+        price.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 16px;");
+        price.setWrapText(true);
+
+        Label meta = new Label(listing.getCategory().getLabel() + " · " + listing.getCondition().getLabel());
         meta.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
 
         Label seller = new Label("Seller: " + listing.getSellerFullName());
         seller.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
 
-        Label location = new Label("📍 " + listing.getMeetupLocation());
+        Label location = new Label("📍 " + listing.getMeetupLocation().getLabel());
         location.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
 
-        Label date = new Label("Posted: " + listing.getSubmittedDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
+        Label date = new Label("Posted: " + ListingSearch.postedDate(listing)
+                .format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
         date.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
 
         Button actionBtn = new Button();
@@ -176,8 +275,29 @@ public class BuyerDashboardController {
 
         HBox actionRow = new HBox(8, actionBtn, chatBtn);
 
-        card.getChildren().addAll(top, title, meta, seller, location, date, actionRow);
+        card.getChildren().addAll(thumbnail(listing), top, title, price, meta, seller, location, date, actionRow);
         return card;
+    }
+
+    /** The first photo, or a placeholder when the listing has none or the file is missing. */
+    private static StackPane thumbnail(Listing listing) {
+        StackPane box = new StackPane();
+        box.setPrefSize(228, 120);
+        box.setMinHeight(120);
+        box.setStyle("-fx-background-color: #eef2f7; -fx-background-radius: 8;");
+        Path photo = listing.getPhotoPaths().isEmpty() ? null : Path.of(listing.getPhotoPaths().get(0));
+        // Loaded synchronously so a missing or unreadable file falls back to the placeholder.
+        Image image = photo != null && Files.isRegularFile(photo)
+                ? new Image(photo.toUri().toString(), 228, 120, true, true, false)
+                : null;
+        if (image != null && !image.isError()) {
+            box.getChildren().add(new ImageView(image));
+        } else {
+            Label none = new Label("No photo");
+            none.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
+            box.getChildren().add(none);
+        }
+        return box;
     }
 
     private void openChat(Listing listing) {
