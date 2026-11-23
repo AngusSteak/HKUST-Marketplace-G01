@@ -5,6 +5,7 @@ import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Claim;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.NotificationCategory;
@@ -49,7 +50,7 @@ public final class DealRequestService {
     public PriceOffer submitOffer(User actor, Listing listing, BigDecimal price) {
         Buyer buyer = requireBuyer(actor);
         requireAvailable(listing, ListingType.SELL);
-        PriceOffer offer = record(() -> data.deals().lifecycle().submitOffer(buyer, listing, price), false);
+        PriceOffer offer = record(() -> data.deals().lifecycle().submitOffer(buyer, listing, price), null);
         notifySeller(offer, buyer.getDisplayName() + " offered " + new Money(offer.getOfferedPrice()).getDisplay()
                 + " for your listing '" + listing.getTitle() + "'.");
         return offer;
@@ -59,7 +60,7 @@ public final class DealRequestService {
     public BorrowRequest submitBorrow(User actor, Listing listing, LocalDateTime start, LocalDateTime end) {
         Buyer buyer = requireBuyer(actor);
         requireAvailable(listing, ListingType.LEND);
-        BorrowRequest request = record(() -> data.deals().lifecycle().submitBorrow(buyer, listing, start, end), false);
+        BorrowRequest request = record(() -> data.deals().lifecycle().submitBorrow(buyer, listing, start, end), null);
         notifySeller(request, buyer.getDisplayName() + " asked to borrow '" + listing.getTitle() + "' from "
                 + start.format(WHEN) + " to " + end.format(WHEN) + ".");
         return request;
@@ -72,7 +73,7 @@ public final class DealRequestService {
     public Claim claim(User actor, Listing listing) {
         Buyer buyer = requireBuyer(actor);
         requireAvailable(listing, ListingType.GIVEAWAY);
-        Claim claim = record(() -> data.deals().lifecycle().submitClaim(buyer, listing), true);
+        Claim claim = record(() -> data.deals().lifecycle().submitClaim(buyer, listing), listing);
         notifySeller(claim, buyer.getDisplayName() + " claimed your giveaway '" + listing.getTitle() + "'.");
         return claim;
     }
@@ -93,15 +94,18 @@ public final class DealRequestService {
     }
 
     /**
-     * Records the request. The lifecycle re-checks availability under its own lock, so if another
-     * buyer got there first (e.g. a claim between our check and now) that refusal is reported in
-     * the buyer's words rather than the lifecycle's.
+     * Records the request. The lifecycle re-checks availability under its own lock, so if the
+     * listing changed since our check its refusal is reported in the buyer's words: a giveaway
+     * that is now Reserved was claimed by someone else (A4); anything else is no longer
+     * available (A1).
      */
-    private static <R extends DealRequest> R record(Supplier<R> submit, boolean claim) {
+    static <R extends DealRequest> R record(Supplier<R> submit, Listing claimedGiveaway) {
         try {
             return submit.get();
         } catch (IllegalStateException e) {
-            throw new IllegalStateException(claim ? ALREADY_CLAIMED : NOT_AVAILABLE, e);
+            boolean claimedFirst = claimedGiveaway != null
+                    && claimedGiveaway.getStatus() == ListingStatus.RESERVED;
+            throw new IllegalStateException(claimedFirst ? ALREADY_CLAIMED : NOT_AVAILABLE, e);
         }
     }
 

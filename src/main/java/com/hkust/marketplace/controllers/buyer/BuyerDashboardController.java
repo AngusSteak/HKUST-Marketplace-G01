@@ -518,7 +518,8 @@ public class BuyerDashboardController {
         if (!(listing instanceof LendListing lend)) {
             return;
         }
-        LocalDateTime defaultStart = LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0);
+        // The next full hour at least an hour away, so the default never slips into the past.
+        LocalDateTime defaultStart = LocalDateTime.now().plusHours(2).truncatedTo(java.time.temporal.ChronoUnit.HOURS);
         java.time.Duration longest = lend.getLendingDuration();
         java.time.Duration suggested = longest.compareTo(java.time.Duration.ofDays(7)) < 0 ? longest
                 : java.time.Duration.ofDays(7);
@@ -557,6 +558,10 @@ public class BuyerDashboardController {
         } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
             new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
             showBrowse();
+        } catch (RuntimeException e) {
+            new Alert(Alert.AlertType.ERROR, "Your claim could not be completed."
+                    + " Please check My Deals before trying again.").showAndWait();
+            showMyDeals();
         }
     }
 
@@ -590,6 +595,13 @@ public class BuyerDashboardController {
                 dialog.close();
                 new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
                 showBrowse();
+            } catch (RuntimeException e) {
+                // A database failure: the request may or may not have been saved.
+                event.consume();
+                dialog.close();
+                new Alert(Alert.AlertType.ERROR, "Your request could not be completed."
+                        + " Please check My Deals before trying again.").showAndWait();
+                showMyDeals();
             }
         });
     }

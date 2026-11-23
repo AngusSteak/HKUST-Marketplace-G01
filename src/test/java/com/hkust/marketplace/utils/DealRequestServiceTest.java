@@ -132,6 +132,23 @@ class DealRequestServiceTest {
     }
 
     @Test
+    void aLateRefusalIsReportedAsClaimedOnlyWhenTheGiveawayIsReserved() {
+        // The lifecycle refused after our availability check; what changed decides the message.
+        java.util.function.Supplier<Claim> refused = () -> {
+            throw new IllegalStateException("Listing is not live");
+        };
+        Listing lamp = data.listings().find("L102");   // seeded: reserved by alice's claim
+        assertEquals(DealRequestService.ALREADY_CLAIMED, assertThrows(IllegalStateException.class,
+                () -> DealRequestService.record(refused, lamp)).getMessage());
+
+        lamp.setStatus(ListingStatus.TAKEN_DOWN);
+        assertEquals(DealRequestService.NOT_AVAILABLE, assertThrows(IllegalStateException.class,
+                () -> DealRequestService.record(refused, lamp)).getMessage());
+        assertEquals(DealRequestService.NOT_AVAILABLE, assertThrows(IllegalStateException.class,
+                () -> DealRequestService.record(refused, null)).getMessage(), "offers and borrows");
+    }
+
+    @Test
     void listingsThatAreNotAvailableAreRefused() {
         Listing textbook = data.listings().find("L100");   // reserved by alice's accepted offer
         IllegalStateException reserved = assertThrows(IllegalStateException.class,
