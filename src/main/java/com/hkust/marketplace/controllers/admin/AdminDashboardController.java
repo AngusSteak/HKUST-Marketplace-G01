@@ -324,6 +324,7 @@ public class AdminDashboardController {
             hide.getStyleClass().addAll("btn-outline", "btn-sm");
             hide.setOnAction(e -> {
                 r.setHidden(!r.isHidden());
+                DummyDataService.getInstance().reviews().save(r);
                 showRatings();
             });
             row.getChildren().addAll(info, hide);

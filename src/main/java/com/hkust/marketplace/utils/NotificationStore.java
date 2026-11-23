@@ -3,6 +3,7 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.persistence.Database;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -11,13 +12,22 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-/** In-memory notification board, one list shared by all recipients. */
+/**
+ * Notification board, one list shared by all recipients. Every notification is saved to the
+ * {@code notifications} table when it is added, and its read flag by {@link #markRead};
+ * {@link #load()} rebuilds them at startup.
+ */
 public class NotificationStore {
 
     private final List<Notification> notifications = new ArrayList<>();
     private final AtomicInteger idCounter = new AtomicInteger(1);
+    private final Database db;
 
-    public List<Notification> forUser(String username) {
+    NotificationStore(Database db) {
+        this.db = Objects.requireNonNull(db, "db");
+    }
+
+    public synchronized List<Notification> forUser(String username) {
         return notifications.stream()
                 .filter(n -> n.getUsername().equalsIgnoreCase(username))
                 .sorted(Comparator.comparing(Notification::getTimestamp).reversed())
@@ -28,7 +38,7 @@ public class NotificationStore {
      * The single way the application creates notifications: every one has an SRS category
      * and, where applicable, a reference to the object an OPEN should navigate to.
      */
-    public Notification notify(String recipient, NotificationCategory category,
+    public synchronized Notification notify(String recipient, NotificationCategory category,
                                String content, NotificationRef relatedRef) {
         Objects.requireNonNull(recipient, "recipient");
         Objects.requireNonNull(category, "category");
@@ -40,11 +50,44 @@ public class NotificationStore {
         return n;
     }
 
-    public void add(Notification n) {
+    public synchronized void add(Notification n) {
         if (n.getId() == null) {
             n.setId("N" + idCounter.getAndIncrement());
         }
+        NotificationRef ref = n.getRelatedRef();
+        db.update("INSERT INTO notifications (id, recipient_username, title, message, category,"
+                        + " related_target, related_id, timestamp, read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                n.getId(), n.getUsername().toLowerCase(), n.getTitle(), n.getMessage(), n.getCategory(),
+                ref == null ? null : ref.getTarget(), ref == null ? null : ref.getId(),
+                n.getTimestamp(), n.isRead());
         notifications.add(n);
+    }
+
+    /** Marks the notification read (or unread) and saves the flag. */
+    public synchronized void markRead(Notification n, boolean read) {
+        Objects.requireNonNull(n, "notification");
+        int rows = db.update("UPDATE notifications SET read = ? WHERE id = ?", read, n.getId());
+        if (rows == 0) {
+            throw new IllegalArgumentException("Unknown notification: " + n.getId());
+        }
+        n.setRead(read);
+    }
+
+    /** Rebuilds the saved notifications, oldest first, and resumes the {@code N} id counter. */
+    synchronized void load() {
+        db.query("SELECT * FROM notifications ORDER BY CAST(substr(id, 2) AS INTEGER)", row -> {
+            String target = row.getString("related_target");
+            Notification n = new Notification(row.getString("recipient_username"), row.getString("title"),
+                    row.getString("message"), NotificationCategory.valueOf(row.getString("category")),
+                    target == null ? null : new NotificationRef(NotificationRef.Target.valueOf(target),
+                            row.getString("related_id")));
+            n.setId(row.getString("id"));
+            n.setTimestamp(Database.dateTime(row, "timestamp"));
+            n.setRead(Database.bool(row, "read"));
+            notifications.add(n);
+            idCounter.set(Math.max(idCounter.get(), Integer.parseInt(n.getId().substring(1)) + 1));
+            return n;
+        });
     }
 
     void seed() {
