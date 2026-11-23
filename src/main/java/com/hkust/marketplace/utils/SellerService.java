@@ -35,6 +35,12 @@ public final class SellerService {
 
     public static final String HAS_ACTIVE_OFFERS = "This listing has open offers and cannot be edited.";
 
+    /** SRS UC-2.5 A2: only a live listing can be marked as sold. */
+    public static final String NOT_LIVE = "Only a live listing can be marked as sold.";
+
+    /** SRS UC-2.5 A3: only a Sale listing can be marked as sold. */
+    public static final String NOT_SALE_LISTING = "Only a Sale listing can be marked as sold.";
+
     private final DummyDataService data;
 
     public SellerService(DummyDataService data) {
@@ -187,6 +193,47 @@ public final class SellerService {
                         ref);
             }
             listing.setDeleted(true);
+            data.listings().update(listing);
+        });
+    }
+
+    /**
+     * Marks one of the seller's own live Sale listings as sold (SRS UC-2.5). Open requests are
+     * declined and their buyers get an OFFER_UPDATE notice, then the listing is set to SOLD — all
+     * in one transaction, so a failure part-way through changes nothing. No deal is created:
+     * completing a deal stays the shared deal lifecycle's job.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException with {@link #NOT_LIVE}, {@link #NOT_SALE_LISTING} or
+     *         {@link #NOT_CHANGEABLE} if the listing is not a visible, live Sale listing
+     */
+    public void markSold(User actor, Listing listing) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(listing, "listing");
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (listing.isDeleted()) {
+            throw new IllegalStateException(NOT_CHANGEABLE);
+        }
+        if (listing.getStatus() != ListingStatus.LIVE) {
+            throw new IllegalStateException(NOT_LIVE);
+        }
+        if (!(listing instanceof SaleListing)) {
+            throw new IllegalStateException(NOT_SALE_LISTING);
+        }
+        List<DealRequest> open = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
+                .toList();
+        NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());
+        data.database().inTransaction(() -> {
+            open.forEach(r -> data.deals().lifecycle().decline(r));
+            for (DealRequest r : open) {
+                data.notifications().notify(r.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                        "'" + listing.getTitle() + "' was marked as sold, so your offer was declined.",
+                        ref);
+            }
+            listing.setStatus(ListingStatus.SOLD);
             data.listings().update(listing);
         });
     }

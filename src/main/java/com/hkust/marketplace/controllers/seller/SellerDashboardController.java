@@ -185,7 +185,35 @@ public class SellerDashboardController {
             });
         });
 
-        row.getChildren().addAll(info, status, editBtn, delBtn);
+        boolean markSoldAllowed = !l.isDeleted()
+                && l.getStatus() == ListingStatus.LIVE
+                && l instanceof SaleListing;
+        Button soldBtn = new Button("Mark sold");
+        soldBtn.getStyleClass().addAll("btn-primary", "btn-sm");
+        soldBtn.setDisable(!markSoldAllowed);
+        soldBtn.setOnAction(e -> {
+            int affected = openRequests.size();
+            String message = affected == 0
+                    ? "Mark this listing as sold?\n\nAny open offers will be closed and their buyers notified."
+                            + "\nThere are no open offers on this listing."
+                    : "Mark this listing as sold?\n\n" + affected + " open offer"
+                            + (affected == 1 ? "" : "s") + " will be closed and the buyer"
+                            + (affected == 1 ? "" : "s") + " notified.";
+            Alert conf = new Alert(Alert.AlertType.CONFIRMATION, message);
+            conf.showAndWait().ifPresent(r -> {
+                if (r == ButtonType.OK) {
+                    try {
+                        sellerService.markSold(SessionManager.getCurrentUser(), l);
+                    } catch (SecurityException | IllegalStateException ex) {
+                        new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                        return;
+                    }
+                    showMyListings();
+                }
+            });
+        });
+
+        row.getChildren().addAll(info, status, editBtn, delBtn, soldBtn);
         return row;
     }
 
