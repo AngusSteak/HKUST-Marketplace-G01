@@ -54,9 +54,24 @@ public class ListingStore {
         return listings.get(id);
     }
 
+    /**
+     * Returns the id the next newly created listing would receive, WITHOUT incrementing
+     * the counter. The submit flow pre-sets this id on a listing before saving so photos
+     * can be keyed to the directory that listing will actually get; {@link #add(Listing)}
+     * preserves a pre-set id because of its {@code getId() == null} guard.
+     *
+     * <p>Assumes the single-threaded demo usage of this store.
+     */
+    public String peekNextId() {
+        return "L" + idCounter.get();
+    }
+
     public void add(Listing listing) {
+        // Always advance the counter, even for a pre-set id: peekNextId() does not
+        // increment, so the submit flow's reserved id must still consume its number.
+        String nextId = "L" + idCounter.getAndIncrement();
         if (listing.getId() == null) {
-            listing.setId("L" + idCounter.getAndIncrement());
+            listing.setId(nextId);
         }
         listings.put(listing.getId(), listing);
     }
