@@ -66,7 +66,7 @@ public class DummyDataService {
         reviews.seed();
         // alice favourites the MacBook charger (L101) and follows its seller charlie
         favourites.seed((Buyer) users.find("alice"), seededListings.get(1), (Seller) users.find("charlie"));
-        // one live chat on the charger, one read-only chat on alice's already-reserved textbook
+        // a chat on the live charger, and one on alice's reserved textbook (messages stay open, offers closed)
         chats.seed((Buyer) users.find("alice"), seededListings.get(1), seededListings.get(0));
     }
 }

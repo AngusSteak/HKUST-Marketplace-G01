@@ -19,7 +19,7 @@ import java.util.Objects;
  * (Buyer, Listing) pair. All methods are synchronized because the brief requires
  * concurrent actions to be safe.
  *
- * <p>This store only stores and returns data. Participant checks and the read-only rule
+ * <p>This store only stores and returns data. Participant checks and the offers-closed rule
  * live in {@link ChatService}, the public seam both portals call.
  */
 public class ChatStore {
@@ -72,7 +72,7 @@ public class ChatStore {
                 .toList();
     }
 
-    /** Seeds one live demo conversation and one read-only demo conversation. */
+    /** Seeds one conversation on a live listing and one on a listing with a deal in progress. */
     void seed(Buyer buyer, Listing liveListing, Listing closedListing) {
         ChatThread live = getOrCreate(buyer, liveListing);
         send(live, buyer, "Hi! Is this still available?");

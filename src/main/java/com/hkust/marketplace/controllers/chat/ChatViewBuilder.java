@@ -37,7 +37,7 @@ import java.util.List;
 
 /**
  * Builds the one chat view shared by the buyer and seller portals, so both sides see the
- * same conversation record, the same read-only banner and the same send behaviour.
+ * same conversation record, the same offers-closed banner and the same send behaviour.
  */
 public final class ChatViewBuilder {
 
@@ -57,12 +57,12 @@ public final class ChatViewBuilder {
 
         Runnable[] refresh = new Runnable[1];
 
-        boolean readOnly = chatService.isReadOnly(thread);
-        Label banner = new Label(ChatService.READ_ONLY_BANNER);
+        boolean offersClosed = !chatService.acceptsOffers(thread);
+        Label banner = new Label(ChatService.OFFERS_CLOSED_BANNER);
         banner.getStyleClass().add("chat-banner");
         banner.setWrapText(true);
-        banner.setVisible(readOnly);
-        banner.setManaged(readOnly);
+        banner.setVisible(offersClosed);
+        banner.setManaged(offersClosed);
         root.getChildren().add(banner);
 
         root.getChildren().add(searchPanel(chatService, currentUser, () -> refresh[0].run()));
@@ -75,8 +75,7 @@ public final class ChatViewBuilder {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         root.getChildren().add(scroll);
 
-        HBox composerRow = composer(chatService, currentUser, thread, readOnly,
-                () -> refresh[0].run());
+        HBox composerRow = composer(chatService, currentUser, thread, () -> refresh[0].run());
         root.getChildren().add(composerRow);
 
         Runnable rerender = () -> {
@@ -92,10 +91,15 @@ public final class ChatViewBuilder {
                             messageRow(message, currentUser, chatService, () -> refresh[0].run()));
                 }
             }
-            boolean nowReadOnly = chatService.isReadOnly(thread);
-            banner.setVisible(nowReadOnly);
-            banner.setManaged(nowReadOnly);
-            composerRow.setDisable(nowReadOnly);
+            // Messages always stay open; only the banner and the Make Offer button follow the listing.
+            boolean nowClosed = !chatService.acceptsOffers(thread);
+            banner.setVisible(nowClosed);
+            banner.setManaged(nowClosed);
+            javafx.scene.Node makeOffer = composerRow.lookup("#" + MAKE_OFFER_ID);
+            if (makeOffer != null) {
+                makeOffer.setVisible(!nowClosed);
+                makeOffer.setManaged(!nowClosed);
+            }
             scroll.setVvalue(1.0);
         };
         refresh[0] = rerender;
@@ -282,19 +286,19 @@ public final class ChatViewBuilder {
         return panel;
     }
 
+    private static final String MAKE_OFFER_ID = "chat-make-offer";
+
     private static HBox composer(ChatService chatService, User currentUser, ChatThread thread,
-                                 boolean readOnly, Runnable refresh) {
+                                 Runnable refresh) {
         HBox row = new HBox(8);
         row.setAlignment(Pos.CENTER_LEFT);
 
         TextField field = new TextField();
-        field.setPromptText(readOnly ? "Chat is read-only" : "Type a message...");
-        field.setDisable(readOnly);
+        field.setPromptText("Type a message...");
         HBox.setHgrow(field, Priority.ALWAYS);
 
         Button send = new Button("Send");
         send.getStyleClass().addAll("btn-primary", "btn-sm");
-        send.setDisable(readOnly);
         send.setOnAction(e -> {
             try {
                 chatService.sendText(currentUser, thread, field.getText());
@@ -310,17 +314,14 @@ public final class ChatViewBuilder {
                 .equalsIgnoreCase(thread.getBuyer().getUsername());
         Button makeOffer = new Button("Make Offer");
         makeOffer.getStyleClass().addAll("btn-gold", "btn-sm");
-        Runnable afterPost = () -> {
-            refresh.run();
-            if (chatService.isReadOnly(thread)) {
-                makeOffer.setDisable(true);
-                field.setDisable(true);
-                send.setDisable(true);
-            }
-        };
-        makeOffer.setOnAction(e -> openFormalOfferForm(chatService, currentUser, thread, afterPost));
+        makeOffer.setId(MAKE_OFFER_ID);
+        // The refresh re-checks acceptsOffers and hides this button once the listing leaves Live.
+        makeOffer.setOnAction(e -> openFormalOfferForm(chatService, currentUser, thread, refresh));
 
-        if (isThreadBuyer && !readOnly) {
+        if (isThreadBuyer) {
+            boolean open = chatService.acceptsOffers(thread);
+            makeOffer.setVisible(open);
+            makeOffer.setManaged(open);
             row.getChildren().add(makeOffer);
         }
         row.getChildren().addAll(field, send);

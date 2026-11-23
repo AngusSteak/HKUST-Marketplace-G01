@@ -21,14 +21,18 @@ import java.util.Objects;
 
 /**
  * The public seam for chat. Both the buyer and seller portals go through this service, so
- * there is exactly one place that decides who may send and whether a thread is read-only.
+ * there is exactly one place that decides who may send and whether a thread accepts offers.
  * Access control lives here, not in the UI and not in {@link ChatStore}.
  */
 public final class ChatService {
 
-    /** Shown on a non-live thread and used as the refusal message for a blocked send. */
-    public static final String READ_ONLY_BANNER =
-            "This listing is no longer live \u2014 chat is read-only.";
+    /**
+     * Shown on a thread whose Listing is no longer live, and used as the refusal message for a
+     * blocked Formal Offer. Plain messages are never blocked: buyer and seller keep talking
+     * through a reserved or lent deal and after it completes (SRS UC-1.5 only closes offers).
+     */
+    public static final String OFFERS_CLOSED_BANNER =
+            "This listing is no longer live \u2014 new offers are disabled.";
 
     private final DummyDataService data;
 
@@ -42,20 +46,17 @@ public final class ChatService {
     }
 
     /**
-     * Sends a free-text message. Only the thread's Buyer or the Listing's Seller may send,
-     * and only while the Listing is live. Empty content is rejected.
+     * Sends a free-text message. Only the thread's Buyer or the Listing's Seller may send.
+     * Messages stay open whatever the Listing's status, so the two can arrange a meet-up or
+     * return and follow up after the deal. Empty content is rejected.
      *
      * @throws SecurityException if {@code sender} is not a participant of the thread
-     * @throws IllegalStateException if the Listing is no longer live
      * @throws IllegalArgumentException if the content is blank
      */
     public Message sendText(User sender, ChatThread thread, String content) {
         Objects.requireNonNull(sender, "sender");
         Objects.requireNonNull(thread, "thread");
         requireParticipant(sender, thread);
-        if (isReadOnly(thread)) {
-            throw new IllegalStateException(READ_ONLY_BANNER);
-        }
         return data.chats().send(thread, sender, content);
     }
 
@@ -142,10 +143,10 @@ public final class ChatService {
         return data.chats().history(Objects.requireNonNull(thread, "thread"));
     }
 
-    /** True when the Listing is no longer live, making the thread a read-only archive. */
-    public boolean isReadOnly(ChatThread thread) {
+    /** True while the Listing is live, so the buyer may still post a Formal Offer (UC-1.5 A2). */
+    public boolean acceptsOffers(ChatThread thread) {
         Objects.requireNonNull(thread, "thread");
-        return thread.getListing().getStatus() != ListingStatus.LIVE;
+        return thread.getListing().getStatus() == ListingStatus.LIVE;
     }
 
     /** Every conversation the buyer participates in. */
@@ -240,8 +241,8 @@ public final class ChatService {
     }
 
     private void requireLive(ChatThread thread) {
-        if (isReadOnly(thread)) {
-            throw new IllegalStateException(READ_ONLY_BANNER);
+        if (!acceptsOffers(thread)) {
+            throw new IllegalStateException(OFFERS_CLOSED_BANNER);
         }
     }
 

@@ -151,16 +151,16 @@ class ChatServiceTest {
     }
 
     @Test
-    void nonLiveListingIsReadOnlyButKeepsHistory() {
+    void messagesStayOpenAndHistoryIsKeptAfterTheListingIsSold() {
         ChatThread thread = chat.openThread(ALICE, charlieListing);
         chat.sendText(ALICE, thread, "Before it sold");
         charlieListing.setStatus(ListingStatus.SOLD);
 
-        assertTrue(chat.isReadOnly(thread));
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> chat.sendText(CHARLIE, thread, "Too late"));
-        assertEquals("This listing is no longer live \u2014 chat is read-only.", refusal.getMessage());
-        assertEquals(List.of("Before it sold"),
+        assertFalse(chat.acceptsOffers(thread));
+        chat.sendText(CHARLIE, thread, "Thanks, enjoy it!");
+        chat.sendText(ALICE, thread, "Will do");
+
+        assertEquals(List.of("Before it sold", "Thanks, enjoy it!", "Will do"),
                 chat.history(thread).stream().map(Message::getContent).toList());
     }
 
@@ -232,7 +232,8 @@ class ChatServiceTest {
         Claim request = assertInstanceOf(Claim.class, card.getDealRequest());
         assertEquals(RequestStatus.PENDING, request.getStatus());
         assertEquals(ListingStatus.RESERVED, charlieListing.getStatus());
-        assertTrue(chat.isReadOnly(thread));
+        assertFalse(chat.acceptsOffers(thread));
+        chat.sendText(CHARLIE, thread, "Sure, pick it up tomorrow");
         assertSame(card, chat.history(thread).get(0));
         assertTrue(card.getContent().contains(charlieListing.getTitle()));
     }
@@ -275,7 +276,7 @@ class ChatServiceTest {
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
                 () -> chat.submitFormalOffer(ALICE, thread, new BigDecimal("90")));
 
-        assertEquals(ChatService.READ_ONLY_BANNER, refusal.getMessage());
+        assertEquals(ChatService.OFFERS_CLOSED_BANNER, refusal.getMessage());
         assertTrue(chat.history(thread).isEmpty());
         assertTrue(data.deals().allRequests().isEmpty());
     }
@@ -461,7 +462,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void sellerAcceptCreatesDealThroughTheLifecycleAndMakesThreadReadOnly() {
+    void sellerAcceptCreatesDealAndClosesOffersButNotMessages() {
         Listing sale = saleListing("S17", CHARLIE, "100");
         ChatThread thread = chat.openThread(ALICE, sale);
         DealRequest request = chat.submitFormalOffer(ALICE, thread, new BigDecimal("90"))
@@ -473,11 +474,12 @@ class ChatServiceTest {
         assertSame(deal, data.deals().allDeals().get(0));
         assertSame(request, deal.getRequest());
         assertEquals(ListingStatus.RESERVED, sale.getStatus());
-        assertTrue(chat.isReadOnly(thread));
+        assertFalse(chat.acceptsOffers(thread));
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> chat.sendText(CHARLIE, thread, "Too late"));
-        assertEquals(ChatService.READ_ONLY_BANNER, refusal.getMessage());
-        assertEquals(1, chat.history(thread).size());
+                () -> chat.submitFormalOffer(ALICE, thread, new BigDecimal("95")));
+        assertEquals(ChatService.OFFERS_CLOSED_BANNER, refusal.getMessage());
+        chat.sendText(CHARLIE, thread, "Meet at the Library at 3pm?");
+        assertEquals(2, chat.history(thread).size());
     }
 
     @Test
@@ -493,7 +495,7 @@ class ChatServiceTest {
         assertEquals(RequestStatus.DECLINED, request.getStatus());
         assertTrue(data.deals().allDeals().isEmpty());
         assertSame(card, chat.history(thread).get(0));
-        assertFalse(chat.isReadOnly(thread));
+        assertTrue(chat.acceptsOffers(thread));
     }
 
     @Test
