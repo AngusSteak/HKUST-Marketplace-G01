@@ -1,7 +1,7 @@
 # HKUST Marketplace — JavaFX Demo
 
 A **JavaFX + Maven** desktop demo of the HKUST Campus Marketplace platform.  
-Data is stored in a local **SQLite** database (`data/marketplace.db`; see [Database](#database)). For now it is recreated with the demo data on every launch, until all stores are saved (#59). The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
+Data is stored in a local **SQLite** database (`data/marketplace.db`, kept across restarts; see [Database](#database)). The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
 
 ## Prerequisites
 
@@ -62,11 +62,14 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 - **File:** `data/marketplace.db`, relative to the folder you run the app from. It is created and filled with the demo data on first run. `data/` is git-ignored and must not be included in the submission ZIP.
 - **Schema:** [`src/main/resources/db/schema.sql`](src/main/resources/db/schema.sql), applied on every start (`CREATE TABLE IF NOT EXISTS`). Open the file with [DB Browser for SQLite](https://sqlitebrowser.org/) or `sqlite3` to inspect it.
 - **How it works:** each store (`users()`, `listings()`, ...) keeps its objects in memory, writes every change to the database straight away, and reads everything back once at startup (`persistence/Database`, `utils/DummyDataService`).
-- **Reset to the demo data:** delete the `data/` folder.
-- **Migration status:** users and listings (#55), and deal requests, deals, favourites and follows (#56) are saved now. Chats, notifications, reviews, reports and the audit log follow in #57 and #58. Until then the database is **recreated on every launch** so all stores stay consistent. To keep data across restarts already (only what is saved so far), run `MarketplaceApp` from IntelliJ with the VM option `-Dmarketplace.resetDb=false` (Run → Edit Configurations → Modify options → Add VM options). #59 makes keeping data the default.
+- **What is saved:** everything — users, listings (with their photo paths), deal requests and deals, favourites and follows, chat threads and messages, notifications, reviews, listing reports and the admin audit log. Data is **kept across restarts**.
+- **Reset to the demo data:** quit the app and delete the `data/` folder; the next launch creates a fresh database with the demo data. Alternatively run `MarketplaceApp` once from IntelliJ with the VM option `-Dmarketplace.resetDb=true` (Run → Edit Configurations → Modify options → Add VM options).
+- **Changing the schema:** `CREATE TABLE IF NOT EXISTS` does not alter existing tables, so after changing a table in `schema.sql`, delete `data/` (or reset as above) to recreate it.
 - **Tests** use a private in-memory SQLite database per `new DummyDataService()`, so they never touch `data/`.
 
 **Team rule:** screens never change a model object and skip the store. Every change goes through a store method, e.g. `listings().update(listing)` after changing a listing or `users().save(user)` after changing an account, so it is written to the database. Requests and deals change only through `deals().lifecycle()`, which saves them (and the listing status they set) itself. A listing with requests or deals cannot be deleted; take it down by status instead.
+
+**Role checks (#60):** admin-only and seller-only actions live in `AdminService` and `SellerService`. Each method takes the acting user (`SessionManager.getCurrentUser()`) and calls `AccessControl.require(actor, role)` first, which throws `SecurityException` for the wrong role or an inactive account. New role-specific actions should follow the same pattern (`ChatService` already does for chat participants), so the check holds even if a screen shows a button it shouldn't.
 
 ## Security State (Demo)
 

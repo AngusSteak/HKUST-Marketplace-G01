@@ -13,9 +13,9 @@ import java.util.Objects;
  * The application's data, split into per-area stores and backed by a local SQLite database
  * ({@value #DATABASE_FILE}).
  *
- * <p>Users, listings (#55), deals, favourites and follows (#56) are saved to the database; the
- * other stores are still in-memory until #57 and #58 persist them. Until then the database is recreated and re-seeded on
- * every launch (see {@link #RESET_PROPERTY}), so all stores stay consistent with each other.
+ * <p>Every store is saved to the database: users and listings (#55); deals, favourites and
+ * follows (#56); chats (#57); notifications, reviews, reports and the audit log (#58). The
+ * database is kept across restarts (#59); it is seeded with the demo data only when empty.
  */
 public class DummyDataService {
 
@@ -23,9 +23,8 @@ public class DummyDataService {
     public static final String DATABASE_FILE = "data/marketplace.db";
 
     /**
-     * System property: {@code true} recreates the database on every launch, {@code false} keeps
-     * saved data across restarts. Defaults to {@code true} until every store is persisted.
-     * TODO(#59): default to false once #57 and #58 are merged.
+     * System property: {@code true} deletes the database at launch and starts again from the demo
+     * data; {@code false} (the default) keeps saved data across restarts.
      */
     public static final String RESET_PROPERTY = "marketplace.resetDb";
 
@@ -35,12 +34,12 @@ public class DummyDataService {
     private final UserStore users;
     private final ListingStore listings;
     private final DealStore deals;
-    private final NotificationStore notifications = new NotificationStore();
-    private final ReviewStore reviews = new ReviewStore();
+    private final NotificationStore notifications;
+    private final ReviewStore reviews;
     private final FavouriteStore favourites;
-    private final AuditStore audit = new AuditStore();
-    private final ReportStore reports = new ReportStore();
-    private final ChatStore chats = new ChatStore();
+    private final AuditStore audit;
+    private final ReportStore reports;
+    private final ChatStore chats;
 
     /**
      * Creates an empty store on a private in-memory database, with no demo data. Visible for
@@ -58,12 +57,17 @@ public class DummyDataService {
         this.listings = new ListingStore(db);
         this.deals = new DealStore(db, listings);
         this.favourites = new FavouriteStore(db);
+        this.chats = new ChatStore(db);
+        this.notifications = new NotificationStore(db);
+        this.reviews = new ReviewStore(db);
+        this.reports = new ReportStore(db);
+        this.audit = new AuditStore(db);
     }
 
     /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
     public static synchronized DummyDataService getInstance() {
         if (instance == null) {
-            boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, "true"));
+            boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, "false"));
             instance = open(Database.openFile(Path.of(DATABASE_FILE), reset));
         }
         return instance;
@@ -82,6 +86,11 @@ public class DummyDataService {
             data.listings.load(data.users);
             data.deals.load(data.users, data.listings);
             data.favourites.load();
+            data.chats.load(data.users, data.listings, data.deals);
+            data.notifications.load();
+            data.reviews.load();
+            data.reports.load(data.users, data.listings);
+            data.audit.load();
         }
         return data;
     }

@@ -51,6 +51,20 @@ public final class Message {
         return new Message(summarize(request), LocalDateTime.now(), sender, request);
     }
 
+    /**
+     * Rebuilds a saved message exactly as stored: its original time and, for a Formal Offer,
+     * the stored summary and the restored request. Only for loading the database.
+     */
+    public static Message restore(String content, LocalDateTime sentTime, User sender,
+                                  DealRequest dealRequest) {
+        Objects.requireNonNull(sender, "sender");
+        Objects.requireNonNull(sentTime, "sentTime");
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("Message content must not be blank");
+        }
+        return new Message(content, sentTime, sender, dealRequest);
+    }
+
     public String getContent() { return content; }
 
     public LocalDateTime getSentTime() { return sentTime; }
