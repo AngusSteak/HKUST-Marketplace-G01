@@ -44,9 +44,7 @@ public class ReportStore {
         if (!reports.contains(report)) {
             throw new IllegalArgumentException("Unknown report: " + report.getId());
         }
-        report.resolve(resolution);
-        db.update("UPDATE listing_reports SET status = ?, resolution = ? WHERE id = ?",
-                report.getStatus(), report.getResolution(), report.getId());
+        resolveSaved(List.of(report), resolution);
     }
 
     /**
@@ -67,8 +65,23 @@ public class ReportStore {
             throw new IllegalArgumentException("Resolution must not be blank");
         }
         List<ListingReport> open = openReports(listing);
-        db.inTransaction(() -> open.forEach(r -> resolve(r, resolution)));
+        resolveSaved(open, resolution);
         return open.size();
+    }
+
+    /**
+     * Saves the reports as resolved in one transaction, then updates them in memory, so a
+     * failed save changes nothing in either place.
+     */
+    private void resolveSaved(List<ListingReport> toResolve, String resolution) {
+        if (resolution == null || resolution.isBlank()) {
+            throw new IllegalArgumentException("Resolution must not be blank");
+        }
+        String note = resolution.trim();
+        db.inTransaction(() -> toResolve.forEach(r -> db.update(
+                "UPDATE listing_reports SET status = ?, resolution = ? WHERE id = ?",
+                ReportStatus.RESOLVED, note, r.getId())));
+        toResolve.forEach(r -> r.resolve(note));
     }
 
     public synchronized List<ListingReport> all() {
