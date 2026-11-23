@@ -2,10 +2,14 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.Message;
 import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.persistence.Database;
+import com.hkust.marketplace.persistence.DatabaseException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -15,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Chat threads and messages, including Formal Offers, survive a reload from the database. */
@@ -89,6 +94,39 @@ class ChatStorePersistenceTest {
         DummyDataService again = DummyDataService.open(db);
         List<Message> history = again.chats().history(again.chats().forBuyer("alice").get(0));
         assertEquals("See you at the library at 3pm.", history.get(history.size() - 1).getContent());
+    }
+
+    @Test
+    void aFailedMessageSaveLeavesNothingBehindAndTheThreadStillWorks() {
+        Buyer bob = (Buyer) seeded.users().find("bob");
+        Listing charger = seeded.listings().find("L101");
+        ChatThread thread = new ChatThread(bob, charger);
+        // A sender with no saved account breaks the messages foreign key, so the save fails.
+        Buyer ghost = new Buyer("ghost", "Ghost", "hash", UserRole.BUYER);
+
+        assertThrows(DatabaseException.class, () -> seeded.chats().send(thread, ghost, "Hello?"));
+
+        assertTrue(seeded.chats().forBuyer("bob").isEmpty(), "no thread left in memory");
+        seeded.chats().send(thread, bob, "Is the charger available?");
+        List<Message> back = DummyDataService.open(db).chats()
+                .history(DummyDataService.open(db).chats().forBuyer("bob").get(0));
+        assertEquals(List.of("Is the charger available?"), back.stream().map(Message::getContent).toList());
+    }
+
+    @Test
+    void chatOnATakenDownListingReloads() {
+        Listing textbook = seeded.listings().find("L100");
+        textbook.setStatus(ListingStatus.TAKEN_DOWN);
+        seeded.listings().update(textbook);
+
+        DummyDataService reloaded = DummyDataService.open(db);
+        ChatThread thread = reloaded.chats().forBuyer("alice").stream()
+                .filter(t -> t.getListing().getId().equals("L100")).findFirst().orElseThrow();
+
+        assertEquals(ListingStatus.TAKEN_DOWN, thread.getListing().getStatus());
+        assertEquals(List.of("Thanks for the smooth deal!"),
+                reloaded.chats().history(thread).stream().map(Message::getContent).toList());
+        assertFalse(new ChatService(reloaded).acceptsOffers(thread));
     }
 
     private DummyDataService seeded() {
