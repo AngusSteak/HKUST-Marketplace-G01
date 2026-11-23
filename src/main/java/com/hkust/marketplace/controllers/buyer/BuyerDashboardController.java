@@ -295,25 +295,40 @@ public class BuyerDashboardController {
         return listing.getPhotoPaths().isEmpty() ? null : listing.getPhotoPaths().get(0);
     }
 
-    /** A photo, or a placeholder when there is none or the file is missing or unreadable. */
+    /**
+     * A photo, or a placeholder when there is none or the file is missing or unreadable. Photos
+     * load in the background so the screen never waits on them; "Loading photo..." shows
+     * underneath until the image appears, and turns into "No photo" if loading fails.
+     */
     private static StackPane photo(String path, double width, double height) {
         StackPane box = new StackPane();
         box.setPrefSize(width, height);
         box.setMinSize(width, height);
         box.setMaxSize(width, height);
         box.setStyle("-fx-background-color: #eef2f7; -fx-background-radius: 8;");
+        Label placeholder = new Label("No photo");
+        placeholder.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
+        box.getChildren().add(placeholder);
         Path file = path == null ? null : Path.of(path);
-        // Loaded synchronously so a missing or unreadable file falls back to the placeholder.
-        Image image = file != null && Files.isRegularFile(file)
-                ? new Image(file.toUri().toString(), width, height, true, true, false)
-                : null;
-        if (image != null && !image.isError()) {
-            box.getChildren().add(new ImageView(image));
-        } else {
-            Label none = new Label("No photo");
-            none.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-            box.getChildren().add(none);
+        if (file == null || !Files.isRegularFile(file)) {
+            return box;
         }
+        Image image = new Image(file.toUri().toString(), width, height, true, true, true);
+        ImageView view = new ImageView(image);
+        Runnable fallBack = () -> {
+            box.getChildren().remove(view);
+            placeholder.setText("No photo");
+        };
+        if (image.isError()) {
+            return box;
+        }
+        placeholder.setText("Loading photo...");
+        box.getChildren().add(view);
+        image.errorProperty().addListener((obs, was, failed) -> {
+            if (failed) {
+                fallBack.run();
+            }
+        });
         return box;
     }
 
@@ -329,7 +344,13 @@ public class BuyerDashboardController {
             return;
         }
         DummyDataService data = DummyDataService.getInstance();
-        data.listings().recordView(listing);
+        try {
+            data.listings().recordView(listing);
+        } catch (IllegalArgumentException e) {
+            // Deleted between the check above and now: same message as A3.
+            new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
+            return;
+        }
         setActive(btnBrowse, "Listing Details");
         contentPane.getChildren().clear();
 

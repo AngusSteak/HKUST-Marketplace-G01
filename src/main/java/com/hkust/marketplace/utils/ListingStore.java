@@ -81,6 +81,9 @@ public class ListingStore {
     /**
      * Counts one view of a listing's details (SRS UC-1.3 S1 step 2) and saves it. Synchronized
      * so two buyers opening the listing at once both count.
+     *
+     * @throws IllegalArgumentException if the listing is not in this store, or its row is gone
+     *         from the database (e.g. deleted a moment ago); nothing changes then
      */
     public synchronized void recordView(Listing listing) {
         Objects.requireNonNull(listing, "listing");
@@ -88,7 +91,9 @@ public class ListingStore {
             throw new IllegalArgumentException("Unknown listing: " + listing.getId());
         }
         int views = listing.getViewCount() + 1;
-        db.update("UPDATE listings SET view_count = ? WHERE id = ?", views, listing.getId());
+        if (db.update("UPDATE listings SET view_count = ? WHERE id = ?", views, listing.getId()) == 0) {
+            throw new IllegalArgumentException("Listing " + listing.getId() + " no longer exists");
+        }
         listing.setViewCount(views);
     }
 

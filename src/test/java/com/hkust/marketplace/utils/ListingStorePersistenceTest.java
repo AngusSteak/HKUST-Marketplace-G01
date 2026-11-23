@@ -147,6 +147,11 @@ class ListingStorePersistenceTest {
         Listing stray = new GiveawayListing(charlie, "Stray", "", Category.OTHERS, Condition.USED, Location.LIBRARY);
         stray.setId("L999");
         assertThrows(IllegalArgumentException.class, () -> store.recordView(stray));
+
+        // Row deleted behind the store's back: refused, and the count in memory stays as it was.
+        db.update("DELETE FROM listings WHERE id = ?", lamp.getId());
+        assertThrows(IllegalArgumentException.class, () -> store.recordView(lamp));
+        assertEquals(2, lamp.getViewCount());
     }
 
     @Test
