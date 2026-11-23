@@ -21,6 +21,7 @@ public class DummyDataService {
     private final NotificationStore notifications = new NotificationStore();
     private final ReviewStore reviews = new ReviewStore();
     private final FavouriteStore favourites = new FavouriteStore();
+    private final AuditStore audit = new AuditStore();
 
     /**
      * Creates an empty store with no demo data. Visible for tests so each test can
@@ -45,6 +46,7 @@ public class DummyDataService {
     public NotificationStore notifications() { return notifications; }
     public ReviewStore reviews() { return reviews; }
     public FavouriteStore favourites() { return favourites; }
+    public AuditStore audit() { return audit; }
 
     /**
      * Populates this store with the demo data. Visible for tests so they can seed an
