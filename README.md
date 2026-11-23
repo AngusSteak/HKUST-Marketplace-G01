@@ -5,8 +5,8 @@ All data is in-memory (no database, no network) and resets on restart. The share
 
 ## Prerequisites
 
-1. **JDK 17 or newer** (full JDK, not only JRE)
-   - Download: https://adoptium.net/ (Temurin 17 or 21 recommended)
+1. **JDK 21 or newer** (full JDK, not only JRE). The course requires JDK 21+.
+   - Download: https://adoptium.net/ (Temurin 21 recommended)
    - After install, open a **new** PowerShell and check:
      ```powershell
      java -version
@@ -122,7 +122,7 @@ Use the wrapper instead:
 ```
 
 ### `java` / `javac` not recognized
-Install JDK 17+ from https://adoptium.net/ and **restart the terminal**.  
+Install JDK 21+ from https://adoptium.net/ and **restart the terminal**.  
 Make sure the installer option “Add to PATH” was checked.
 
 ### Build fails with JavaFX / DISPLAY errors
