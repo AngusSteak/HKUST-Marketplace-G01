@@ -13,6 +13,7 @@ import com.hkust.marketplace.models.DealType;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
+import com.hkust.marketplace.models.Message;
 import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
@@ -56,7 +57,7 @@ public class BuyerDashboardController {
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnBrowse, btnDeals, btnHistory, btnFavourites, btnNotifications, btnProfile;
+    @FXML private Button btnBrowse, btnDeals, btnChats, btnHistory, btnFavourites, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
@@ -415,7 +416,7 @@ public class BuyerDashboardController {
         HBox actions = new HBox(8, actionButton(listing));
         Button chatBtn = new Button("Chat");
         chatBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        chatBtn.setOnAction(e -> openChat(listing));
+        chatBtn.setOnAction(e -> openChat(listing, "Browse Marketplace", this::showBrowse));
         Button reportBtn = new Button("Report Listing");
         reportBtn.getStyleClass().addAll("btn-outline", "btn-sm");
         // TODO(#23): open the Report Listing form (SRS UC-1.10).
@@ -467,7 +468,12 @@ public class BuyerDashboardController {
         return String.format("\u2605 %.1f (%d review%s)", average.getAsDouble(), count, count == 1 ? "" : "s");
     }
 
-    private void openChat(Listing listing) {
+    /**
+     * Chat About Listing (SRS UC-1.5) in the shared chat component: the one thread between this
+     * buyer and the listing's seller, created on first use. {@code back} returns to where the
+     * buyer came from.
+     */
+    private void openChat(Listing listing, String backTo, Runnable back) {
         if (!(SessionManager.getCurrentUser() instanceof Buyer buyer)) {
             new Alert(Alert.AlertType.WARNING, "You must be logged in as a buyer to chat.").showAndWait();
             return;
@@ -476,13 +482,76 @@ public class BuyerDashboardController {
         pageTitle.setText("Chat: " + listing.getTitle());
         contentPane.getChildren().clear();
 
-        Button back = new Button("\u2190 Back to Browse Marketplace");
-        back.getStyleClass().addAll("btn-outline", "btn-sm");
-        back.setOnAction(e -> showBrowse());
+        Button backBtn = new Button("\u2190 Back to " + backTo);
+        backBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        backBtn.setOnAction(e -> back.run());
 
         VBox root = new VBox(12);
-        root.getChildren().addAll(back, ChatViewBuilder.build(chatService, buyer, thread));
+        root.getChildren().addAll(backBtn, ChatViewBuilder.build(chatService, buyer, thread));
         contentPane.getChildren().add(root);
+    }
+
+    /**
+     * The buyer's chat threads, most recent activity first, so an existing conversation can be
+     * reopened (SRS UC-1.5 step 1), including threads on listings that are no longer live.
+     */
+    @FXML
+    private void showChats() {
+        setActive(btnChats, "Chats");
+        contentPane.getChildren().clear();
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(4));
+        if (!(SessionManager.getCurrentUser() instanceof Buyer buyer)) {
+            root.getChildren().add(muted("Log in as a buyer to see your chats."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+        List<ChatThread> threads = new ArrayList<>(chatService.threadsForBuyer(buyer));
+        if (threads.isEmpty()) {
+            root.getChildren().add(muted("You have no chats yet. Open a listing and choose Chat to message its seller."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+        threads.sort(java.util.Comparator.comparing(this::lastActivity,
+                java.util.Comparator.nullsLast(java.util.Comparator.<LocalDateTime>reverseOrder())));
+        DateTimeFormatter when = DateTimeFormatter.ofPattern("dd MMM HH:mm");
+        for (ChatThread thread : threads) {
+            Listing listing = thread.getListing();
+            List<Message> history = chatService.history(thread);
+            Message last = history.isEmpty() ? null : history.get(history.size() - 1);
+            Label title = new Label(listing.getTitle());
+            title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            Label status = new Label(chatService.acceptsOffers(thread) ? "Live" : "Offers closed");
+            status.getStyleClass().addAll("badge", chatService.acceptsOffers(thread) ? "badge-live" : "badge-sold");
+            HBox titleRow = new HBox(8, title, status);
+            titleRow.setAlignment(Pos.CENTER_LEFT);
+            String preview = last == null ? "No messages yet"
+                    : (last.getSenderUsername().equalsIgnoreCase(buyer.getUsername()) ? "You: " : "")
+                    + last.getContent();
+            Label detail = muted("with " + thread.getSeller().getDisplayName() + "  \u00b7  " + preview);
+            detail.setMaxWidth(700);
+            detail.setWrapText(false);
+            Label time = new Label(last == null ? "" : last.getSentTime().format(when));
+            time.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
+            VBox info = new VBox(3, titleRow, detail, time);
+            HBox.setHgrow(info, Priority.ALWAYS);
+            Button open = new Button("Open");
+            open.getStyleClass().addAll("btn-primary", "btn-sm");
+            open.setOnAction(e -> openChat(listing, "Chats", this::showChats));
+            HBox row = new HBox(12, info, open);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("notif-item");
+            root.getChildren().add(row);
+        }
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    /** When the thread last had a message, or {@code null} if it has none. */
+    private LocalDateTime lastActivity(ChatThread thread) {
+        List<Message> history = chatService.history(thread);
+        return history.isEmpty() ? null : history.get(history.size() - 1).getSentTime();
     }
 
     // ---------- Make Deal Request (SRS UC-1.4) ----------
@@ -981,7 +1050,7 @@ public class BuyerDashboardController {
                 if (listing == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This chat's listing no longer exists.").showAndWait();
                 } else {
-                    openChat(listing);
+                    openChat(listing, "Notifications", this::showNotifications);
                 }
             }
             // TODO(#23): open the buyer's review once Manage Reviews exists.
