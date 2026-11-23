@@ -97,6 +97,15 @@
     -fx-effect: dropshadow(gaussian, rgba(0,57,116,0.25), 6, 0, 0, 0);
 }
 
+.input-error {
+    -fx-border-color: #c62828;
+    -fx-border-width: 2;
+}
+.input-error-label {
+    -fx-text-fill: #c62828;
+    -fx-font-size: 12px;
+}
+
 /* ---------- Cards ---------- */
 .card {
     -fx-background-color: white;

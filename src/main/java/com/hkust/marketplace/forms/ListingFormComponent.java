@@ -8,7 +8,9 @@ import com.hkust.marketplace.models.Seller;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
@@ -21,6 +23,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -43,6 +46,7 @@ public class ListingFormComponent {
     private final ListingFormState state = new ListingFormState();
     private final VBox root = new VBox(12);
     private final Map<String, Label> errorLabels = new LinkedHashMap<>();
+    private final Map<String, Node> fieldControls = new HashMap<>();
 
     private final ComboBox<String> typeCombo =
             new ComboBox<>(FXCollections.observableArrayList("Sell", "Lend", "Give Away"));
@@ -71,6 +75,7 @@ public class ListingFormComponent {
     private final Button cancelButton = new Button("Cancel");
 
     private Consumer<ListingFormState> onSubmit;
+    private Runnable onCancel;
 
     public ListingFormComponent(Supplier<Seller> sellerSupplier, Consumer<ListingFormState> onSubmit) {
         this.sellerSupplier = sellerSupplier;
@@ -109,6 +114,10 @@ public class ListingFormComponent {
                 label.setVisible(true);
                 label.setManaged(true);
             }
+            Node control = fieldControls.get(key);
+            if (control != null) {
+                control.getStyleClass().add("input-error");
+            }
         });
     }
 
@@ -119,6 +128,25 @@ public class ListingFormComponent {
             label.setVisible(false);
             label.setManaged(false);
         });
+        fieldControls.values().forEach(control -> control.getStyleClass().remove("input-error"));
+    }
+
+    /** Clears only one field's error, leaving its typed value intact. */
+    private void clearError(String key) {
+        Label label = errorLabels.get(key);
+        if (label != null) {
+            label.setText("");
+            label.setVisible(false);
+            label.setManaged(false);
+        }
+        Node control = fieldControls.get(key);
+        if (control != null) {
+            control.getStyleClass().remove("input-error");
+        }
+    }
+
+    public void setOnCancel(Runnable onCancel) {
+        this.onCancel = onCancel;
     }
 
     /** The photo area, filled by the photo chooser step. */
@@ -180,6 +208,19 @@ public class ListingFormComponent {
             }
         });
         cancelButton.getStyleClass().add("btn-outline");
+        cancelButton.setOnAction(event -> {
+            if (state.isDirty()) {
+                Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Discard your unsaved changes and return to My Listings?");
+                confirmation.setHeaderText("Unsaved changes");
+                if (confirmation.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                    return;
+                }
+            }
+            if (onCancel != null) {
+                onCancel.run();
+            }
+        });
 
         HBox actions = new HBox(10, submitButton, cancelButton);
 
@@ -207,6 +248,7 @@ public class ListingFormComponent {
             errorLabel.setVisible(false);
             errorLabel.setManaged(false);
             errorLabels.put(errorKey, errorLabel);
+            fieldControls.put(errorKey, control);
             box.getChildren().add(errorLabel);
         }
         return box;
@@ -286,16 +328,41 @@ public class ListingFormComponent {
         typeCombo.valueProperty().addListener((obs, old, value) -> {
             state.setType(toListingType(value));
             updateTypeFields();
+            clearError("type");
         });
-        nameField.textProperty().addListener((obs, old, value) -> state.setTitle(value));
+        nameField.textProperty().addListener((obs, old, value) -> {
+            state.setTitle(value);
+            clearError("title");
+        });
         descriptionArea.textProperty().addListener((obs, old, value) -> state.setDescription(value));
-        categoryCombo.valueProperty().addListener((obs, old, value) -> state.setCategory(value));
-        conditionCombo.valueProperty().addListener((obs, old, value) -> state.setCondition(value));
-        locationCombo.valueProperty().addListener((obs, old, value) -> state.setMeetupLocation(value));
-        priceField.textProperty().addListener((obs, old, value) -> state.setRawPrice(value));
-        daysField.textProperty().addListener((obs, old, value) -> state.setRawDurationDays(value));
-        hoursField.textProperty().addListener((obs, old, value) -> state.setRawDurationHours(value));
-        secondsField.textProperty().addListener((obs, old, value) -> state.setRawDurationSeconds(value));
+        categoryCombo.valueProperty().addListener((obs, old, value) -> {
+            state.setCategory(value);
+            clearError("category");
+        });
+        conditionCombo.valueProperty().addListener((obs, old, value) -> {
+            state.setCondition(value);
+            clearError("condition");
+        });
+        locationCombo.valueProperty().addListener((obs, old, value) -> {
+            state.setMeetupLocation(value);
+            clearError("location");
+        });
+        priceField.textProperty().addListener((obs, old, value) -> {
+            state.setRawPrice(value);
+            clearError("price");
+        });
+        daysField.textProperty().addListener((obs, old, value) -> {
+            state.setRawDurationDays(value);
+            clearError("duration");
+        });
+        hoursField.textProperty().addListener((obs, old, value) -> {
+            state.setRawDurationHours(value);
+            clearError("duration");
+        });
+        secondsField.textProperty().addListener((obs, old, value) -> {
+            state.setRawDurationSeconds(value);
+            clearError("duration");
+        });
     }
 
     /** Shows exactly the active type's specific row; never re-creates controls. */
