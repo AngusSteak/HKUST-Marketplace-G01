@@ -6,6 +6,8 @@ import com.hkust.marketplace.models.Category;
 import com.hkust.marketplace.models.ChatThread;
 import com.hkust.marketplace.models.Claim;
 import com.hkust.marketplace.models.Condition;
+import com.hkust.marketplace.models.CounterOffer;
+import com.hkust.marketplace.models.CounterStatus;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.GiveawayListing;
@@ -511,6 +513,155 @@ class ChatServiceTest {
 
         assertThrows(SecurityException.class, () -> chat.declineOffer(DIANA, request));
         assertEquals(RequestStatus.PENDING, request.getStatus());
+    }
+
+    @Test
+    void sellerCounterPostsItsOwnCardAndLeavesTheBuyerCardUnchanged() {
+        Listing sale = saleListing("S20", CHARLIE, "100");
+        ChatThread thread = chat.openThread(ALICE, sale);
+        Message buyerCard = chat.submitFormalOffer(ALICE, thread, new BigDecimal("90"));
+        DealRequest request = buyerCard.getDealRequest();
+
+        Message counterCard = chat.counterOffer(CHARLIE, request, new BigDecimal("120"));
+
+        assertTrue(counterCard.isCounterOffer());
+        assertFalse(counterCard.isFormalOffer());
+        assertEquals("charlie", counterCard.getSenderUsername());
+        CounterOffer counter = counterCard.getCounterOffer();
+        assertEquals(RequestStatus.COUNTERED, request.getStatus());
+        assertEquals(CounterStatus.OFFERED, counter.getStatus());
+        assertEquals(new BigDecimal("120.00"), counter.getPrice());
+        assertEquals(new BigDecimal("90.00"), ((PriceOffer) request).getOfferedPrice());
+        assertEquals(new BigDecimal("90.00"), ((PriceOffer) request).agreedPrice());
+        assertEquals(2, chat.history(thread).size());
+        assertSame(buyerCard, chat.history(thread).get(0));
+        assertSame(counterCard, chat.history(thread).get(1));
+        assertTrue(counterCard.getContent().contains("HK$ 120"));
+        assertTrue(data.deals().allDeals().isEmpty());
+
+        Deal deal = chat.acceptCounter(ALICE, counter);
+
+        assertEquals(CounterStatus.ACCEPTED, counter.getStatus());
+        assertEquals(RequestStatus.ACCEPTED, request.getStatus());
+        assertSame(request, deal.getRequest());
+        assertEquals(ListingStatus.RESERVED, sale.getStatus());
+        assertEquals(new BigDecimal("120.00"), ((PriceOffer) request).agreedPrice());
+        assertEquals(2, chat.history(thread).size());
+    }
+
+    @Test
+    void sellerCanCancelACounterAndThenSendANewOne() {
+        Listing sale = saleListing("S21", CHARLIE, "100");
+        ChatThread thread = chat.openThread(ALICE, sale);
+        DealRequest request = chat.submitFormalOffer(ALICE, thread, new BigDecimal("90"))
+                .getDealRequest();
+        CounterOffer first = chat.counterOffer(CHARLIE, request, new BigDecimal("120"))
+                .getCounterOffer();
+
+        // A sent counter is immutable, so another one is refused until this one is cancelled.
+        assertThrows(IllegalStateException.class,
+                () -> chat.counterOffer(CHARLIE, request, new BigDecimal("110")));
+        assertEquals(new BigDecimal("120.00"), first.getPrice());
+
+        chat.cancelCounter(CHARLIE, first);
+
+        assertEquals(CounterStatus.CANCELLED, first.getStatus());
+        assertEquals(RequestStatus.PENDING, request.getStatus());
+
+        CounterOffer second = chat.counterOffer(CHARLIE, request, new BigDecimal("110"))
+                .getCounterOffer();
+        assertEquals(CounterStatus.OFFERED, second.getStatus());
+        assertEquals(3, chat.history(thread).size());
+    }
+
+    @Test
+    void sellerCanCounterABorrowRequestWithAnotherPeriodOnANewCard() {
+        Listing lend = lendListing("S22", CHARLIE, Duration.ofDays(7));
+        ChatThread thread = chat.openThread(ALICE, lend);
+        LocalDateTime start = LocalDateTime.now().plusMinutes(5);
+        LocalDateTime end = start.plusDays(2);
+        BorrowRequest request = assertInstanceOf(BorrowRequest.class,
+                chat.submitFormalOffer(ALICE, thread, start, end).getDealRequest());
+        LocalDateTime counterStart = LocalDateTime.now().plusDays(2);
+        LocalDateTime counterEnd = counterStart.plusDays(4);
+
+        Message card = chat.counterOffer(CHARLIE, request, counterStart, counterEnd);
+
+        CounterOffer counter = card.getCounterOffer();
+        assertEquals(RequestStatus.COUNTERED, request.getStatus());
+        assertEquals(counterStart, counter.getStartDate());
+        assertEquals(counterEnd, counter.getEndDate());
+        assertEquals(start, request.getStartDate());
+        assertEquals(ListingStatus.LIVE, lend.getStatus());
+
+        Deal deal = chat.acceptCounter(ALICE, counter);
+
+        assertEquals(CounterStatus.ACCEPTED, counter.getStatus());
+        assertEquals(RequestStatus.ACCEPTED, request.getStatus());
+        assertEquals(ListingStatus.LENT, lend.getStatus());
+        assertEquals(counterEnd, deal.getDueDate());
+    }
+
+    @Test
+    void onlyTheListingSellerCanCounterAndOnlyTheBuyerCanRespond() {
+        Listing sale = saleListing("S23", CHARLIE, "100");
+        ChatThread thread = chat.openThread(ALICE, sale);
+        DealRequest request = chat.submitFormalOffer(ALICE, thread, new BigDecimal("90"))
+                .getDealRequest();
+
+        assertThrows(SecurityException.class,
+                () -> chat.counterOffer(ALICE, request, new BigDecimal("120")));
+        assertThrows(SecurityException.class,
+                () -> chat.counterOffer(DIANA, request, new BigDecimal("120")));
+        assertEquals(RequestStatus.PENDING, request.getStatus());
+
+        CounterOffer counter = chat.counterOffer(CHARLIE, request, new BigDecimal("120"))
+                .getCounterOffer();
+
+        assertThrows(SecurityException.class, () -> chat.acceptCounter(CHARLIE, counter));
+        assertThrows(SecurityException.class, () -> chat.acceptCounter(DIANA, counter));
+        assertThrows(SecurityException.class, () -> chat.declineCounter(CHARLIE, counter));
+        assertThrows(SecurityException.class, () -> chat.cancelCounter(ALICE, counter));
+        assertEquals(CounterStatus.OFFERED, counter.getStatus());
+        assertTrue(data.deals().allDeals().isEmpty());
+    }
+
+    @Test
+    void buyerCanDeclineTheSellersCounter() {
+        Listing sale = saleListing("S24", CHARLIE, "100");
+        ChatThread thread = chat.openThread(ALICE, sale);
+        DealRequest request = chat.submitFormalOffer(ALICE, thread, new BigDecimal("90"))
+                .getDealRequest();
+        CounterOffer counter = chat.counterOffer(CHARLIE, request, new BigDecimal("120"))
+                .getCounterOffer();
+
+        chat.declineCounter(ALICE, counter);
+
+        assertEquals(CounterStatus.DECLINED, counter.getStatus());
+        assertEquals(RequestStatus.DECLINED, request.getStatus());
+        assertTrue(data.deals().allDeals().isEmpty());
+        assertEquals(ListingStatus.LIVE, sale.getStatus());
+    }
+
+    @Test
+    void counterNeedsALiveListingAndACounterableRequest() {
+        Listing sale = saleListing("S25", CHARLIE, "100");
+        ChatThread thread = chat.openThread(ALICE, sale);
+        DealRequest offer = chat.submitFormalOffer(ALICE, thread, new BigDecimal("90"))
+                .getDealRequest();
+        sale.setStatus(ListingStatus.TAKEN_DOWN);
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                () -> chat.counterOffer(CHARLIE, offer, new BigDecimal("120")));
+        assertEquals(ChatService.OFFERS_CLOSED_BANNER, refusal.getMessage());
+        assertEquals(RequestStatus.PENDING, offer.getStatus());
+        assertTrue(data.deals().lifecycle().counterOffers().isEmpty());
+
+        ChatThread giveawayThread = chat.openThread(ALICE, charlieListing);
+        DealRequest claim = chat.submitFormalOffer(ALICE, giveawayThread).getDealRequest();
+        assertThrows(IllegalArgumentException.class,
+                () -> chat.counterOffer(CHARLIE, claim, new BigDecimal("10")));
+        assertEquals(RequestStatus.PENDING, claim.getStatus());
     }
 
     private static List<String> contents(List<Message> messages) {

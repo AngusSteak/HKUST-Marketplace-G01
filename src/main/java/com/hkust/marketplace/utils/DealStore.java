@@ -2,6 +2,7 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.CounterOffer;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealLifecycle;
 import com.hkust.marketplace.models.DealRequest;
@@ -131,16 +132,24 @@ public class DealStore {
         BigDecimal offered = null, counter = null;
         LocalDateTime start = null, end = null, counterStart = null, counterEnd = null;
         String type;
+        CounterOffer active = lifecycle.activeCounter(request).orElse(null);
         if (request instanceof PriceOffer offer) {
             type = "OFFER";
             offered = offer.getOfferedPrice();
-            counter = offer.getCounterPrice();
+            counter = offer.getAgreedCounterPrice();
+            if (active != null && active.getPrice() != null) {
+                counter = active.getPrice();
+            }
         } else if (request instanceof BorrowRequest borrow) {
             type = "BORROW";
             start = borrow.getStartDate();
             end = borrow.getEndDate();
-            counterStart = borrow.getCounterStart();
-            counterEnd = borrow.getCounterEnd();
+            counterStart = borrow.getAgreedCounterStart();
+            counterEnd = borrow.getAgreedCounterEnd();
+            if (active != null && active.getStartDate() != null) {
+                counterStart = active.getStartDate();
+                counterEnd = active.getEndDate();
+            }
         } else {
             type = "CLAIM";
         }

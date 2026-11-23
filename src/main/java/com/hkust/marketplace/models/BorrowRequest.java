@@ -6,8 +6,9 @@ import java.time.LocalDateTime;
 public class BorrowRequest extends DealRequest {
     private final LocalDateTime startDate;
     private final LocalDateTime endDate;
-    private LocalDateTime counterStart;
-    private LocalDateTime counterEnd;
+    /** Set only when the buyer accepts one of the seller's counters; {@code null} before that. */
+    private LocalDateTime agreedCounterStart;
+    private LocalDateTime agreedCounterEnd;
 
     BorrowRequest(String id, Buyer buyer, Listing listing, LocalDateTime startDate,
                   LocalDateTime endDate, LocalDateTime submittedTime) {
@@ -22,24 +23,24 @@ public class BorrowRequest extends DealRequest {
     public LocalDateTime getStartDate() { return startDate; }
     public LocalDateTime getEndDate() { return endDate; }
 
-    /** The seller's counter start, or {@code null} if never countered. */
-    public LocalDateTime getCounterStart() { return counterStart; }
+    /** The countered start the buyer agreed to, or {@code null} before a counter is accepted. */
+    public LocalDateTime getAgreedCounterStart() { return agreedCounterStart; }
 
-    /** The seller's counter end, or {@code null} if never countered. */
-    public LocalDateTime getCounterEnd() { return counterEnd; }
+    /** The countered end the buyer agreed to, or {@code null} before a counter is accepted. */
+    public LocalDateTime getAgreedCounterEnd() { return agreedCounterEnd; }
 
-    /** The start that applies if accepted: the countered start if there is one. */
+    /** The start that applies: the accepted counter if there is one, otherwise the request. */
     public LocalDateTime agreedStart() {
-        return counterStart != null ? counterStart : startDate;
+        return agreedCounterStart != null ? agreedCounterStart : startDate;
     }
 
-    /** The end that applies if accepted (the loan's due date). */
+    /** The end that applies (the loan's due date): the accepted counter if there is one. */
     public LocalDateTime agreedEnd() {
-        return counterEnd != null ? counterEnd : endDate;
+        return agreedCounterEnd != null ? agreedCounterEnd : endDate;
     }
 
-    void setCounterPeriod(LocalDateTime start, LocalDateTime end) {
-        this.counterStart = start;
-        this.counterEnd = end;
+    void agreeCounterPeriod(LocalDateTime start, LocalDateTime end) {
+        this.agreedCounterStart = start;
+        this.agreedCounterEnd = end;
     }
 }

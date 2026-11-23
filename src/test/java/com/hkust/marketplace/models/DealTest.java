@@ -52,9 +52,9 @@ class DealTest {
         BorrowRequest request = lifecycle.submitBorrow(ALICE, liveListing("L1", ListingType.LEND),
                 NOW, NOW.plusDays(2));
         LocalDateTime counterEnd = NOW.plusDays(1);
-        lifecycle.counterBorrow(request, NOW, counterEnd);
+        CounterOffer counter = lifecycle.counterBorrow(request, NOW, counterEnd);
 
-        Deal deal = lifecycle.acceptCounter(request);
+        Deal deal = lifecycle.acceptCounter(counter);
 
         assertEquals(counterEnd, deal.getDueDate());
     }

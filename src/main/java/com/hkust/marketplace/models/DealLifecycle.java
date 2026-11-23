@@ -33,12 +33,16 @@ public final class DealLifecycle {
     private final Clock clock;
     private final Map<String, DealRequest> requests = new LinkedHashMap<>();
     private final Map<String, Deal> deals = new LinkedHashMap<>();
+    private final Map<String, CounterOffer> counters = new LinkedHashMap<>();
     /** listing id -> id of its one active deal */
     private final Map<String, String> activeDealByListing = new HashMap<>();
     /** giveaway listing id -> id of the pending claim holding its reservation */
     private final Map<String, String> pendingClaimByListing = new HashMap<>();
+    /** buyer request id -> id of the one unanswered counter sent on it */
+    private final Map<String, String> activeCounterByRequest = new HashMap<>();
     private int nextRequestId = 1;
     private int nextDealId = 1;
+    private int nextCounterId = 1;
     private Listener listener = listing -> { };
 
     /**
@@ -101,40 +105,89 @@ public final class DealLifecycle {
 
     // ---------- Counter / accept / decline ----------
 
-    /** Seller counters a price offer; repeatable while the offer is countered. */
-    public synchronized PriceOffer counterOffer(PriceOffer offer, BigDecimal counterPrice) {
-        requireOpen(offer, "counter");
+    /**
+     * Seller counters a pending price offer with a new price. The counter is a new record; the
+     * buyer's request is only marked {@link RequestStatus#COUNTERED}. A second counter is refused
+     * until this one is answered or cancelled, so a card that was sent never changes.
+     */
+    public synchronized CounterOffer counterOffer(PriceOffer offer, BigDecimal counterPrice) {
+        requireStatus(offer, RequestStatus.PENDING);
+        requireNoActiveCounter(offer);
         BigDecimal money = requirePositiveMoney(counterPrice, "Counter price");
-        offer.setCounterPrice(money);
+        CounterOffer counter = new CounterOffer("C" + nextCounterId, offer, money,
+                null, null, now());
         offer.setStatus(RequestStatus.COUNTERED);
-        return changed(offer);
+        register(counter);
+        changed(offer);
+        return counter;
     }
 
-    /** Seller counters a borrow request with another period; repeatable while countered. */
-    public synchronized BorrowRequest counterBorrow(BorrowRequest request,
-                                                    LocalDateTime start, LocalDateTime end) {
-        requireOpen(request, "counter");
+    /**
+     * Seller counters a pending borrow request with another period. Like a price counter this is
+     * a new record, so the requested period on the buyer's card is never overwritten.
+     */
+    public synchronized CounterOffer counterBorrow(BorrowRequest request,
+                                                   LocalDateTime start, LocalDateTime end) {
+        requireStatus(request, RequestStatus.PENDING);
+        requireNoActiveCounter(request);
         validateBorrowPeriod(request.getListing(), start, end);
-        request.setCounterPeriod(start, end);
+        CounterOffer counter = new CounterOffer("C" + nextCounterId, request, null,
+                start, end, now());
         request.setStatus(RequestStatus.COUNTERED);
-        return changed(request);
+        register(counter);
+        changed(request);
+        return counter;
     }
 
-    /** Seller accepts a pending request. A countered request is accepted by the buyer via {@link #acceptCounter}. */
+    /** Withdraws an unanswered counter; the buyer's request becomes pending again. */
+    public synchronized CounterOffer cancelCounter(CounterOffer counter) {
+        requireCounterStatus(counter, CounterStatus.OFFERED);
+        counter.setStatus(CounterStatus.CANCELLED);
+        closeCounter(counter);
+        counter.getRequest().setStatus(RequestStatus.PENDING);
+        changed(counter.getRequest());
+        return counter;
+    }
+
+    /** Buyer accepts the seller's counter; the deal opens on the countered terms. */
+    public synchronized Deal acceptCounter(CounterOffer counter) {
+        requireCounterStatus(counter, CounterStatus.OFFERED);
+        DealRequest request = counter.getRequest();
+        requireStatus(request, RequestStatus.COUNTERED);
+        // Validate the Listing before changing anything, so a refusal leaves both cards intact.
+        requireLiveAndNotDealt(request.getListing());
+        if (request instanceof PriceOffer offer) {
+            offer.agreeCounterPrice(counter.getPrice());
+        } else if (request instanceof BorrowRequest borrow) {
+            borrow.agreeCounterPeriod(counter.getStartDate(), counter.getEndDate());
+        }
+        counter.setStatus(CounterStatus.ACCEPTED);
+        closeCounter(counter);
+        return changed(acceptAsDeal(request));
+    }
+
+    /** Buyer declines the seller's counter; the buyer's request is declined with it. */
+    public synchronized CounterOffer declineCounter(CounterOffer counter) {
+        requireCounterStatus(counter, CounterStatus.OFFERED);
+        counter.setStatus(CounterStatus.DECLINED);
+        closeCounter(counter);
+        counter.getRequest().setStatus(RequestStatus.DECLINED);
+        changed(counter.getRequest());
+        return counter;
+    }
+
+    /** Seller accepts a pending request. A counter is answered by the buyer via {@link #acceptCounter}. */
     public synchronized Deal accept(DealRequest request) {
         requireStatus(request, RequestStatus.PENDING);
         return changed(acceptAsDeal(request));
     }
 
-    /** Buyer accepts the seller's counter on their request. */
-    public synchronized Deal acceptCounter(DealRequest request) {
-        requireStatus(request, RequestStatus.COUNTERED);
-        return changed(acceptAsDeal(request));
-    }
-
-    /** Declines a pending or countered request. Declining a pending claim relists the giveaway. */
+    /**
+     * Declines a pending request. A request with an unanswered counter cannot be declined: the
+     * seller cancels the counter first, or the buyer declines the counter.
+     */
     public synchronized DealRequest decline(DealRequest request) {
-        requireOpen(request, "decline");
+        requireStatus(request, RequestStatus.PENDING);
         request.setStatus(RequestStatus.DECLINED);
         if (request instanceof Claim) {
             String listingId = request.getListing().getId();
@@ -207,7 +260,13 @@ public final class DealLifecycle {
                                                 BigDecimal offeredPrice, BigDecimal counterPrice,
                                                 LocalDateTime submittedTime, RequestStatus status) {
         PriceOffer offer = new PriceOffer(id, buyer, listing, offeredPrice, submittedTime);
-        offer.setCounterPrice(counterPrice);
+        if (counterPrice != null) {
+            if (status == RequestStatus.COUNTERED) {
+                restoreCounter(offer, counterPrice, null, null, submittedTime);
+            } else {
+                offer.agreeCounterPrice(counterPrice);
+            }
+        }
         return restored(offer, status);
     }
 
@@ -218,7 +277,11 @@ public final class DealLifecycle {
                                                     LocalDateTime submittedTime, RequestStatus status) {
         BorrowRequest request = new BorrowRequest(id, buyer, listing, startDate, endDate, submittedTime);
         if (counterStart != null || counterEnd != null) {
-            request.setCounterPeriod(counterStart, counterEnd);
+            if (status == RequestStatus.COUNTERED) {
+                restoreCounter(request, null, counterStart, counterEnd, submittedTime);
+            } else {
+                request.agreeCounterPeriod(counterStart, counterEnd);
+            }
         }
         return restored(request, status);
     }
@@ -281,6 +344,19 @@ public final class DealLifecycle {
         return Collections.unmodifiableList(new ArrayList<>(requests.values()));
     }
 
+    /** Every counter the sellers have sent, in send order. */
+    public synchronized List<CounterOffer> counterOffers() {
+        return Collections.unmodifiableList(new ArrayList<>(counters.values()));
+    }
+
+    /** The one unanswered counter on {@code request}, if any. */
+    public synchronized Optional<CounterOffer> activeCounter(DealRequest request) {
+        Objects.requireNonNull(request, "request");
+        String counterId = activeCounterByRequest.get(request.getId());
+        return Optional.ofNullable(counters.get(counterId))
+                .filter(counter -> counter.getStatus() == CounterStatus.OFFERED);
+    }
+
     /** Every deal, in the order the requests were accepted. */
     public synchronized List<Deal> deals() {
         return Collections.unmodifiableList(new ArrayList<>(deals.values()));
@@ -296,6 +372,14 @@ public final class DealLifecycle {
         Listing listing = result instanceof Deal deal ? deal.getListing() : ((DealRequest) result).getListing();
         listener.changed(listing);
         return result;
+    }
+
+    private void restoreCounter(DealRequest request, BigDecimal price,
+                                LocalDateTime start, LocalDateTime end, LocalDateTime sentTime) {
+        CounterOffer counter = new CounterOffer(
+                "C" + nextCounterId++, request, price, start, end, sentTime);
+        counters.put(counter.getId(), counter);
+        activeCounterByRequest.put(request.getId(), counter.getId());
     }
 
     private <R extends DealRequest> R restored(R request, RequestStatus status) {
@@ -323,6 +407,17 @@ public final class DealLifecycle {
         requests.put(request.getId(), request);
         nextRequestId++;
         return request;
+    }
+
+    private CounterOffer register(CounterOffer counter) {
+        counters.put(counter.getId(), counter);
+        activeCounterByRequest.put(counter.getRequest().getId(), counter.getId());
+        nextCounterId++;
+        return counter;
+    }
+
+    private void closeCounter(CounterOffer counter) {
+        activeCounterByRequest.remove(counter.getRequest().getId(), counter.getId());
     }
 
     private void validateBorrowPeriod(Listing listing, LocalDateTime start, LocalDateTime end) {
@@ -361,10 +456,18 @@ public final class DealLifecycle {
         }
     }
 
-    private static void requireOpen(DealRequest request, String action) {
-        Objects.requireNonNull(request, "request");
-        if (request.getStatus() != RequestStatus.PENDING && request.getStatus() != RequestStatus.COUNTERED) {
-            throw new IllegalStateException("Cannot " + action + " a " + request.getStatus() + " request");
+    private void requireNoActiveCounter(DealRequest request) {
+        if (activeCounter(request).isPresent()) {
+            throw new IllegalStateException(
+                    "Cancel the current counter before sending a new one");
+        }
+    }
+
+    private static void requireCounterStatus(CounterOffer counter, CounterStatus expected) {
+        Objects.requireNonNull(counter, "counter");
+        if (counter.getStatus() != expected) {
+            throw new IllegalStateException(
+                    "Expected an " + expected + " counter but was " + counter.getStatus());
         }
     }
 
@@ -390,6 +493,13 @@ public final class DealLifecycle {
                     && other.getListing().getId().equals(listing.getId())
                     && (other.getStatus() == RequestStatus.PENDING
                         || other.getStatus() == RequestStatus.COUNTERED)) {
+                if (other.getStatus() == RequestStatus.COUNTERED) {
+                    // The other negotiation is over too, so withdraw its outstanding counter.
+                    activeCounter(other).ifPresent(counter -> {
+                        counter.setStatus(CounterStatus.DECLINED);
+                        closeCounter(counter);
+                    });
+                }
                 other.setStatus(RequestStatus.DECLINED);
             }
         }

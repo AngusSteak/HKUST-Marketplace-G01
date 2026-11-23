@@ -2,6 +2,7 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.CounterOffer;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.Message;
@@ -61,6 +62,12 @@ public class ChatStore {
     public synchronized Message sendFormalOffer(ChatThread thread, User sender,
                                                 DealRequest dealRequest) {
         return append(thread, Message.formalOffer(sender, dealRequest));
+    }
+
+    /** Appends a Counter Offer card for an already-created seller counter, as its own message. */
+    public synchronized Message sendCounterOffer(ChatThread thread, User sender,
+                                                 CounterOffer counter) {
+        return append(thread, Message.counterOffer(sender, counter));
     }
 
     /** The thread's messages in send-time order. History is never removed. */

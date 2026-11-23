@@ -66,38 +66,58 @@ class DealLifecycleTest {
     }
 
     @Test
-    void counterOfferStoresThePriceAndMovesPendingToCountered() {
+    void counterOfferIsItsOwnRecordAndMovesTheOfferToCountered() {
         PriceOffer offer = offer(liveListing("L1", ListingType.SELL));
 
-        lifecycle.counterOffer(offer, new BigDecimal("120"));
+        CounterOffer counter = lifecycle.counterOffer(offer, new BigDecimal("120"));
 
         assertEquals(RequestStatus.COUNTERED, offer.getStatus());
-        assertEquals(new BigDecimal("120.00"), offer.getCounterPrice());
-        assertEquals(new BigDecimal("120.00"), offer.agreedPrice());
+        assertEquals(CounterStatus.OFFERED, counter.getStatus());
+        assertSame(offer, counter.getRequest());
+        assertEquals(new BigDecimal("120.00"), counter.getPrice());
+        assertEquals(new BigDecimal("100.00"), offer.agreedPrice());
+        assertSame(counter, lifecycle.activeCounter(offer).orElseThrow());
+        assertEquals(List.of(counter), lifecycle.counterOffers());
     }
 
     @Test
-    void counterCanBeRepeatedWhileCountered() {
+    void aSentCounterCannotBeChangedAndASecondOneIsRefused() {
         PriceOffer offer = offer(liveListing("L1", ListingType.SELL));
-        lifecycle.counterOffer(offer, new BigDecimal("120"));
+        CounterOffer counter = lifecycle.counterOffer(offer, new BigDecimal("120"));
 
-        lifecycle.counterOffer(offer, new BigDecimal("110"));
-
-        assertEquals(RequestStatus.COUNTERED, offer.getStatus());
-        assertEquals(new BigDecimal("110.00"), offer.getCounterPrice());
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.counterOffer(offer, new BigDecimal("110")));
+        assertEquals(new BigDecimal("120.00"), counter.getPrice());
+        assertEquals(1, lifecycle.counterOffers().size());
     }
 
     @Test
-    void counterBorrowStoresThePeriod() {
+    void cancellingACounterReturnsTheRequestToPendingAndAllowsANewOne() {
+        PriceOffer offer = offer(liveListing("L1", ListingType.SELL));
+        CounterOffer first = lifecycle.counterOffer(offer, new BigDecimal("120"));
+
+        lifecycle.cancelCounter(first);
+
+        assertEquals(CounterStatus.CANCELLED, first.getStatus());
+        assertEquals(RequestStatus.PENDING, offer.getStatus());
+        assertTrue(lifecycle.activeCounter(offer).isEmpty());
+        CounterOffer second = lifecycle.counterOffer(offer, new BigDecimal("110"));
+        assertEquals(CounterStatus.OFFERED, second.getStatus());
+        assertEquals(2, lifecycle.counterOffers().size());
+    }
+
+    @Test
+    void counterBorrowStoresThePeriodOnItsOwnRecord() {
         BorrowRequest request = borrow(liveListing("L1", ListingType.LEND));
         LocalDateTime start = NOW.plusHours(2);
         LocalDateTime end = NOW.plusHours(5);
 
-        lifecycle.counterBorrow(request, start, end);
+        CounterOffer counter = lifecycle.counterBorrow(request, start, end);
 
         assertEquals(RequestStatus.COUNTERED, request.getStatus());
-        assertEquals(start, request.getCounterStart());
-        assertEquals(end, request.agreedEnd());
+        assertEquals(start, counter.getStartDate());
+        assertEquals(end, counter.getEndDate());
+        assertSame(request, counter.getRequest());
     }
 
     @Test
@@ -142,11 +162,12 @@ class DealLifecycleTest {
         Listing listing = liveListing("L1", ListingType.SELL);
         PriceOffer accepted = offer(listing);
         PriceOffer countered = lifecycle.submitOffer(BOB, listing, new BigDecimal("90"));
-        lifecycle.counterOffer(countered, new BigDecimal("95"));
+        CounterOffer counter = lifecycle.counterOffer(countered, new BigDecimal("95"));
 
         lifecycle.accept(accepted);
 
         assertEquals(RequestStatus.DECLINED, countered.getStatus());
+        assertEquals(CounterStatus.DECLINED, counter.getStatus());
     }
 
     @Test
@@ -160,28 +181,48 @@ class DealLifecycleTest {
     }
 
     @Test
-    void acceptCounterAcceptsACounteredRequest() {
+    void acceptCounterOpensTheDealOnTheCounteredTerms() {
         Listing listing = liveListing("L1", ListingType.SELL);
         PriceOffer offer = offer(listing);
-        lifecycle.counterOffer(offer, new BigDecimal("120"));
+        CounterOffer counter = lifecycle.counterOffer(offer, new BigDecimal("120"));
 
-        Deal deal = lifecycle.acceptCounter(offer);
+        Deal deal = lifecycle.acceptCounter(counter);
 
+        assertEquals(CounterStatus.ACCEPTED, counter.getStatus());
         assertEquals(RequestStatus.ACCEPTED, offer.getStatus());
+        assertEquals(new BigDecimal("120.00"), offer.agreedPrice());
         assertEquals(DealStatus.ACTIVE, deal.getStatus());
         assertEquals(ListingStatus.RESERVED, listing.getStatus());
     }
 
     @Test
-    void declineWorksFromPendingAndCountered() {
+    void acceptingACounterOnANonLiveListingLeavesTheCounterOffered() {
+        Listing listing = liveListing("L1", ListingType.SELL);
+        PriceOffer offer = offer(listing);
+        CounterOffer counter = lifecycle.counterOffer(offer, new BigDecimal("120"));
+        listing.setStatus(ListingStatus.SOLD);
+
+        assertThrows(IllegalStateException.class, () -> lifecycle.acceptCounter(counter));
+
+        assertEquals(CounterStatus.OFFERED, counter.getStatus());
+        assertEquals(RequestStatus.COUNTERED, offer.getStatus());
+        assertEquals(new BigDecimal("100.00"), offer.agreedPrice());
+        assertTrue(lifecycle.deals().isEmpty());
+    }
+
+    @Test
+    void declineWorksFromPendingButNotWhileACounterIsOut() {
         PriceOffer pending = offer(liveListing("L1", ListingType.SELL));
         PriceOffer countered = offer(liveListing("L2", ListingType.SELL));
-        lifecycle.counterOffer(countered, new BigDecimal("120"));
+        CounterOffer counter = lifecycle.counterOffer(countered, new BigDecimal("120"));
 
         lifecycle.decline(pending);
-        lifecycle.decline(countered);
+        assertThrows(IllegalStateException.class, () -> lifecycle.decline(countered));
+
+        lifecycle.declineCounter(counter);
 
         assertEquals(RequestStatus.DECLINED, pending.getStatus());
+        assertEquals(CounterStatus.DECLINED, counter.getStatus());
         assertEquals(RequestStatus.DECLINED, countered.getStatus());
     }
 
@@ -351,10 +392,28 @@ class DealLifecycleTest {
     // ---------- Illegal transitions ----------
 
     @Test
-    void pendingRequestCannotAcceptACounter() {
-        PriceOffer pending = offer(liveListing("L1", ListingType.SELL));
+    void anAnsweredOrCancelledCounterCannotMoveAgain() {
+        PriceOffer accepted = offer(liveListing("L1", ListingType.SELL));
+        CounterOffer acceptedCounter = lifecycle.counterOffer(accepted, new BigDecimal("120"));
+        lifecycle.acceptCounter(acceptedCounter);
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.acceptCounter(pending));
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.acceptCounter(acceptedCounter));
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.declineCounter(acceptedCounter));
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.cancelCounter(acceptedCounter));
+
+        PriceOffer cancelled = offer(liveListing("L2", ListingType.SELL));
+        CounterOffer cancelledCounter = lifecycle.counterOffer(cancelled, new BigDecimal("120"));
+        lifecycle.cancelCounter(cancelledCounter);
+
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.acceptCounter(cancelledCounter));
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.declineCounter(cancelledCounter));
+        assertThrows(IllegalStateException.class,
+                () -> lifecycle.cancelCounter(cancelledCounter));
     }
 
     @Test
@@ -381,7 +440,6 @@ class DealLifecycleTest {
         assertThrows(IllegalStateException.class, () -> lifecycle.counterOffer(declined, BigDecimal.TEN));
         assertThrows(IllegalStateException.class, () -> lifecycle.decline(declined));
         assertThrows(IllegalStateException.class, () -> lifecycle.accept(declined));
-        assertThrows(IllegalStateException.class, () -> lifecycle.acceptCounter(declined));
     }
 
     @Test

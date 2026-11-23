@@ -10,24 +10,28 @@ import java.util.Objects;
  * One entry in a {@link ChatThread} (ADR-0005). A single final class with a private
  * constructor and named factories, so a message can never be built in an invalid shape.
  *
- * <p>There are exactly two shapes: {@link #text(String, User)} carries user-authored text and
- * no request link, while {@link #formalOffer(User, DealRequest)} carries a linked request and
- * a generated summary instead of user text. Because the offer factory has no content
- * parameter, a mixed text-and-offer message is unconstructible.
+ * <p>There are exactly three shapes: {@link #text(String, User)} carries user-authored text and
+ * no deal link, {@link #formalOffer(User, DealRequest)} carries the buyer's linked request, and
+ * {@link #counterOffer(User, CounterOffer)} carries the seller's linked counter. Both deal-card
+ * factories have no content parameter, so a mixed text-and-card message is unconstructible.
  */
 public final class Message {
 
     private final String content;
     private final LocalDateTime sentTime;
     private final User sender;
-    /** The request behind a Formal Offer; {@code null} for a plain text message. */
+    /** The request behind a Formal Offer; {@code null} for a plain text message or a counter. */
     private final DealRequest dealRequest;
+    /** The seller's counter behind a Counter Offer card; {@code null} otherwise. */
+    private final CounterOffer counterOffer;
 
-    private Message(String content, LocalDateTime sentTime, User sender, DealRequest dealRequest) {
+    private Message(String content, LocalDateTime sentTime, User sender, DealRequest dealRequest,
+                    CounterOffer counterOffer) {
         this.content = content;
         this.sentTime = sentTime;
         this.sender = sender;
         this.dealRequest = dealRequest;
+        this.counterOffer = counterOffer;
     }
 
     /** Creates a free-text message. Empty or blank content is rejected. */
@@ -36,7 +40,7 @@ public final class Message {
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("Message content must not be blank");
         }
-        return new Message(content, LocalDateTime.now(), sender, null);
+        return new Message(content, LocalDateTime.now(), sender, null, null);
     }
 
     /**
@@ -48,7 +52,17 @@ public final class Message {
     public static Message formalOffer(User sender, DealRequest request) {
         Objects.requireNonNull(sender, "sender");
         Objects.requireNonNull(request, "dealRequest");
-        return new Message(summarize(request), LocalDateTime.now(), sender, request);
+        return new Message(summarize(request), LocalDateTime.now(), sender, request, null);
+    }
+
+    /**
+     * Creates a Counter Offer card for {@code counter}. The sender is the Listing's Seller and the
+     * summary is generated from the countered terms, so the card is never user-edited.
+     */
+    public static Message counterOffer(User sender, CounterOffer counter) {
+        Objects.requireNonNull(sender, "sender");
+        Objects.requireNonNull(counter, "counterOffer");
+        return new Message(summarize(counter), LocalDateTime.now(), sender, null, counter);
     }
 
     /**
@@ -62,7 +76,7 @@ public final class Message {
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("Message content must not be blank");
         }
-        return new Message(content, sentTime, sender, dealRequest);
+        return new Message(content, sentTime, sender, dealRequest, null);
     }
 
     public String getContent() { return content; }
@@ -74,11 +88,20 @@ public final class Message {
     /** Convenience mirror of the bean-style username accessors used by the other models. */
     public String getSenderUsername() { return sender.getUsername(); }
 
-    /** The request behind a Formal Offer, or {@code null} for a plain text message. */
+    /** The request behind a Formal Offer, or {@code null} for a plain text or counter message. */
     public DealRequest getDealRequest() { return dealRequest; }
 
-    /** True only when this message carries a Formal Offer; derived from the request link. */
+    /** True only when this message carries the buyer's Formal Offer; derived from the link. */
     public boolean isFormalOffer() { return dealRequest != null; }
+
+    /** The seller's counter behind a Counter Offer card, or {@code null}. */
+    public CounterOffer getCounterOffer() { return counterOffer; }
+
+    /** True only when this message carries the seller's counter; derived from the link. */
+    public boolean isCounterOffer() { return counterOffer != null; }
+
+    /** True for either kind of deal card, so search and rendering treat both the same way. */
+    public boolean isOfferCard() { return dealRequest != null || counterOffer != null; }
 
     /** Generated, status-free summary of the request's terms plus the Listing title. */
     private static String summarize(DealRequest request) {
@@ -89,8 +112,20 @@ public final class Message {
         if (request instanceof BorrowRequest borrow) {
             Duration period = Duration.between(borrow.getStartDate(), borrow.getEndDate());
             return "Borrow request for " + describe(period) + " for " + title;
+        }        return "Claim for " + title;
+    }
+
+
+
+    /** Generated summary of a seller counter's terms plus the Listing title. */
+    private static String summarize(CounterOffer counter) {
+        String title = counter.getListing().getTitle();
+        if (counter.getPrice() != null) {
+            return "Counter offer of " + new Money(counter.getPrice()).getDisplay()
+                    + " for " + title;
         }
-        return "Claim for " + title;
+        Duration period = Duration.between(counter.getStartDate(), counter.getEndDate());
+        return "Counter borrow for " + describe(period) + " for " + title;
     }
 
     /**

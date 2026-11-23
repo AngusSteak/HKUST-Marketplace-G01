@@ -3,6 +3,7 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Claim;
+import com.hkust.marketplace.models.CounterOffer;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealLifecycle;
 import com.hkust.marketplace.models.DealRequest;
@@ -118,11 +119,13 @@ class DealStorePersistenceTest {
         BorrowRequest request = (BorrowRequest) seeded.deals().findRequest("Q4");
         seeded.deals().lifecycle().counterBorrow(request, start, end);
 
-        BorrowRequest back = (BorrowRequest) DummyDataService.open(db).deals().findRequest("Q4");
+        DealLifecycle reloaded = DummyDataService.open(db).deals().lifecycle();
+        BorrowRequest back = (BorrowRequest) reloaded.findRequest("Q4");
 
         assertEquals(RequestStatus.COUNTERED, back.getStatus());
-        assertEquals(start, back.getCounterStart());
-        assertEquals(end, back.getCounterEnd());
+        CounterOffer counter = reloaded.activeCounter(back).orElseThrow();
+        assertEquals(start, counter.getStartDate());
+        assertEquals(end, counter.getEndDate());
         assertEquals(request.getStartDate(), back.getStartDate());
     }
 

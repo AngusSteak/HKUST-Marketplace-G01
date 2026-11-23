@@ -6,7 +6,8 @@ import java.time.LocalDateTime;
 /** A price offer on a Sale listing. The seller may counter with a different price. */
 public class PriceOffer extends DealRequest {
     private final BigDecimal offeredPrice;
-    private BigDecimal counterPrice;
+    /** Set only when the buyer accepts one of the seller's counters; {@code null} before that. */
+    private BigDecimal agreedCounterPrice;
 
     PriceOffer(String id, Buyer buyer, Listing listing, BigDecimal offeredPrice,
                LocalDateTime submittedTime) {
@@ -19,13 +20,13 @@ public class PriceOffer extends DealRequest {
 
     public BigDecimal getOfferedPrice() { return offeredPrice; }
 
-    /** The seller's counter price, or {@code null} if the offer was never countered. */
-    public BigDecimal getCounterPrice() { return counterPrice; }
+    /** The counter price the buyer agreed to, or {@code null} before a counter is accepted. */
+    public BigDecimal getAgreedCounterPrice() { return agreedCounterPrice; }
 
-    /** The price that applies if accepted: the counter price if there is one. */
+    /** The price that applies: the accepted counter if there is one, otherwise the offer. */
     public BigDecimal agreedPrice() {
-        return counterPrice != null ? counterPrice : offeredPrice;
+        return agreedCounterPrice != null ? agreedCounterPrice : offeredPrice;
     }
 
-    void setCounterPrice(BigDecimal counterPrice) { this.counterPrice = counterPrice; }
+    void agreeCounterPrice(BigDecimal counterPrice) { this.agreedCounterPrice = counterPrice; }
 }

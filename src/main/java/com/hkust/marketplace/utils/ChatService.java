@@ -1,13 +1,16 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.CounterOffer;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Message;
+import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 
@@ -70,7 +73,7 @@ public final class ChatService {
      */
     public Message submitFormalOffer(User sender, ChatThread thread, BigDecimal price) {
         Buyer buyer = requireThreadBuyer(sender, thread);
-        requireLive(thread);
+        requireLive(thread.getListing());
         requireType(thread, ListingType.SELL);
         DealRequest request = data.deals().lifecycle().submitOffer(buyer, thread.getListing(), price);
         return data.chats().sendFormalOffer(thread, buyer, request);
@@ -87,7 +90,7 @@ public final class ChatService {
     public Message submitFormalOffer(User sender, ChatThread thread,
                                      LocalDateTime start, LocalDateTime end) {
         Buyer buyer = requireThreadBuyer(sender, thread);
-        requireLive(thread);
+        requireLive(thread.getListing());
         requireType(thread, ListingType.LEND);
         DealRequest request = data.deals().lifecycle()
                 .submitBorrow(buyer, thread.getListing(), start, end);
@@ -104,7 +107,7 @@ public final class ChatService {
      */
     public Message submitFormalOffer(User sender, ChatThread thread) {
         Buyer buyer = requireThreadBuyer(sender, thread);
-        requireLive(thread);
+        requireLive(thread.getListing());
         requireType(thread, ListingType.GIVEAWAY);
         DealRequest request = data.deals().lifecycle().submitClaim(buyer, thread.getListing());
         return data.chats().sendFormalOffer(thread, buyer, request);
@@ -131,11 +134,96 @@ public final class ChatService {
      * remain in the retained history.
      *
      * @throws SecurityException if {@code seller} is not the Seller of the request's Listing
-     * @throws IllegalStateException if the request is not pending or countered
+     * @throws IllegalStateException if the request is not pending
      */
     public DealRequest declineOffer(User seller, DealRequest request) {
         requireListingSeller(seller, request);
         return data.deals().lifecycle().decline(request);
+    }
+
+    /**
+     * Counters a pending price offer with a new price on behalf of the Listing's Seller, and
+     * posts the counter as its own card in the thread. The buyer's offer card is left untouched,
+     * and the new counter can no longer be edited: send a new one only after cancelling this one.
+     *
+     * @throws SecurityException if {@code seller} is not the Seller of the request's Listing
+     * @throws IllegalStateException if the Listing is not live, the request is not pending, or
+     *         an earlier counter is still unanswered
+     * @throws IllegalArgumentException if the request is not a price offer or the price is invalid
+     */
+    public Message counterOffer(User seller, DealRequest request, BigDecimal price) {
+        requireListingSeller(seller, request);
+        if (!(request instanceof PriceOffer offer)) {
+            throw new IllegalArgumentException("Only a price offer can be countered with a price");
+        }
+        requireLive(request.getListing());
+        CounterOffer counter = data.deals().lifecycle().counterOffer(offer, price);
+        return data.chats().sendCounterOffer(threadFor(request), seller, counter);
+    }
+
+    /**
+     * Counters a pending borrow request with another lending period on behalf of the Listing's
+     * Seller, and posts it as its own card. Like a price counter it is immutable once sent.
+     *
+     * @throws SecurityException if {@code seller} is not the Seller of the request's Listing
+     * @throws IllegalStateException if the Listing is not live, the request is not pending, or
+     *         an earlier counter is still unanswered
+     * @throws IllegalArgumentException if the request is not a borrow request or the period is invalid
+     */
+    public Message counterOffer(User seller, DealRequest request,
+                                LocalDateTime start, LocalDateTime end) {
+        requireListingSeller(seller, request);
+        if (!(request instanceof BorrowRequest borrow)) {
+            throw new IllegalArgumentException(
+                    "Only a borrow request can be countered with a lending period");
+        }
+        requireLive(request.getListing());
+        CounterOffer counter = data.deals().lifecycle().counterBorrow(borrow, start, end);
+        return data.chats().sendCounterOffer(threadFor(request), seller, counter);
+    }
+
+    /**
+     * Withdraws an unanswered counter on behalf of the Listing's Seller. The buyer's request
+     * returns to pending, so the seller may accept it, decline it, or send a fresh counter.
+     *
+     * @throws SecurityException if {@code seller} is not the Listing's Seller
+     * @throws IllegalStateException if the counter is not still offered
+     */
+    public CounterOffer cancelCounter(User seller, CounterOffer counter) {
+        Objects.requireNonNull(seller, "seller");
+        Objects.requireNonNull(counter, "counter");
+        if (!seller.getUsername().equalsIgnoreCase(counter.getSellerUsername())) {
+            throw new SecurityException("Only the listing's seller may cancel a counter");
+        }
+        return data.deals().lifecycle().cancelCounter(counter);
+    }
+
+    /**
+     * Accepts the seller's counter on behalf of the request's Buyer, creating the Deal on the
+     * countered terms through the lifecycle.
+     *
+     * @throws SecurityException if {@code buyer} is not the request's Buyer
+     * @throws IllegalStateException if the counter is not offered or the Listing is unavailable
+     */
+    public Deal acceptCounter(User buyer, CounterOffer counter) {
+        requireCounterBuyer(buyer, counter);
+        return data.deals().lifecycle().acceptCounter(counter);
+    }
+
+    /**
+     * Declines the seller's counter on behalf of the request's Buyer. The counter card stays in
+     * the retained history with a declined status.
+     *
+     * @throws SecurityException if {@code buyer} is not the request's Buyer
+     * @throws IllegalStateException if the counter is not offered
+     */
+    public CounterOffer declineCounter(User buyer, CounterOffer counter) {
+        requireCounterBuyer(buyer, counter);
+        return data.deals().lifecycle().declineCounter(counter);
+    }
+
+    private ChatThread threadFor(DealRequest request) {
+        return data.chats().getOrCreate(request.getBuyer(), request.getListing());
     }
 
     /** All messages in the thread, oldest (send-time) first. History is never removed. */
@@ -217,8 +305,8 @@ public final class ChatService {
     private static boolean matchesKind(Message message, MessageSearchFilter filter) {
         return switch (filter) {
             case ALL -> true;
-            case TEXT_ONLY -> !message.isFormalOffer();
-            case OFFERS_ONLY -> message.isFormalOffer();
+            case TEXT_ONLY -> !message.isOfferCard();
+            case OFFERS_ONLY -> message.isOfferCard();
         };
     }
 
@@ -227,7 +315,15 @@ public final class ChatService {
         Objects.requireNonNull(request, "request");
         if (!actor.getUsername().equalsIgnoreCase(request.getSellerUsername())) {
             throw new SecurityException(
-                    "Only the listing's seller may accept or decline an offer");
+                    "Only the listing's seller may accept, decline or counter an offer");
+        }
+    }
+
+    private static void requireCounterBuyer(User actor, CounterOffer counter) {
+        Objects.requireNonNull(actor, "buyer");
+        Objects.requireNonNull(counter, "counter");
+        if (!actor.getUsername().equalsIgnoreCase(counter.getBuyerUsername())) {
+            throw new SecurityException("Only the request's buyer may respond to a counter");
         }
     }
 
@@ -240,8 +336,8 @@ public final class ChatService {
         return thread.getBuyer();
     }
 
-    private void requireLive(ChatThread thread) {
-        if (!acceptsOffers(thread)) {
+    private static void requireLive(Listing listing) {
+        if (listing.getStatus() != ListingStatus.LIVE) {
             throw new IllegalStateException(OFFERS_CLOSED_BANNER);
         }
     }

@@ -2,7 +2,10 @@ package com.hkust.marketplace.controllers.chat;
 
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.CounterOffer;
+import com.hkust.marketplace.models.CounterStatus;
 import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.Message;
 import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.PriceOffer;
@@ -33,7 +36,10 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * Builds the one chat view shared by the buyer and seller portals, so both sides see the
@@ -122,9 +128,13 @@ public final class ChatViewBuilder {
 
     private static HBox messageRow(Message message, User currentUser,
                                    ChatService chatService, Runnable refresh) {
-        return message.isFormalOffer()
-                ? formalOfferRow(message, currentUser, chatService, refresh)
-                : textBubbleRow(message, currentUser);
+        if (message.isCounterOffer()) {
+            return counterOfferRow(message, currentUser, chatService, refresh);
+        }
+        if (message.isFormalOffer()) {
+            return formalOfferRow(message, currentUser, chatService, refresh);
+        }
+        return textBubbleRow(message, currentUser);
     }
 
     private static HBox textBubbleRow(Message message, User currentUser) {
@@ -147,25 +157,46 @@ public final class ChatViewBuilder {
         return row;
     }
 
-    /** Renders a Formal Offer as one card, never as a text bubble. */
+    /** Renders a buyer's Formal Offer as one card, never as a text bubble. */
     private static HBox formalOfferRow(Message message, User currentUser,
                                        ChatService chatService, Runnable refresh) {
         DealRequest request = message.getDealRequest();
-        boolean own = message.getSenderUsername().equalsIgnoreCase(currentUser.getUsername());
+        return offerCardRow(message, currentUser, "FORMAL OFFER",
+                request.getStatus().name(), statusStyle(request.getStatus()),
+                termsText(request), offerActions(chatService, currentUser, request, refresh));
+    }
 
-        Label kind = new Label("FORMAL OFFER");
+    /** Renders a seller's counter as its own card, never as a text bubble. */
+    private static HBox counterOfferRow(Message message, User currentUser,
+                                        ChatService chatService, Runnable refresh) {
+        CounterOffer counter = message.getCounterOffer();
+        return offerCardRow(message, currentUser, "COUNTER OFFER",
+                counter.getStatus().name(), counterStatusStyle(counter.getStatus()),
+                counterTerms(counter), counterActions(chatService, currentUser, counter, refresh));
+    }
+
+    /** The one card layout shared by a buyer's offer and a seller's counter. */
+    private static HBox offerCardRow(Message message, User currentUser, String badgeText,
+                                     String statusText, String statusStyle, String terms,
+                                     HBox actions) {
+        boolean own = message.getSenderUsername().equalsIgnoreCase(currentUser.getUsername());
+        DealRequest request = message.isCounterOffer()
+                ? message.getCounterOffer().getRequest()
+                : message.getDealRequest();
+
+        Label kind = new Label(badgeText);
         kind.getStyleClass().add("offer-badge");
-        Label status = new Label(request.getStatus().name());
-        status.getStyleClass().addAll("badge", statusStyle(request.getStatus()));
+        Label status = new Label(statusText);
+        status.getStyleClass().addAll("badge", statusStyle);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox top = new HBox(8, kind, spacer, status);
         top.setAlignment(Pos.CENTER_LEFT);
 
-        Label terms = new Label(termsText(request));
-        terms.setWrapText(true);
-        terms.getStyleClass().add("offer-terms");
+        Label termsLabel = new Label(terms);
+        termsLabel.setWrapText(true);
+        termsLabel.getStyleClass().add("offer-terms");
 
         Label listing = new Label(request.getListing().getTitle());
         listing.getStyleClass().add("offer-listing");
@@ -174,11 +205,10 @@ public final class ChatViewBuilder {
                 + " \u00b7 " + message.getSentTime().format(TIME_FORMAT));
         meta.getStyleClass().add("chat-time");
 
-        VBox card = new VBox(6, top, terms, listing, meta);
+        VBox card = new VBox(6, top, termsLabel, listing, meta);
         card.getStyleClass().add("offer-card");
         card.setMaxWidth(520);
 
-        HBox actions = offerActions(chatService, currentUser, request, refresh);
         if (actions != null) {
             card.getChildren().add(actions);
         }
@@ -188,6 +218,10 @@ public final class ChatViewBuilder {
         return row;
     }
 
+    /**
+     * Actions on the buyer's request card. While a counter is unanswered the request card offers
+     * nothing: the seller cancels that counter first, then accepts, declines or counters again.
+     */
     private static HBox offerActions(ChatService chatService, User currentUser,
                                      DealRequest request, Runnable refresh) {
         boolean isListingSeller = currentUser.getUsername()
@@ -195,20 +229,98 @@ public final class ChatViewBuilder {
         if (!isListingSeller || request.getStatus() != RequestStatus.PENDING) {
             return null;
         }
+        List<Button> buttons = new ArrayList<>();
+
         Button accept = new Button("Accept");
         accept.getStyleClass().addAll("btn-primary", "btn-sm");
-        accept.setOnAction(e -> submit(() -> chatService.acceptOffer(currentUser, request), refresh));
+        accept.setOnAction(e -> submit(
+                () -> chatService.acceptOffer(currentUser, request), refresh));
+        buttons.add(accept);
+
+        if (isCounterable(request) && request.getListing().getStatus() == ListingStatus.LIVE) {
+            Button counter = new Button("Counter");
+            counter.getStyleClass().addAll("btn-gold", "btn-sm");
+            counter.setOnAction(e ->
+                    openCounterForm(chatService, currentUser, request, refresh));
+            buttons.add(counter);
+        }
 
         Button decline = new Button("Decline");
         decline.getStyleClass().addAll("btn-sm");
-        decline.setOnAction(e ->
-                submit(() -> chatService.declineOffer(currentUser, request), refresh));
+        decline.setOnAction(e -> submit(
+                () -> chatService.declineOffer(currentUser, request), refresh));
+        buttons.add(decline);
 
-        HBox actions = new HBox(8, accept, decline);
+        return actionsRow(buttons);
+    }
+
+    /**
+     * Actions on a seller's counter card: only the buyer may accept or decline it, and only the
+     * seller may cancel it, while it is still offered.
+     */
+    private static HBox counterActions(ChatService chatService, User currentUser,
+                                       CounterOffer counter, Runnable refresh) {
+        if (counter.getStatus() != CounterStatus.OFFERED) {
+            return null;
+        }
+        List<Button> buttons = new ArrayList<>();
+        boolean isListingSeller = currentUser.getUsername()
+                .equalsIgnoreCase(counter.getSellerUsername());
+        boolean isRequestBuyer = currentUser.getUsername()
+                .equalsIgnoreCase(counter.getBuyerUsername());
+
+        if (isRequestBuyer) {
+            // Accepting reserves/lends the item, so it follows the same live rule as offers.
+            if (counter.getListing().getStatus() == ListingStatus.LIVE) {
+                Button accept = new Button("Accept Counter");
+                accept.getStyleClass().addAll("btn-primary", "btn-sm");
+                accept.setOnAction(e -> submit(
+                        () -> chatService.acceptCounter(currentUser, counter), refresh));
+                buttons.add(accept);
+            }
+            Button decline = new Button("Decline Counter");
+            decline.getStyleClass().addAll("btn-sm");
+            decline.setOnAction(e -> submit(
+                    () -> chatService.declineCounter(currentUser, counter), refresh));
+            buttons.add(decline);
+        } else if (isListingSeller) {
+            Button cancel = new Button("Cancel Counter");
+            cancel.getStyleClass().addAll("btn-sm");
+            cancel.setOnAction(e -> submit(
+                    () -> chatService.cancelCounter(currentUser, counter), refresh));
+            buttons.add(cancel);
+        }
+        return actionsRow(buttons);
+    }
+
+    private static HBox actionsRow(List<Button> buttons) {
+        if (buttons.isEmpty()) {
+            return null;
+        }
+        HBox actions = new HBox(8, buttons.toArray(Button[]::new));
         actions.setAlignment(Pos.CENTER_RIGHT);
         return actions;
     }
 
+    /** Only Sale and Lend requests can be countered; a Giveaway claim cannot. */
+    private static boolean isCounterable(DealRequest request) {
+        return request instanceof PriceOffer || request instanceof BorrowRequest;
+    }
+
+    private static void openCounterForm(ChatService chatService, User currentUser,
+                                        DealRequest request, Runnable afterPost) {
+        String header = "Counter the offer for: " + request.getListing().getTitle();
+        if (request instanceof PriceOffer) {
+            promptPrice("Counter Offer", header, "Your counter price (HK$):",
+                    price -> chatService.counterOffer(currentUser, request, price), afterPost);
+        } else if (request instanceof BorrowRequest) {
+            promptBorrowPeriod("Counter Offer", header, "Send Counter",
+                    (start, end) -> chatService.counterOffer(currentUser, request, start, end),
+                    afterPost);
+        }
+    }
+
+    /** The buyer's original terms; a seller counter is shown on its own card, never here. */
     private static String termsText(DealRequest request) {
         if (request instanceof PriceOffer offer) {
             return "Price offer: " + new Money(offer.getOfferedPrice()).getDisplay();
@@ -220,12 +332,28 @@ public final class ChatViewBuilder {
         return "Claim for this giveaway";
     }
 
+    private static String counterTerms(CounterOffer counter) {
+        if (counter.getPrice() != null) {
+            return "Counter price: " + new Money(counter.getPrice()).getDisplay();
+        }
+        return "Counter period: " + DurationText.format(
+                Duration.between(counter.getStartDate(), counter.getEndDate()));
+    }
+
     private static String statusStyle(RequestStatus status) {
         return switch (status) {
             case PENDING -> "badge-pending";
             case ACCEPTED -> "badge-live";
             case DECLINED -> "badge-rejected";
             case COUNTERED -> "badge-sold";
+        };
+    }
+
+    private static String counterStatusStyle(CounterStatus status) {
+        return switch (status) {
+            case OFFERED -> "badge-pending";
+            case ACCEPTED -> "badge-live";
+            case DECLINED, CANCELLED -> "badge-rejected";
         };
     }
 
@@ -339,10 +467,19 @@ public final class ChatViewBuilder {
 
     private static void promptPrice(ChatService chatService, User currentUser, ChatThread thread,
                                     Runnable afterPost) {
+        promptPrice("Make an Offer",
+                "Formal price offer for: " + thread.getListing().getTitle(),
+                "Your offer price (HK$):",
+                price -> chatService.submitFormalOffer(currentUser, thread, price), afterPost);
+    }
+
+    /** One price dialog shared by the buyer's offer and the seller's counter. */
+    private static void promptPrice(String title, String header, String prompt,
+                                    Consumer<BigDecimal> action, Runnable afterPost) {
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Make an Offer");
-        dialog.setHeaderText("Formal price offer for: " + thread.getListing().getTitle());
-        dialog.setContentText("Your offer price (HK$):");
+        dialog.setTitle(title);
+        dialog.setHeaderText(header);
+        dialog.setContentText(prompt);
         dialog.showAndWait().ifPresent(raw -> {
             BigDecimal price;
             try {
@@ -352,15 +489,25 @@ public final class ChatViewBuilder {
                         .showAndWait();
                 return;
             }
-            submit(() -> chatService.submitFormalOffer(currentUser, thread, price), afterPost);
+            submit(() -> action.accept(price), afterPost);
         });
     }
 
     private static void promptBorrowPeriod(ChatService chatService, User currentUser,
                                            ChatThread thread, Runnable afterPost) {
+        promptBorrowPeriod("Request to Borrow",
+                "Formal borrow request for: " + thread.getListing().getTitle(), "Send Request",
+                (start, end) -> chatService.submitFormalOffer(currentUser, thread, start, end),
+                afterPost);
+    }
+
+    /** One period dialog shared by the buyer's request and the seller's counter. */
+    private static void promptBorrowPeriod(String title, String header, String sendLabel,
+                                           BiConsumer<LocalDateTime, LocalDateTime> action,
+                                           Runnable afterPost) {
         Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Request to Borrow");
-        dialog.setHeaderText("Formal borrow request for: " + thread.getListing().getTitle());
+        dialog.setTitle(title);
+        dialog.setHeaderText(header);
 
         TextField days = new TextField();
         days.setPromptText("Days");
@@ -370,7 +517,7 @@ public final class ChatViewBuilder {
         form.setPadding(new Insets(8));
         dialog.getDialogPane().setContent(form);
 
-        ButtonType send = new ButtonType("Send Request", ButtonBar.ButtonData.OK_DONE);
+        ButtonType send = new ButtonType(sendLabel, ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(send, ButtonType.CANCEL);
         dialog.showAndWait().filter(send::equals).ifPresent(ignored -> {
             Duration period;
@@ -382,7 +529,7 @@ public final class ChatViewBuilder {
             }
             LocalDateTime start = LocalDateTime.now().plusSeconds(1);
             LocalDateTime end = start.plus(period);
-            submit(() -> chatService.submitFormalOffer(currentUser, thread, start, end), afterPost);
+            submit(() -> action.accept(start, end), afterPost);
         });
     }
 

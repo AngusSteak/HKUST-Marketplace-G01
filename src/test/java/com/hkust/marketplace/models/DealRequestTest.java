@@ -32,7 +32,7 @@ class DealRequestTest {
         assertEquals("alice", offer.getBuyerUsername());
         assertEquals("charlie", offer.getSellerUsername());
         assertEquals(new BigDecimal("160.50"), offer.getOfferedPrice());
-        assertNull(offer.getCounterPrice());
+        assertNull(offer.getAgreedCounterPrice());
         assertEquals(new BigDecimal("160.50"), offer.agreedPrice());
     }
 
@@ -48,12 +48,13 @@ class DealRequestTest {
     }
 
     @Test
-    void counterPriceMustBePositiveAndLeavesTheOfferUnchangedWhenInvalid() {
+    void counterPriceMustBePositiveAndLeavesNoCounterBehindWhenInvalid() {
         PriceOffer offer = lifecycle.submitOffer(ALICE, liveListing("L1", ListingType.SELL), BigDecimal.TEN);
 
         assertThrows(IllegalArgumentException.class, () -> lifecycle.counterOffer(offer, BigDecimal.ZERO));
         assertEquals(RequestStatus.PENDING, offer.getStatus());
-        assertNull(offer.getCounterPrice());
+        assertNull(offer.getAgreedCounterPrice());
+        assertTrue(lifecycle.counterOffers().isEmpty());
     }
 
     @Test
@@ -140,7 +141,8 @@ class DealRequestTest {
         assertThrows(IllegalArgumentException.class,
                 () -> lifecycle.counterBorrow(request, NOW.plusHours(1), NOW.plusHours(1).plusSeconds(4)));
         assertEquals(RequestStatus.PENDING, request.getStatus());
-        assertNull(request.getCounterEnd());
+        assertNull(request.getAgreedCounterEnd());
+        assertTrue(lifecycle.counterOffers().isEmpty());
     }
 
     // ---------- Ids ----------
