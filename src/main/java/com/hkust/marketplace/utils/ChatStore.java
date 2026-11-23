@@ -6,6 +6,7 @@ import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.Message;
 import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.persistence.Database;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,9 +16,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * In-memory chat threads and their retained message history, one thread per
- * (Buyer, Listing) pair. All methods are synchronized because the brief requires
- * concurrent actions to be safe.
+ * Chat threads and their retained message history, one thread per (Buyer, Listing) pair.
+ * Threads and messages are saved to the {@code chat_threads} and {@code messages} tables as
+ * they are created; {@link #load} rebuilds them at startup. All methods are synchronized
+ * because the brief requires concurrent actions to be safe.
  *
  * <p>This store only stores and returns data. Participant checks and the offers-closed rule
  * live in {@link ChatService}, the public seam both portals call.
@@ -28,11 +30,23 @@ public class ChatStore {
     private final Map<String, ChatThread> threads = new LinkedHashMap<>();
     /** thread key -> messages, in send order */
     private final Map<String, List<Message>> messages = new LinkedHashMap<>();
+    private final Database db;
+
+    ChatStore(Database db) {
+        this.db = Objects.requireNonNull(db, "db");
+    }
 
     /** Returns the single thread for this pair, creating it on first call. */
     public synchronized ChatThread getOrCreate(Buyer buyer, Listing listing) {
         String key = key(buyer, listing);
-        return threads.computeIfAbsent(key, ignored -> new ChatThread(buyer, listing));
+        ChatThread existing = threads.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        ChatThread thread = new ChatThread(buyer, listing);
+        saveThread(thread);
+        threads.put(key, thread);
+        return thread;
     }
 
     /** Appends a free-text message; the caller has already enforced access control. */
@@ -84,10 +98,57 @@ public class ChatStore {
 
     private Message append(ChatThread thread, Message message) {
         String key = key(thread);
-        // Keep the canonical thread if an equal key was already opened.
-        threads.putIfAbsent(key, thread);
+        db.inTransaction(() -> {
+            // Keep the canonical thread if an equal key was already opened.
+            if (!threads.containsKey(key)) {
+                saveThread(thread);
+                threads.put(key, thread);
+            }
+            DealRequest request = message.getDealRequest();
+            db.update("INSERT INTO messages (buyer_username, listing_id, sender_username, content,"
+                            + " sent_time, deal_request_id) VALUES (?, ?, ?, ?, ?, ?)",
+                    thread.getBuyer().getUsername().toLowerCase(), thread.getListing().getId(),
+                    message.getSenderUsername().toLowerCase(), message.getContent(),
+                    message.getSentTime(), request == null ? null : request.getId());
+        });
         messages.computeIfAbsent(key, ignored -> new ArrayList<>()).add(message);
         return message;
+    }
+
+    private void saveThread(ChatThread thread) {
+        db.update("INSERT OR IGNORE INTO chat_threads (buyer_username, listing_id) VALUES (?, ?)",
+                thread.getBuyer().getUsername().toLowerCase(), thread.getListing().getId());
+    }
+
+    /**
+     * Rebuilds threads in the order they were opened and their messages in send order, on the
+     * already loaded users, listings and deal requests (a Formal Offer links its request).
+     */
+    synchronized void load(UserStore users, ListingStore listings, DealStore deals) {
+        db.query("SELECT buyer_username, listing_id FROM chat_threads ORDER BY rowid", row -> {
+            Buyer buyer = (Buyer) require(users.find(row.getString("buyer_username")), "buyer", row.getString(1));
+            Listing listing = require(listings.find(row.getString("listing_id")), "listing", row.getString(2));
+            ChatThread thread = new ChatThread(buyer, listing);
+            threads.put(key(thread), thread);
+            return thread;
+        });
+        db.query("SELECT * FROM messages ORDER BY id", row -> {
+            String key = row.getString("buyer_username") + "|" + row.getString("listing_id");
+            String requestId = row.getString("deal_request_id");
+            Message message = Message.restore(row.getString("content"),
+                    Database.dateTime(row, "sent_time"),
+                    require(users.find(row.getString("sender_username")), "sender", row.getString("sender_username")),
+                    requestId == null ? null : require(deals.findRequest(requestId), "request", requestId));
+            messages.computeIfAbsent(key, ignored -> new ArrayList<>()).add(message);
+            return message;
+        });
+    }
+
+    private static <T> T require(T found, String what, String id) {
+        if (found == null) {
+            throw new IllegalStateException("Saved chat refers to unknown " + what + " " + id);
+        }
+        return found;
     }
 
     private static String key(ChatThread thread) {
