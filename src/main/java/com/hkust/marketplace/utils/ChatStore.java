@@ -98,11 +98,10 @@ public class ChatStore {
 
     private Message append(ChatThread thread, Message message) {
         String key = key(thread);
+        boolean newThread = !threads.containsKey(key);
         db.inTransaction(() -> {
-            // Keep the canonical thread if an equal key was already opened.
-            if (!threads.containsKey(key)) {
+            if (newThread) {
                 saveThread(thread);
-                threads.put(key, thread);
             }
             DealRequest request = message.getDealRequest();
             db.update("INSERT INTO messages (buyer_username, listing_id, sender_username, content,"
@@ -111,6 +110,9 @@ public class ChatStore {
                     message.getSenderUsername().toLowerCase(), message.getContent(),
                     message.getSentTime(), request == null ? null : request.getId());
         });
+        // Only after the save succeeded, so memory never holds a thread or message the database lacks.
+        // Keep the canonical thread if an equal key was already opened.
+        threads.putIfAbsent(key, thread);
         messages.computeIfAbsent(key, ignored -> new ArrayList<>()).add(message);
         return message;
     }
