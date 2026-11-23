@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.PasswordRule;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.PasswordHasher;
@@ -9,6 +10,8 @@ import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+
+import java.util.Set;
 
 public class BuyerRegisterController {
 
@@ -52,9 +55,9 @@ public class BuyerRegisterController {
             showError("Full Name cannot be empty.");
             return;
         }
-        String pwdCheck = UserStore.checkPasswordStrength(password);
-        if (!"OK".equals(pwdCheck)) {
-            showError(pwdCheck);
+        Set<PasswordRule> failed = UserStore.checkPasswordStrength(password, username);
+        if (!failed.isEmpty()) {
+            showError(UserStore.formatPasswordErrors(failed));
             return;
         }
         if (!password.equals(confirm)) {
