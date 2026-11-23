@@ -20,6 +20,7 @@ import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
+import com.hkust.marketplace.persistence.DatabaseException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -144,7 +145,10 @@ class ChatServiceTest {
     void historySurvivesTheListingLeavingTheMarketplace() {
         ChatThread thread = chat.openThread(ALICE, charlieListing);
         chat.sendText(ALICE, thread, "Before the sale");
-        data.listings().remove(charlieListing.getId());
+        // A listing with a chat can't be deleted (the saved messages point to it); it is taken down.
+        assertThrows(DatabaseException.class, () -> data.listings().remove(charlieListing.getId()));
+        charlieListing.setStatus(ListingStatus.TAKEN_DOWN);
+        data.listings().update(charlieListing);
 
         assertEquals(List.of("Before the sale"),
                 chat.history(thread).stream().map(Message::getContent).toList());

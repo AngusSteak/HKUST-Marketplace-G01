@@ -13,8 +13,8 @@ import java.util.Objects;
  * The application's data, split into per-area stores and backed by a local SQLite database
  * ({@value #DATABASE_FILE}).
  *
- * <p>Users, listings (#55), deals, favourites and follows (#56) are saved to the database; the
- * other stores are still in-memory until #57 and #58 persist them. Until then the database is recreated and re-seeded on
+ * <p>Users, listings (#55), deals, favourites, follows (#56) and chats (#57) are saved to the
+ * database; the other stores are still in-memory until #58 persists them. Until then the database is recreated and re-seeded on
  * every launch (see {@link #RESET_PROPERTY}), so all stores stay consistent with each other.
  */
 public class DummyDataService {
@@ -25,7 +25,7 @@ public class DummyDataService {
     /**
      * System property: {@code true} recreates the database on every launch, {@code false} keeps
      * saved data across restarts. Defaults to {@code true} until every store is persisted.
-     * TODO(#59): default to false once #57 and #58 are merged.
+     * TODO(#59): default to false once #58 is merged.
      */
     public static final String RESET_PROPERTY = "marketplace.resetDb";
 
@@ -40,7 +40,7 @@ public class DummyDataService {
     private final FavouriteStore favourites;
     private final AuditStore audit = new AuditStore();
     private final ReportStore reports = new ReportStore();
-    private final ChatStore chats = new ChatStore();
+    private final ChatStore chats;
 
     /**
      * Creates an empty store on a private in-memory database, with no demo data. Visible for
@@ -58,6 +58,7 @@ public class DummyDataService {
         this.listings = new ListingStore(db);
         this.deals = new DealStore(db, listings);
         this.favourites = new FavouriteStore(db);
+        this.chats = new ChatStore(db);
     }
 
     /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
@@ -82,6 +83,7 @@ public class DummyDataService {
             data.listings.load(data.users);
             data.deals.load(data.users, data.listings);
             data.favourites.load();
+            data.chats.load(data.users, data.listings, data.deals);
         }
         return data;
     }
