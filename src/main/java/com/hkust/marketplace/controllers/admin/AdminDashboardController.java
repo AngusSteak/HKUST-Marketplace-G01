@@ -40,6 +40,11 @@ public class AdminDashboardController {
         pageTitle.setText(title);
     }
 
+    private String adminUsername() {
+        User admin = SessionManager.getCurrentUser();
+        return admin == null ? "admin" : admin.getUsername();
+    }
+
     @FXML
     private void showReview() {
         setActive(btnReview, "Listing Review & Approval");
@@ -167,6 +172,7 @@ public class AdminDashboardController {
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
                         DummyDataService.getInstance().listings().remove(l.getId());
+                        DummyDataService.getInstance().audit().recordTakeDown(adminUsername(), l.getId());
                         showAllListings();
                     }
                 });
@@ -223,6 +229,8 @@ public class AdminDashboardController {
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
                         u.setActive(false);
+                        DummyDataService.getInstance().audit()
+                                .recordAccountDeletion(adminUsername(), "@" + u.getUsername());
                         new Alert(Alert.AlertType.INFORMATION, "User deactivated (demo safety).").showAndWait();
                         showUsers();
                     }
