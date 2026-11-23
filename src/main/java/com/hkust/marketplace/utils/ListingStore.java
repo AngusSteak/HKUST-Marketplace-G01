@@ -29,7 +29,8 @@ import java.util.stream.Collectors;
 
 /**
  * Listings, kept in memory and written to the {@code listings} and {@code listing_photos}
- * tables on every change, so they survive a restart ({@link #load(UserStore)}).
+ * tables on every change and loaded back at startup ({@link #load(UserStore)}). They survive
+ * a restart once the reset-on-start switch is turned off (#59).
  *
  * <p>Change a listing's fields, then call {@link #update(Listing)}; never change a
  * {@code Listing} and skip the store.
@@ -121,7 +122,8 @@ public class ListingStore {
     /**
      * Deletes a listing and its photos. Kept for the current admin "Remove" button only; a
      * listing with requests or deals should be taken down by status instead (#26, #34), since
-     * the database refuses to delete a listing that deal history still points to.
+     * once deals and chats are saved (#56, #57) the database will refuse to delete a listing
+     * that their rows point to, and this throws {@link com.hkust.marketplace.persistence.DatabaseException}.
      */
     public void remove(String id) {
         db.update("DELETE FROM listings WHERE id = ?", id);

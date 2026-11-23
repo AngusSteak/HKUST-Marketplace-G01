@@ -22,7 +22,8 @@ import java.util.stream.Collectors;
 
 /**
  * Accounts, keyed by lower-case username. Accounts are kept in memory and every change is
- * written to the {@code users} table, so they survive a restart ({@link #load()}).
+ * written to the {@code users} table and loaded back at startup ({@link #load()}). They
+ * survive a restart once the reset-on-start switch is turned off (#59).
  *
  * <p>Change an account's fields, then call {@link #save(User)}; never change a {@code User}
  * and skip the store.

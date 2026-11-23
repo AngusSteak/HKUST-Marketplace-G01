@@ -87,6 +87,18 @@ class DatabaseTest {
     }
 
     @Test
+    void errorInsideTransactionAlsoSavesNothing() {
+        Database db = Database.inMemory();
+
+        assertThrows(AssertionError.class, () -> db.inTransaction(() -> {
+            insertUser(db, "alice");
+            throw new AssertionError("boom");
+        }));
+
+        assertTrue(db.isEmpty("users"));
+    }
+
+    @Test
     void fileDatabaseKeepsDataUnlessReset(@TempDir Path dir) {
         Path file = dir.resolve("nested/marketplace.db");
         try (Database db = Database.openFile(file, false)) {

@@ -118,7 +118,7 @@ public final class Database implements AutoCloseable {
             try {
                 work.run();
                 connection.commit();
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | Error e) {
                 connection.rollback();
                 throw e;
             } finally {
@@ -189,6 +189,7 @@ public final class Database implements AutoCloseable {
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read " + SCHEMA_RESOURCE, e);
         }
+        // Simple split: schema.sql must not contain ';' or '--' inside string literals.
         try (Statement statement = connection.createStatement()) {
             for (String sql : script.replaceAll("(?m)--.*$", "").split(";")) {
                 if (!sql.isBlank()) {

@@ -1,7 +1,7 @@
 # HKUST Marketplace — JavaFX Demo
 
 A **JavaFX + Maven** desktop demo of the HKUST Campus Marketplace platform.  
-Data is stored in a local **SQLite** database (`data/marketplace.db`, created on first run; see [Database](#database)). The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
+Data is stored in a local **SQLite** database (`data/marketplace.db`; see [Database](#database)). For now it is recreated with the demo data on every launch, until all stores are saved (#59). The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
 
 ## Prerequisites
 
