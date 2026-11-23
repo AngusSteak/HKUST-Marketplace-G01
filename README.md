@@ -1,7 +1,7 @@
 # HKUST Marketplace — JavaFX Demo
 
 A **JavaFX + Maven** desktop demo of the HKUST Campus Marketplace platform.  
-All data is in-memory (no database, no network) and resets on restart. The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
+Data is stored in a local **SQLite** database (`data/marketplace.db`, created on first run; see [Database](#database)). The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
 
 ## Prerequisites
 
@@ -55,6 +55,19 @@ mvn clean javafx:run
 | Seller | `charlie` | `password1`|
 | Seller | `diana`   | `password1`|
 
+## Database
+
+The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Maven dependency, so there is nothing to install or configure).
+
+- **File:** `data/marketplace.db`, relative to the folder you run the app from. It is created and filled with the demo data on first run. `data/` is git-ignored and must not be included in the submission ZIP.
+- **Schema:** [`src/main/resources/db/schema.sql`](src/main/resources/db/schema.sql), applied on every start (`CREATE TABLE IF NOT EXISTS`). Open the file with [DB Browser for SQLite](https://sqlitebrowser.org/) or `sqlite3` to inspect it.
+- **How it works:** each store (`users()`, `listings()`, ...) keeps its objects in memory, writes every change to the database straight away, and reads everything back once at startup (`persistence/Database`, `utils/DummyDataService`).
+- **Reset to the demo data:** delete the `data/` folder.
+- **Migration status:** users and listings are saved now (#55). Deals, favourites, chats, notifications, reviews, reports and the audit log follow in #56, #57 and #58. Until then the database is **recreated on every launch** so all stores stay consistent. To keep data across restarts already (users and listings only), run `MarketplaceApp` from IntelliJ with the VM option `-Dmarketplace.resetDb=false` (Run → Edit Configurations → Modify options → Add VM options). #59 makes keeping data the default.
+- **Tests** use a private in-memory SQLite database per `new DummyDataService()`, so they never touch `data/`.
+
+**Team rule:** screens never change a model object and skip the store. Every change goes through a store method, e.g. `listings().update(listing)` after changing a listing or `users().save(user)` after changing an account, so it is written to the database.
+
 ## Security State (Demo)
 
 - Passwords are stored only as **BCrypt hashes** (jBCrypt, cost factor 12), produced by `PasswordHasher`. `User.passwordHash` is the only credential field; plaintext passwords are never stored in a `User`, logged, or compared directly. Seeding hashes the demo passwords at startup, buyer/seller registration hashes the chosen password, and every login verifies through `PasswordHasher.verify`.
@@ -71,7 +84,7 @@ mvn clean javafx:run
 
 ## Features Implemented (Demo)
 
-All state lives in `DummyDataService` and is lost when the application closes.
+All state is reached through `DummyDataService` and its per-area stores, backed by SQLite (see [Database](#database)).
 
 ### Shared
 - Abstract `User` base with `Buyer` / `Seller` / `Admin` subtypes; each account holds exactly one fixed role, and usernames are unique across all roles
@@ -80,7 +93,7 @@ All state lives in `DummyDataService` and is lost when the application closes.
 - Welcome screen with role selection (Buyer / Seller / Admin)
 - HKUST branding (logo + colour palette: deep blue `#003974` + gold `#A68137`)
 - Modern card-based UI, icons (Ikonli), consistent sidebars & top bars
-- In-memory dummy data (no database / no network)
+- Local SQLite database with seeded demo data (no server, no network)
 
 ### Buyer Portal
 - Registration, Login, Browse Marketplace, Make Offer / Borrow / Claim
@@ -106,8 +119,10 @@ HKUST-Marketplace/
     │   ├── MarketplaceApp.java
     │   ├── controllers/
     │   ├── models/
-    │   └── utils/
+    │   ├── persistence/     ← SQLite connection (Database)
+    │   └── utils/           ← per-area stores, DummyDataService
     └── resources/
+        ├── db/schema.sql    ← database schema
         ├── fxml/
         ├── css/styles.css
         └── images/hkust_logo.png
@@ -136,8 +151,8 @@ Copy the lines that start with `Exception in thread` or `Caused by`.
 
 ## Next Steps (Backend)
 
-1. Replace `DummyDataService` with real repositories / REST clients backed by a database — the current store is in-memory only
-2. Keep credentials BCrypt-hashed through `PasswordHasher` when persistence lands; the demo seed hashes the demo passwords at startup
+1. Persist the remaining stores to SQLite (#56, #57, #58), then keep data across restarts by default (#59)
+2. Credentials stay BCrypt-hashed through `PasswordHasher`; the database only ever holds the hash
 3. Replace the in-memory `SessionManager` with real session tokens and enforce RBAC at the API layer (the current portal checks are demo-only UI gates)
 4. Photo upload, chat, auto-return for borrowed items, etc.
 

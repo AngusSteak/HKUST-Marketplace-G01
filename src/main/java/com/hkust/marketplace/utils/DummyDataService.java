@@ -3,20 +3,37 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.persistence.Database;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * In-memory data store for the frontend demo, split into per-area stores.
- * All data is lost when the application closes.
- * TODO: Replace these stores with real repositories / API clients.
+ * The application's data, split into per-area stores and backed by a local SQLite database
+ * ({@value #DATABASE_FILE}).
+ *
+ * <p>Users and listings are saved to the database (#55); the other stores are still in-memory
+ * until #56, #57 and #58 persist them. Until then the database is recreated and re-seeded on
+ * every launch (see {@link #RESET_PROPERTY}), so all stores stay consistent with each other.
  */
 public class DummyDataService {
 
-    private static final DummyDataService INSTANCE = createSeededInstance();
+    /** Where the app keeps its database, relative to the working directory. */
+    public static final String DATABASE_FILE = "data/marketplace.db";
 
-    private final UserStore users = new UserStore();
-    private final ListingStore listings = new ListingStore();
+    /**
+     * System property: {@code true} recreates the database on every launch, {@code false} keeps
+     * saved data across restarts. Defaults to {@code true} until every store is persisted.
+     * TODO(#59): default to false once #56, #57 and #58 are merged.
+     */
+    public static final String RESET_PROPERTY = "marketplace.resetDb";
+
+    private static DummyDataService instance;
+
+    private final Database db;
+    private final UserStore users;
+    private final ListingStore listings;
     private final DealStore deals = new DealStore();
     private final NotificationStore notifications = new NotificationStore();
     private final ReviewStore reviews = new ReviewStore();
@@ -26,21 +43,55 @@ public class DummyDataService {
     private final ChatStore chats = new ChatStore();
 
     /**
-     * Creates an empty store with no demo data. Visible for tests so each test can
-     * work on an isolated instance; application code must use {@link #getInstance()}.
+     * Creates an empty store on a private in-memory database, with no demo data. Visible for
+     * tests so each test works on an isolated instance; application code must use
+     * {@link #getInstance()}.
      */
     DummyDataService() {
+        this(Database.inMemory());
     }
 
-    private static DummyDataService createSeededInstance() {
-        DummyDataService store = new DummyDataService();
-        store.seedData();
-        return store;
+    /** Creates the stores on {@code db} without loading or seeding anything. */
+    DummyDataService(Database db) {
+        this.db = Objects.requireNonNull(db, "db");
+        this.users = new UserStore(db);
+        this.listings = new ListingStore(db);
     }
 
-    public static DummyDataService getInstance() {
-        return INSTANCE;
+    /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
+    public static synchronized DummyDataService getInstance() {
+        if (instance == null) {
+            boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, "true"));
+            instance = open(Database.openFile(Path.of(DATABASE_FILE), reset));
+        }
+        return instance;
     }
+
+    /**
+     * Opens the stores on {@code db}: a fresh (empty) database is seeded with the demo data,
+     * otherwise the saved users and listings are loaded.
+     */
+    static DummyDataService open(Database db) {
+        DummyDataService data = new DummyDataService(db);
+        if (db.isEmpty("users")) {
+            data.seedData();
+        } else {
+            data.users.load();
+            data.listings.load(data.users);
+        }
+        return data;
+    }
+
+    /** Closes the shared instance's database, e.g. when the application exits. */
+    public static synchronized void shutdown() {
+        if (instance != null) {
+            instance.db.close();
+            instance = null;
+        }
+    }
+
+    /** The database behind the stores, for stores that persist themselves (#56, #57, #58). */
+    public Database database() { return db; }
 
     public UserStore users() { return users; }
     public ListingStore listings() { return listings; }

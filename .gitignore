@@ -1,0 +1,10 @@
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Local SQLite database and uploaded photos (created on first run; never commit or zip)
+data/
