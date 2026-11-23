@@ -179,6 +179,10 @@ public class SellerDashboardController {
                     } catch (SecurityException | IllegalStateException ex) {
                         new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
                         return;
+                    } catch (RuntimeException ex) {
+                        new Alert(Alert.AlertType.ERROR,
+                                "Could not withdraw the listing: " + ex.getMessage()).showAndWait();
+                        return;
                     }
                     showMyListings();
                 }
@@ -206,6 +210,10 @@ public class SellerDashboardController {
                         sellerService.markSold(SessionManager.getCurrentUser(), l);
                     } catch (SecurityException | IllegalStateException ex) {
                         new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                        return;
+                    } catch (RuntimeException ex) {
+                        new Alert(Alert.AlertType.ERROR,
+                                "Could not mark the listing as sold: " + ex.getMessage()).showAndWait();
                         return;
                     }
                     showMyListings();
