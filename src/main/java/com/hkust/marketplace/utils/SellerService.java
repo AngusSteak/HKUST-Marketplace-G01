@@ -1,11 +1,22 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.persistence.DatabaseException;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -26,6 +37,54 @@ public final class SellerService {
 
     public SellerService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
+    }
+
+    /**
+     * Creates a listing from the reusable form for an active Seller, notifying every admin.
+     *
+     * @throws SecurityException if {@code actor} is not a signed-in, active Seller
+     * @throws IllegalArgumentException if the form state still has validation errors
+     */
+    public Listing createListing(User actor, ListingFormState state, PhotoStorage photos) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(photos, "photos");
+
+        Map<String, String> errors = state.validate(seller);
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException("Invalid listing: " + errors);
+        }
+
+        String id = data.listings().reserveId();
+        List<String> storedPaths = new ArrayList<>();
+        for (PhotoDraft draft : state.getChosenPhotos()) {
+            storedPaths.add(photos.store(draft.source(), seller.getUsername(), id));
+        }
+        state.setPhotoPaths(storedPaths);
+
+        Listing listing = state.buildListing(seller);
+        listing.setId(id);
+
+        try {
+            data.database().inTransaction(() -> {
+                data.listings().add(listing);
+                for (User admin : data.users().byRole(UserRole.ADMIN)) {
+                    data.notifications().notify(admin.getUsername(), NotificationCategory.NEW_SUBMISSION,
+                            seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.",
+                            new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
+                }
+            });
+        } catch (RuntimeException e) {
+            for (String path : storedPaths) {
+                try {
+                    Files.deleteIfExists(Path.of(path));
+                } catch (IOException ignored) {
+                    // best-effort cleanup of a photo whose listing was never saved
+                }
+            }
+            throw e;
+        }
+        return listing;
     }
 
     /**

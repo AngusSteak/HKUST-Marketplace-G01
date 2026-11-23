@@ -3,12 +3,10 @@ package com.hkust.marketplace.controllers.seller;
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
-import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
-import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerService;
@@ -27,7 +25,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +39,7 @@ public class SellerDashboardController {
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
+    private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -255,26 +253,19 @@ public class SellerDashboardController {
             return;
         }
 
-        ListingStore listings = DummyDataService.getInstance().listings();
-        String id = listings.peekNextId();
-
-        List<String> storedPaths = new ArrayList<>();
-        for (PhotoDraft draft : state.getChosenPhotos()) {
-            storedPaths.add(photoStorage.store(draft.source(), seller.getUsername(), id));
+        try {
+            sellerService.createListing(user, state, photoStorage);
+        } catch (SecurityException ex) {
+            new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+            return;
+        } catch (RuntimeException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not save the listing: " + ex.getMessage()).showAndWait();
+            return;
         }
-        state.setPhotoPaths(storedPaths);
-
-        Listing listing = state.buildListing(seller);
-        listing.setId(id);
-        listings.add(listing);
-
-        DummyDataService.getInstance().notifications().notify(
-                "admin", NotificationCategory.NEW_SUBMISSION,
-                seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.",
-                new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
 
         new Alert(Alert.AlertType.INFORMATION,
-                "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – in-memory only)").showAndWait();
+                "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – saved locally)").showAndWait();
         showMyListings();
     }
 
