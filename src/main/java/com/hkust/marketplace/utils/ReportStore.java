@@ -35,7 +35,12 @@ public class ReportStore {
                 report.getId(), report.getReporterUsername().toLowerCase(), listing.getId(),
                 report.getReason(), report.getReportedTime(), report.getStatus(), report.getResolution());
         idCounter.incrementAndGet();
-        reports.add(report);
+        // Only once saved, so a report filed inside a transaction that rolls back never appears.
+        db.afterCommit(() -> {
+            synchronized (this) {
+                reports.add(report);
+            }
+        });
         return report;
     }
 
