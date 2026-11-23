@@ -73,6 +73,16 @@ public class ListingStore {
         return listings.get(id);
     }
 
+    /**
+     * Claims and returns the next {@code L...} id in one atomic step. The submit flow reserves
+     * an id before saving so photos can be keyed to the directory the listing will actually
+     * get; two concurrent callers can never receive the same id. {@link #add(Listing)} leaves a
+     * pre-set id untouched and does not advance the counter again.
+     */
+    public String reserveId() {
+        return "L" + idCounter.getAndIncrement();
+    }
+
     /** The listings with these ids, in the same order, skipping ids that no longer exist. */
     public List<Listing> findAll(List<String> ids) {
         return ids.stream().map(listings::get).filter(Objects::nonNull).toList();

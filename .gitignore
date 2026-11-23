@@ -6,5 +6,5 @@ target/
 *.iml
 .vscode/
 
-# Local SQLite database and uploaded photos (created on first run; never commit or zip)
+# Local SQLite database and uploaded demo photos (created on first run; never commit or zip)
 data/

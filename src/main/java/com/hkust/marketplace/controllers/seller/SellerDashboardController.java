@@ -1,10 +1,13 @@
 package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.forms.ListingFormComponent;
+import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
+import com.hkust.marketplace.utils.LocalPhotoStorage;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
@@ -21,10 +24,10 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
-import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
 
 public class SellerDashboardController {
@@ -36,6 +39,7 @@ public class SellerDashboardController {
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
+    private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -211,144 +215,58 @@ public class SellerDashboardController {
         contentPane.getChildren().add(root);
     }
 
+    private final LocalPhotoStorage photoStorage = new LocalPhotoStorage();
+    private ListingFormComponent listingForm;
+
     @FXML
     private void showCreateListing() {
         setActive(btnCreate, "Create New Listing");
         contentPane.getChildren().clear();
 
-        VBox form = new VBox(12);
-        form.setMaxWidth(520);
-        form.getStyleClass().add("card");
-        form.setPadding(new Insets(20));
-
-        Label title = new Label("Post a new item");
-        title.getStyleClass().add("section-title");
-
-        ComboBox<String> typeCombo = new ComboBox<>(FXCollections.observableArrayList("Sell", "Lend", "Give Away"));
-        typeCombo.setPromptText("Listing type *");
-        typeCombo.setMaxWidth(Double.MAX_VALUE);
-
-        TextField nameField = new TextField();
-        nameField.setPromptText("Item name *");
-        ComboBox<Category> catCombo = new ComboBox<>(FXCollections.observableArrayList(Category.values()));
-        catCombo.setPromptText("Category *");
-        catCombo.setMaxWidth(Double.MAX_VALUE);
-        ComboBox<Condition> condCombo = new ComboBox<>(FXCollections.observableArrayList(Condition.values()));
-        condCombo.setPromptText("Condition *");
-        condCombo.setMaxWidth(Double.MAX_VALUE);
-        TextArea descArea = new TextArea();
-        descArea.setPromptText("Description");
-        descArea.setPrefRowCount(3);
-
-        TextField priceField = new TextField();
-        priceField.setPromptText("Price (HK$) – required for Sell");
-        TextField daysField = new TextField();
-        daysField.setPromptText("Days");
-        TextField hoursField = new TextField();
-        hoursField.setPromptText("Hours (0–23)");
-        HBox durationRow = new HBox(8, daysField, hoursField);
-        HBox.setHgrow(daysField, Priority.ALWAYS);
-        HBox.setHgrow(hoursField, Priority.ALWAYS);
-        daysField.setMaxWidth(Double.MAX_VALUE);
-        hoursField.setMaxWidth(Double.MAX_VALUE);
-
-        ComboBox<Location> meetupCombo = new ComboBox<>(FXCollections.observableArrayList(Location.values()));
-        meetupCombo.setPromptText("Meet-up location *");
-        meetupCombo.setMaxWidth(Double.MAX_VALUE);
-
-        Label photoNote = new Label("📷 Photos: up to 6 (UI placeholder – file chooser not wired in demo)");
-        photoNote.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-
-        Button submitBtn = new Button("Submit for Review");
-        submitBtn.getStyleClass().add("btn-gold");
-        submitBtn.setOnAction(e -> {
-            if (typeCombo.getValue() == null || nameField.getText().isBlank() ||
-                    catCombo.getValue() == null || condCombo.getValue() == null ||
-                    meetupCombo.getValue() == null) {
-                new Alert(Alert.AlertType.WARNING, "Please fill all required fields.").showAndWait();
-                return;
-            }
-            if (!(SessionManager.getCurrentUser() instanceof Seller seller)) {
-                new Alert(Alert.AlertType.WARNING, "You must be logged in as a seller to post a listing.").showAndWait();
-                return;
-            }
-            String name = nameField.getText().trim();
-            String desc = descArea.getText();
-            Category cat = catCombo.getValue();
-            Condition cond = condCombo.getValue();
-            Location meetup = meetupCombo.getValue();
-
-            Listing listing;
-            switch (typeCombo.getValue()) {
-                case "Sell" -> {
-                    Money price;
-                    try {
-                        price = Money.of(priceField.getText());
-                    } catch (IllegalArgumentException ex) {
-                        new Alert(Alert.AlertType.WARNING, "Valid price required for Sell listings.").showAndWait();
-                        return;
-                    }
-                    listing = new SaleListing(seller, name, desc, cat, cond, meetup, price);
-                }
-                case "Lend" -> {
-                    Duration duration = parseDuration(daysField, hoursField);
-                    if (duration == null) {
-                        return;
-                    }
-                    try {
-                        listing = new LendListing(seller, name, desc, cat, cond, meetup, duration);
-                    } catch (IllegalArgumentException ex) {
-                        new Alert(Alert.AlertType.WARNING, "Valid lending duration required (at least 5 seconds).").showAndWait();
-                        return;
-                    }
-                }
-                default -> listing = new GiveawayListing(seller, name, desc, cat, cond, meetup);
-            }
-            DummyDataService.getInstance().listings().add(listing);
-            // Notify admin
-            DummyDataService.getInstance().notifications().notify(
-                    "admin", NotificationCategory.NEW_SUBMISSION,
-                    seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.",
-                    new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
-            new Alert(Alert.AlertType.INFORMATION,
-                    "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – in-memory only)").showAndWait();
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to post a listing.").showAndWait();
             showMyListings();
-        });
+            return;
+        }
 
-        form.getChildren().addAll(title,
-                new Label("Listing Type *"), typeCombo,
-                new Label("Item Name *"), nameField,
-                new Label("Category *"), catCombo,
-                new Label("Condition *"), condCombo,
-                new Label("Description"), descArea,
-                new Label("Price (Sell only)"), priceField,
-                new Label("Lending Duration (Lend only)"), durationRow,
-                new Label("Meet-up Location *"), meetupCombo,
-                photoNote, submitBtn);
+        listingForm = new ListingFormComponent(() -> seller, this::submitListing);
+        listingForm.setOnCancel(this::showMyListings);
 
-        ScrollPane scroll = new ScrollPane(form);
+        ScrollPane scroll = new ScrollPane(listingForm.getView());
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
     }
 
-    private Duration parseDuration(TextField daysField, TextField hoursField) {
-        String daysText = daysField.getText().trim();
-        String hoursText = hoursField.getText().trim();
-        if (daysText.isEmpty() && hoursText.isEmpty()) {
-            new Alert(Alert.AlertType.WARNING, "Lending duration is required for Lend listings.").showAndWait();
-            return null;
+    private void submitListing(ListingFormState state) {
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to post a listing.").showAndWait();
+            return;
         }
+
+        Map<String, String> errors = state.validate(seller);
+        if (!errors.isEmpty()) {
+            listingForm.showErrors(errors);
+            return;
+        }
+
         try {
-            long days = daysText.isEmpty() ? 0 : Long.parseLong(daysText);
-            long hours = hoursText.isEmpty() ? 0 : Long.parseLong(hoursText);
-            if (days < 0 || hours < 0) {
-                throw new NumberFormatException("negative");
-            }
-            return Duration.ofDays(days).plusHours(hours);
-        } catch (NumberFormatException ex) {
-            new Alert(Alert.AlertType.WARNING, "Lending days and hours must be whole, non-negative numbers.").showAndWait();
-            return null;
+            sellerService.createListing(user, state, photoStorage);
+        } catch (SecurityException ex) {
+            new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+            return;
+        } catch (RuntimeException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not save the listing: " + ex.getMessage()).showAndWait();
+            return;
         }
+
+        new Alert(Alert.AlertType.INFORMATION,
+                "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – saved locally)").showAndWait();
+        showMyListings();
     }
 
     @FXML
