@@ -873,7 +873,13 @@ public class BuyerDashboardController {
             }
             // TODO(#23): open the buyer's review once Manage Reviews exists.
             case REVIEW -> showHistory();
-            case USER -> showProfile();
+            case USER -> {
+                // A buyer is only ever told about their own account.
+                User me = SessionManager.getCurrentUser();
+                if (me != null && me.getUsername().equalsIgnoreCase(ref.getId())) {
+                    showProfile();
+                }
+            }
         }
     }
 
@@ -931,6 +937,9 @@ public class BuyerDashboardController {
             } catch (SecurityException | IllegalArgumentException ex) {
                 // SRS UC-1.7 A1 / A2: say which check failed; nothing was changed.
                 showMessage(message, ex.getMessage(), true);
+            } catch (RuntimeException ex) {
+                // The save itself failed and was rolled back.
+                showMessage(message, "Your profile could not be saved. Please try again.", true);
             }
         });
         // SRS UC-1.7 A3: discard the edits.

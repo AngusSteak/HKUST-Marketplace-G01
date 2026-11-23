@@ -35,6 +35,8 @@ public final class Database implements AutoCloseable {
     private static final String SCHEMA_RESOURCE = "/db/schema.sql";
 
     private final Connection connection;
+    /** Work to run once the current transaction commits; dropped if it rolls back. */
+    private final List<Runnable> afterCommit = new ArrayList<>();
 
     private Database(String url) {
         try {
@@ -119,13 +121,36 @@ public final class Database implements AutoCloseable {
                 work.run();
                 connection.commit();
             } catch (RuntimeException | Error e) {
+                afterCommit.clear();
                 connection.rollback();
                 throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
+            afterCommit.clear();
             throw new DatabaseException("Transaction failed", e);
+        }
+        List<Runnable> committed = new ArrayList<>(afterCommit);
+        afterCommit.clear();
+        committed.forEach(Runnable::run);
+    }
+
+    /**
+     * Runs {@code action} once the data it depends on is saved: straight away outside a
+     * transaction, or when the current transaction commits. If the transaction rolls back the
+     * action never runs. Stores use it to update their in-memory copy only for saved rows.
+     */
+    public synchronized void afterCommit(Runnable action) {
+        Objects.requireNonNull(action, "action");
+        try {
+            if (connection.getAutoCommit()) {
+                action.run();
+            } else {
+                afterCommit.add(action);
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not read the transaction state", e);
         }
     }
 

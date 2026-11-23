@@ -72,7 +72,12 @@ public class NotificationStore {
                 n.getId(), n.getUsername().toLowerCase(), n.getTitle(), n.getMessage(), n.getCategory(),
                 ref == null ? null : ref.getTarget(), ref == null ? null : ref.getId(),
                 n.getTimestamp(), n.isRead());
-        notifications.add(n);
+        // Only once saved: inside a transaction that later rolls back, the notice never appears.
+        db.afterCommit(() -> {
+            synchronized (this) {
+                notifications.add(n);
+            }
+        });
     }
 
     /** Marks the notification read (or unread) and saves the flag. */

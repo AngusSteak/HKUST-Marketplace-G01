@@ -102,6 +102,20 @@ class ProfileServiceTest {
         assertThrows(SecurityException.class, () -> profiles.updateProfile(alice, "Alice", "", "", ""));
     }
 
+    @Test
+    void aFailedSaveLeavesNoNoticeOrChangeBehind() {
+        data.users().register(new com.hkust.marketplace.models.Admin("admin2", "Second Admin", "hash",
+                com.hkust.marketplace.models.UserRole.ADMIN));
+        // The second admin's notice fails after the first one was written, so everything rolls back.
+        db.update("CREATE TRIGGER fail_notice BEFORE INSERT ON notifications WHEN NEW.recipient_username = 'admin2'"
+                + " BEGIN SELECT RAISE(ABORT, 'simulated failure'); END");
+
+        assertThrows(com.hkust.marketplace.persistence.DatabaseException.class,
+                () -> profiles.updateProfile(alice, "Alice Renamed", "", "", ""));
+
+        assertUnchanged();
+    }
+
     private void assertFailure(String expected, String current, String newPassword, String confirm) {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> profiles.updateProfile(alice, "Someone Else", current, newPassword, confirm));

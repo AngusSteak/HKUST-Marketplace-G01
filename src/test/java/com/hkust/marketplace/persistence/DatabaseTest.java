@@ -99,6 +99,28 @@ class DatabaseTest {
     }
 
     @Test
+    void afterCommitRunsAtOnceOutsideATransactionAndOnlyOnCommitInside() {
+        Database db = Database.inMemory();
+        List<String> ran = new java.util.ArrayList<>();
+
+        db.afterCommit(() -> ran.add("now"));
+        assertEquals(List.of("now"), ran);
+
+        db.inTransaction(() -> {
+            db.afterCommit(() -> ran.add("committed"));
+            assertEquals(List.of("now"), ran, "waits for the commit");
+        });
+        assertEquals(List.of("now", "committed"), ran);
+
+        assertThrows(IllegalStateException.class, () -> db.inTransaction(() -> {
+            db.afterCommit(() -> ran.add("rolled back"));
+            throw new IllegalStateException("boom");
+        }));
+        db.inTransaction(() -> { });
+        assertEquals(List.of("now", "committed"), ran, "a rolled-back action never runs");
+    }
+
+    @Test
     void fileDatabaseKeepsDataUnlessReset(@TempDir Path dir) {
         Path file = dir.resolve("nested/marketplace.db");
         try (Database db = Database.openFile(file, false)) {
