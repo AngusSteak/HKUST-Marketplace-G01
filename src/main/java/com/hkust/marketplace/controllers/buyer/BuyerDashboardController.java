@@ -584,8 +584,6 @@ public class BuyerDashboardController {
                 submit.get();
             } catch (IllegalArgumentException e) {
                 showMessage(error, e.getMessage(), true);
-                // Grow the window so the new message doesn't push the buttons out of view.
-                dialog.getDialogPane().getScene().getWindow().sizeToScene();
                 event.consume();
             } catch (SecurityException | IllegalStateException e) {
                 event.consume();
@@ -603,11 +601,14 @@ public class BuyerDashboardController {
         showMyDeals();
     }
 
+    /**
+     * The red message line in a request dialog. Its two lines are reserved from the start, because
+     * a dialog window does not grow when content appears, which would push the buttons out of view.
+     */
     private static Label dialogError() {
         Label error = new Label();
         error.setWrapText(true);
-        error.setManaged(false);
-        error.setVisible(false);
+        error.setMinHeight(36);
         return error;
     }
 
