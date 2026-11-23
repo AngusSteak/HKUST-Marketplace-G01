@@ -22,6 +22,7 @@ import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.ChatService;
+import com.hkust.marketplace.utils.DealHistorySearch;
 import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DealRequestService;
@@ -946,57 +947,86 @@ public class BuyerDashboardController {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
+    /** Deal History (SRS UC-1.6 S1): finished deals, filtered by date range, category, seller and keyword. */
     @FXML
     private void showHistory() {
         setActive(btnHistory, "Deal History");
         contentPane.getChildren().clear();
 
-        VBox root = new VBox(16);
+        VBox root = new VBox(12);
         root.setPadding(new Insets(4));
 
-        HBox filters = new HBox(12);
-        filters.setAlignment(Pos.CENTER_LEFT);
         DatePicker from = new DatePicker();
         from.setPromptText("From");
+        from.setPrefWidth(140);
         DatePicker to = new DatePicker();
         to.setPromptText("To");
-        TextField search = new TextField();
-        search.setPromptText("Search by title / seller...");
-        filters.getChildren().addAll(new Label("Date range:"), from, new Label("–"), to, search);
-        root.getChildren().add(filters);
+        to.setPrefWidth(140);
+        ComboBox<Option<Category>> category =
+                optionBox("All categories", Arrays.asList(Category.values()), Category::getLabel);
+        TextField seller = new TextField();
+        seller.setPromptText("Seller");
+        seller.setPrefWidth(140);
+        TextField keyword = new TextField();
+        keyword.setPromptText("Keyword in title...");
+        keyword.setPrefWidth(180);
+        Button clear = new Button("Clear");
+        clear.getStyleClass().addAll("btn-outline", "btn-sm");
+        HBox filters = new HBox(10, new Label("From"), from, new Label("to"), to, category, seller, keyword, clear);
+        filters.setAlignment(Pos.CENTER_LEFT);
 
-        TableView<String[]> table = new TableView<>();
+        Label error = new Label();
+        error.setStyle("-fx-text-fill: #c0392b; -fx-font-size: 13px;");
+        error.setManaged(false);
+        error.setVisible(false);
+
+        TableView<Deal> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        TableColumn<String[], String> c1 = new TableColumn<>("Item Title");
-        c1.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[0]));
-        TableColumn<String[], String> c2 = new TableColumn<>("Seller");
-        c2.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[1]));
-        TableColumn<String[], String> c3 = new TableColumn<>("Deal Date");
-        c3.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[2]));
-        TableColumn<String[], String> c4 = new TableColumn<>("Type");
-        c4.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[3]));
-        TableColumn<String[], String> c5 = new TableColumn<>("Outcome");
-        c5.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[4]));
-        table.getColumns().addAll(c1, c2, c3, c4, c5);
-        String buyer = SessionManager.getCurrentUser().getUsername();
-        List<String[]> rows = new ArrayList<>();
-        for (Deal deal : DummyDataService.getInstance().deals().pastDealsForBuyer(buyer)) {
-            rows.add(new String[]{
-                    deal.getListing().getTitle(),
-                    deal.getListing().getSellerFullName(),
-                    deal.getCompletedDate().format(DEAL_TIME),
-                    switch (deal.getDealType()) {
-                        case SOLD -> "Bought";
-                        case LENT -> "Borrowed";
-                        case GIVEN -> "Received";
-                    },
-                    statusLabel(deal.getStatus())});
-        }
-        table.setItems(FXCollections.observableArrayList(rows));
-        table.setPlaceholder(new Label("No past deals yet."));
-        // TODO(#22): wire the date range and search filters.
-        root.getChildren().add(table);
+        table.getColumns().add(column("Item Title", d -> d.getListing().getTitle()));
+        table.getColumns().add(column("Seller", Deal::getSellerDisplayName));
+        table.getColumns().add(column("Category", d -> d.getListing().getCategory().getLabel()));
+        table.getColumns().add(column("Deal Date", d -> d.getCompletedDate().format(DEAL_TIME)));
+        table.getColumns().add(column("Type", d -> switch (d.getDealType()) {
+            case SOLD -> "Bought";
+            case LENT -> "Borrowed";
+            case GIVEN -> "Received";
+        }));
+        table.getColumns().add(column("Outcome", d -> statusLabel(d.getStatus())));
+
+        String buyer = SessionManager.getCurrentUser() == null ? "" : SessionManager.getCurrentUser().getUsername();
+        List<Deal> past = DummyDataService.getInstance().deals().pastDealsForBuyer(buyer);
+        table.setPlaceholder(new Label(past.isEmpty() ? "No past deals yet." : "No deals match these filters."));
+
+        Runnable refresh = () -> {
+            try {
+                table.setItems(FXCollections.observableArrayList(DealHistorySearch.filter(past,
+                        new DealHistorySearch.Criteria(from.getValue(), to.getValue(), selected(category),
+                                seller.getText(), keyword.getText()))));
+                error.setManaged(false);
+                error.setVisible(false);
+            } catch (IllegalArgumentException e) {
+                // SRS UC-1.6 A4: say why and keep the current results.
+                error.setText(e.getMessage());
+                error.setManaged(true);
+                error.setVisible(true);
+            }
+        };
+        from.setOnAction(e -> refresh.run());
+        to.setOnAction(e -> refresh.run());
+        category.setOnAction(e -> refresh.run());
+        seller.textProperty().addListener((o, a, b) -> refresh.run());
+        keyword.textProperty().addListener((o, a, b) -> refresh.run());
+        clear.setOnAction(e -> showHistory());
+        refresh.run();
+
+        root.getChildren().addAll(filters, error, table);
         contentPane.getChildren().add(root);
+    }
+
+    private static TableColumn<Deal, String> column(String title, Function<Deal, String> value) {
+        TableColumn<Deal, String> column = new TableColumn<>(title);
+        column.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(value.apply(d.getValue())));
+        return column;
     }
 
     private static final DateTimeFormatter DEAL_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
