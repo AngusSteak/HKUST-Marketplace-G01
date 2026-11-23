@@ -36,7 +36,6 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
-import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
@@ -144,7 +143,7 @@ public class BuyerDashboardController {
             try {
                 criteria = new ListingSearch.Criteria(searchField.getText(),
                         selected(categoryFilter), selected(typeFilter), selected(conditionFilter),
-                        parsePrice(minPrice.getText()), parsePrice(maxPrice.getText()), sortBox.getValue());
+                        ListingSearch.parsePrice(minPrice.getText()), ListingSearch.parsePrice(maxPrice.getText()), sortBox.getValue());
                 found = ListingSearch.search(DummyDataService.getInstance().listings().all(), criteria);
             } catch (IllegalArgumentException ex) {
                 // SRS UC-1.3 A2: say why and keep the current results.
@@ -158,7 +157,7 @@ public class BuyerDashboardController {
             results.getChildren().clear();
             if (found.isEmpty()) {
                 // SRS UC-1.3 A1
-                resultCount.setText("");
+                resultCount.setText("0 listings");
                 Label empty = new Label("No listings found.");
                 empty.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 15px;");
                 results.getChildren().add(empty);
@@ -195,18 +194,6 @@ public class BuyerDashboardController {
         field.setPromptText(prompt);
         field.setPrefWidth(90);
         return field;
-    }
-
-    /** A blank price means "no limit". */
-    private static BigDecimal parsePrice(String text) {
-        if (text == null || text.isBlank()) {
-            return null;
-        }
-        try {
-            return new BigDecimal(text.trim().replace(",", ""));
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Prices must be numbers, e.g. 50 or 120.50.");
-        }
     }
 
     private static String typeLabel(ListingType type) {
@@ -299,9 +286,12 @@ public class BuyerDashboardController {
         box.setMinHeight(120);
         box.setStyle("-fx-background-color: #eef2f7; -fx-background-radius: 8;");
         Path photo = listing.getPhotoPaths().isEmpty() ? null : Path.of(listing.getPhotoPaths().get(0));
-        if (photo != null && Files.isRegularFile(photo)) {
-            ImageView image = new ImageView(new Image(photo.toUri().toString(), 228, 120, true, true, true));
-            box.getChildren().add(image);
+        // Loaded synchronously so a missing or unreadable file falls back to the placeholder.
+        Image image = photo != null && Files.isRegularFile(photo)
+                ? new Image(photo.toUri().toString(), 228, 120, true, true, false)
+                : null;
+        if (image != null && !image.isError()) {
+            box.getChildren().add(new ImageView(image));
         } else {
             Label none = new Label("No photo");
             none.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");

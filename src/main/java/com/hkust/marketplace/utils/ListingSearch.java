@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * The Browse Marketplace rules (SRS UC-1.3): which listings a buyer sees, and the search,
@@ -82,7 +83,7 @@ public final class ListingSearch {
     public static List<Listing> search(Collection<Listing> listings, Criteria criteria) {
         Objects.requireNonNull(criteria, "criteria");
         requireValidPriceRange(criteria.minPrice(), criteria.maxPrice());
-        String keyword = criteria.keyword() == null ? "" : criteria.keyword().trim().toLowerCase(Locale.ROOT);
+        String keyword = normalise(criteria.keyword());
         return listings.stream()
                 .filter(ListingSearch::isBrowsable)
                 .filter(l -> keyword.isEmpty() || contains(l.getTitle(), keyword) || contains(l.getDescription(), keyword))
@@ -112,6 +113,31 @@ public final class ListingSearch {
         return listing.getReviewedAt() != null ? listing.getReviewedAt() : listing.getSubmittedDate();
     }
 
+    /** Plain digits, or digits grouped in threes with commas (1,200), with optional cents. */
+    private static final Pattern PRICE = Pattern.compile("(\\d+|\\d{1,3}(,\\d{3})+)(\\.\\d+)?");
+
+    /** What the screen shows for a price that isn't a number. */
+    public static final String INVALID_PRICE = "Prices must be numbers, e.g. 50, 1,200 or 120.50.";
+
+    /**
+     * Reads a price box: blank means "no limit". A leading minus is accepted here so that the
+     * search reports it as an invalid range (A2).
+     *
+     * @throws IllegalArgumentException with {@link #INVALID_PRICE} for anything else, such as
+     *         letters or badly grouped commas ("1,2,3")
+     */
+    public static BigDecimal parsePrice(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String value = text.trim();
+        String digits = value.startsWith("-") ? value.substring(1) : value;
+        if (!PRICE.matcher(digits).matches()) {
+            throw new IllegalArgumentException(INVALID_PRICE);
+        }
+        return new BigDecimal(value.replace(",", ""));
+    }
+
     /** @throws IllegalArgumentException with {@link #INVALID_PRICE_RANGE} if the range is invalid */
     public static void requireValidPriceRange(BigDecimal min, BigDecimal max) {
         boolean negative = (min != null && min.signum() < 0) || (max != null && max.signum() < 0);
@@ -121,8 +147,13 @@ public final class ListingSearch {
         }
     }
 
+    /** Matches ignoring case and repeated spaces, so "calculus   textbook" finds "Calculus Textbook". */
     private static boolean contains(String text, String keyword) {
-        return text != null && text.toLowerCase(Locale.ROOT).contains(keyword);
+        return text != null && normalise(text).contains(keyword);
+    }
+
+    private static String normalise(String text) {
+        return text == null ? "" : text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     /** The sale price, or {@code null} for a listing without one. */

@@ -76,6 +76,7 @@ class ListingSearchTest {
         assertEquals(List.of(calculator, textbook), search(keyword("  CALCUL ")));   // both titles
         assertEquals(List.of(charger), search(keyword("apple")));                    // description only
         assertEquals(search(Criteria.all()), search(keyword("   ")));                // blank = no search
+        assertEquals(List.of(textbook), search(keyword("calculus   TEXTBOOK")));     // repeated spaces
     }
 
     @Test
@@ -107,6 +108,20 @@ class ListingSearchTest {
         assertThrows(IllegalArgumentException.class, () -> search(price("-1", null)));
         assertThrows(IllegalArgumentException.class, () -> search(price(null, "-5")));
         assertEquals(List.of(charger), search(price("250", "250")), "min equal to max is fine");
+    }
+
+    @Test
+    void priceBoxesAcceptPlainOrGroupedNumbersOnly() {
+        assertEquals(null, ListingSearch.parsePrice("  "));
+        assertEquals(new BigDecimal("50"), ListingSearch.parsePrice(" 50 "));
+        assertEquals(new BigDecimal("120.50"), ListingSearch.parsePrice("120.50"));
+        assertEquals(new BigDecimal("1200"), ListingSearch.parsePrice("1,200"));
+        assertEquals(new BigDecimal("-5"), ListingSearch.parsePrice("-5"), "reported later as an invalid range");
+        for (String bad : List.of("abc", "1,2,3", "12,00", "1.2.3", "HK$50", "5-")) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> ListingSearch.parsePrice(bad), bad);
+            assertEquals(ListingSearch.INVALID_PRICE, e.getMessage());
+        }
     }
 
     @Test
