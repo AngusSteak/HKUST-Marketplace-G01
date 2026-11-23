@@ -73,6 +73,30 @@ public class ListingStore {
         return listings.get(id);
     }
 
+    /** The listings with these ids, in the same order, skipping ids that no longer exist. */
+    public List<Listing> findAll(List<String> ids) {
+        return ids.stream().map(listings::get).filter(Objects::nonNull).toList();
+    }
+
+    /**
+     * Counts one view of a listing's details (SRS UC-1.3 S1 step 2) and saves it. Synchronized
+     * so two buyers opening the listing at once both count.
+     *
+     * @throws IllegalArgumentException if the listing is not in this store, or its row is gone
+     *         from the database (e.g. deleted a moment ago); nothing changes then
+     */
+    public synchronized void recordView(Listing listing) {
+        Objects.requireNonNull(listing, "listing");
+        if (listings.get(listing.getId()) != listing) {
+            throw new IllegalArgumentException("Unknown listing: " + listing.getId());
+        }
+        int views = listing.getViewCount() + 1;
+        if (db.update("UPDATE listings SET view_count = ? WHERE id = ?", views, listing.getId()) == 0) {
+            throw new IllegalArgumentException("Listing " + listing.getId() + " no longer exists");
+        }
+        listing.setViewCount(views);
+    }
+
     /** Adds a new listing (giving it the next {@code L...} id if it has none) and saves it. */
     public void add(Listing listing) {
         if (listing.getId() == null) {
