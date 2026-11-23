@@ -96,6 +96,34 @@ class LoanTimerTest {
                 .filter(n -> n.getMessage().startsWith("Reminder")).count(), "reminded before the due date");
     }
 
+    @Test
+    void stopWaitsForTheTimerAndASecondStopIsHarmless() {
+        LoanTimer timer = new LoanTimer(data);
+        timer.start();
+        timer.stop();
+        timer.stop();
+        loan(java.time.Duration.ofDays(1));
+        // after stop nothing runs: a check in this thread still works on the open database
+        assertEquals(0, timerAt(LocalDateTime.now()).check());
+    }
+
+    @Test
+    void listingsCanBeReadWhileTheTimerUpdatesThem() throws InterruptedException {
+        Thread reader = new Thread(() -> {
+            for (int i = 0; i < 20_000; i++) {
+                data.listings().all().forEach(l -> l.getStatus());
+                data.listings().live();
+            }
+        });
+        reader.start();
+        for (int i = 0; i < 200; i++) {
+            com.hkust.marketplace.models.Listing charger = data.listings().find("L101");
+            data.listings().update(charger);
+        }
+        reader.join(10_000);
+        assertEquals(5, data.listings().all().size());
+    }
+
     private Deal loan(java.time.Duration length) {
         LocalDateTime start = LocalDateTime.now().plusMinutes(1).withNano(0);
         BorrowRequest request = new DealRequestService(data).submitBorrow(data.users().find("alice"),

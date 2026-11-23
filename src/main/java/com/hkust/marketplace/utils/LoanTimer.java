@@ -38,6 +38,8 @@ public final class LoanTimer {
     private final MyDealsService myDeals;
     private final Clock clock;
     private ScheduledExecutorService executor;
+    /** Set by {@link #stop()} so a check in progress stops before touching the database again. */
+    private volatile boolean stopping;
 
     public LoanTimer(DummyDataService data) {
         this(data, Clock.systemDefaultZone());
@@ -54,6 +56,7 @@ public final class LoanTimer {
         if (executor != null) {
             return;
         }
+        stopping = false;
         executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "loan-timer");
             thread.setDaemon(true);
@@ -62,15 +65,23 @@ public final class LoanTimer {
         executor.scheduleWithFixedDelay(this::safeCheck, 0, TICK.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** Stops the timer, waiting briefly for a check in progress, e.g. before the database closes. */
+    /**
+     * Stops the timer and waits for a check in progress to finish, so the database can be closed
+     * safely afterwards. A running check notices the stop and ends after the loan it is on.
+     */
     public synchronized void stop() {
         if (executor == null) {
             return;
         }
+        stopping = true;
         executor.shutdown();
         try {
-            executor.awaitTermination(2, TimeUnit.SECONDS);
+            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+                executor.awaitTermination(2, TimeUnit.SECONDS);
+            }
         } catch (InterruptedException e) {
+            executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
         executor = null;
@@ -94,6 +105,9 @@ public final class LoanTimer {
         LocalDateTime now = LocalDateTime.now(clock);
         int returned = 0;
         for (Deal deal : data.deals().allDeals()) {
+            if (stopping) {
+                break;
+            }
             if (deal.getDealType() != DealType.LENT || deal.getStatus() != DealStatus.ACTIVE) {
                 continue;
             }
