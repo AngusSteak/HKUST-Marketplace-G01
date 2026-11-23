@@ -4,6 +4,7 @@ import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
+import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -293,8 +294,10 @@ public class AdminDashboardController {
 
             VBox info = new VBox(4);
             HBox.setHgrow(info, Priority.ALWAYS);
+            UserStore users = DummyDataService.getInstance().users();
             Label stars = new Label("★".repeat(r.getRating()) + "☆".repeat(5 - r.getRating()) +
-                    "  @" + r.getSellerUsername() + " by @" + r.getBuyerUsername());
+                    "  " + users.historicalLabel(r.getSellerUsername())
+                    + " by " + users.historicalLabel(r.getBuyerUsername()));
             stars.setStyle("-fx-font-weight: bold;");
             Label comment = new Label(r.getComment());
             comment.setWrapText(true);

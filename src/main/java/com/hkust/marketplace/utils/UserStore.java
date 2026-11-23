@@ -33,14 +33,23 @@ public class UserStore {
         users.putIfAbsent(user.getUsername().toLowerCase(), user);
     }
 
+    /** Active and disabled accounts only; soft-deleted accounts stay in {@link #find}. */
     public Collection<User> all() {
-        return users.values();
+        return users.values().stream()
+                .filter(u -> !u.isDeleted())
+                .collect(Collectors.toList());
     }
 
     public List<User> byRole(UserRole role) {
-        return users.values().stream()
+        return all().stream()
                 .filter(u -> u.getRole() == role)
                 .collect(Collectors.toList());
+    }
+
+    /** Label for a username stored in a historical record (review, deal, chat). */
+    public String historicalLabel(String username) {
+        User user = find(username);
+        return user != null && user.isDeleted() ? "deleted user" : "@" + username;
     }
 
     void seed() {

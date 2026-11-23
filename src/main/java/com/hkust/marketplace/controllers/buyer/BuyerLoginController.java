@@ -35,6 +35,7 @@ public class BuyerLoginController {
             case USER_NOT_FOUND -> showError("User not found. Please check your username.");
             case WRONG_PORTAL -> showError("This account is not a Buyer account. Please use the correct portal.");
             case WRONG_PASSWORD -> showError("Incorrect password. Please try again.");
+            case DELETED -> showError("This account has been deleted and cannot log in.");
             case DISABLED -> showError("This account has been deactivated. Contact admin.");
             case OK -> {
                 SessionManager.login(user);

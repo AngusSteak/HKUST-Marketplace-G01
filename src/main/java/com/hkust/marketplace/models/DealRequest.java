@@ -42,5 +42,9 @@ public abstract class DealRequest {
     public String getBuyerUsername() { return buyer.getUsername(); }
     public String getSellerUsername() { return listing.getSellerUsername(); }
 
+    /** Display names for historical records: a soft-deleted party reads "deleted user". */
+    public String getBuyerDisplayName() { return buyer.getDisplayName(); }
+    public String getSellerDisplayName() { return listing.getSeller().getDisplayName(); }
+
     void setStatus(RequestStatus status) { this.status = status; }
 }

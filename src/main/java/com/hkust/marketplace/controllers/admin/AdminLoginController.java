@@ -32,6 +32,7 @@ public class AdminLoginController {
         switch (LoginGate.check(user, UserRole.ADMIN, password)) {
             case USER_NOT_FOUND, WRONG_PORTAL -> showError("Invalid admin credentials.");
             case WRONG_PASSWORD -> showError("Incorrect password.");
+            case DELETED -> showError("This account has been deleted and cannot log in.");
             case DISABLED -> showError("This account has been deactivated. Contact admin.");
             case OK -> {
                 SessionManager.login(user);
