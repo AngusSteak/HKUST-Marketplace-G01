@@ -8,6 +8,8 @@ import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
+import com.hkust.marketplace.persistence.Database;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -24,7 +26,20 @@ class FavouriteStoreTest {
     private static final Seller CHARLIE = new Seller("charlie", "Charlie Lee", "hash", UserRole.SELLER);
     private static final Seller DIANA = new Seller("diana", "Diana Ng", "hash", UserRole.SELLER);
 
-    private final FavouriteStore store = new FavouriteStore();
+    private final Database db = Database.inMemory();
+    private final FavouriteStore store = new FavouriteStore(db);
+
+    @BeforeEach
+    void saveUsersAndListings() {
+        UserStore users = new UserStore(db);
+        List.of(ALICE, BOB, CHARLIE, DIANA).forEach(users::register);
+        for (String id : List.of("L1", "L2", "L3")) {
+            db.update("INSERT INTO listings (id, type, seller_username, title, description, category,"
+                            + " condition, meetup_location, status, submitted_date)"
+                            + " VALUES (?, 'GIVEAWAY', 'charlie', 'Test item', '', 'ELECTRONICS', 'USED',"
+                            + " 'LIBRARY', 'LIVE', '2026-11-01T09:00')", id);
+        }
+    }
 
     @Test
     void toggleFavouriteAddsThenRemoves() {
@@ -109,6 +124,25 @@ class FavouriteStoreTest {
 
         assertEquals(List.of("L101"), data.favourites().favouriteListingIds(ALICE));
         assertEquals(List.of("charlie"), data.favourites().followedSellers(ALICE));
+    }
+
+    @Test
+    void favouritesAndFollowsSurviveAReloadInOrder() {
+        store.toggleFavourite(ALICE, listing("L2"));
+        store.toggleFavourite(ALICE, listing("L1"));
+        store.toggleFavourite(ALICE, listing("L3"));
+        store.toggleFavourite(ALICE, listing("L1")); // removed again
+        store.toggleFavourite(BOB, listing("L1"));
+        store.toggleFollow(ALICE, DIANA);
+        store.toggleFollow(ALICE, CHARLIE);
+
+        FavouriteStore reloaded = new FavouriteStore(db);
+        reloaded.load();
+
+        assertEquals(List.of("L2", "L3"), reloaded.favouriteListingIds(ALICE));
+        assertEquals(List.of("L1"), reloaded.favouriteListingIds(BOB));
+        assertEquals(List.of("diana", "charlie"), reloaded.followedSellers(ALICE));
+        assertTrue(reloaded.toggleFavourite(ALICE, listing("L1")), "toggling continues from the saved state");
     }
 
     private static Listing listing(String id) {

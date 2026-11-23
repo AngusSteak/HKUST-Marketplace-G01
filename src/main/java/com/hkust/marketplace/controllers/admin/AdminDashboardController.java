@@ -165,13 +165,17 @@ public class AdminDashboardController {
             edit.getStyleClass().addAll("btn-outline", "btn-sm");
             edit.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Edit listing dialog (demo).").showAndWait());
 
-            Button remove = new Button("Remove");
+            Button remove = new Button("Take down");
             remove.getStyleClass().addAll("btn-danger", "btn-sm");
             remove.setOnAction(e -> {
-                Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Permanently remove this listing?");
+                Alert conf = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Take this listing down? It stays in deal history but leaves the marketplace.");
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
-                        DummyDataService.getInstance().listings().remove(l.getId());
+                        // A taken-down listing keeps its deals, chats and reports (#34 adds the full flow).
+                        l.setStatus(ListingStatus.TAKEN_DOWN);
+                        l.setTakedownReason("Removed by admin");
+                        DummyDataService.getInstance().listings().update(l);
                         DummyDataService.getInstance().audit().recordTakeDown(adminUsername(), l.getId());
                         showAllListings();
                     }

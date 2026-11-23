@@ -2,6 +2,7 @@ package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.models.*;
+import com.hkust.marketplace.persistence.DatabaseException;
 import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
@@ -116,7 +117,12 @@ public class SellerDashboardController {
             Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Delete this listing?");
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
-                    DummyDataService.getInstance().listings().remove(l.getId());
+                    try {
+                        DummyDataService.getInstance().listings().remove(l.getId());
+                    } catch (DatabaseException ex) {
+                        new Alert(Alert.AlertType.WARNING, "This listing has offers, deals, chats or"
+                                + " reports, so it can't be deleted.").showAndWait();
+                    }
                     showMyListings();
                 }
             });
