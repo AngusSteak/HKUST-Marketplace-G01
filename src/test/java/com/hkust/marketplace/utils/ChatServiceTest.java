@@ -521,19 +521,23 @@ class ChatServiceTest {
         return listing;
     }
 
-    private static Listing saleListing(String id, Seller seller, String price) {
+    /** Saved like a real listing, so requests on it can be saved too. */
+    private Listing saleListing(String id, Seller seller, String price) {
         Listing listing = new SaleListing(seller, "Sale " + id, "", Category.ELECTRONICS,
                 Condition.USED, Location.LIBRARY, Money.of(price));
         listing.setId(id);
         listing.setStatus(ListingStatus.LIVE);
+        data.listings().add(listing);
         return listing;
     }
 
-    private static Listing lendListing(String id, Seller seller, Duration duration) {
+    /** Saved like a real listing, so requests on it can be saved too. */
+    private Listing lendListing(String id, Seller seller, Duration duration) {
         Listing listing = new LendListing(seller, "Lend " + id, "", Category.ELECTRONICS,
                 Condition.USED, Location.LIBRARY, duration);
         listing.setId(id);
         listing.setStatus(ListingStatus.LIVE);
+        data.listings().add(listing);
         return listing;
     }
 }

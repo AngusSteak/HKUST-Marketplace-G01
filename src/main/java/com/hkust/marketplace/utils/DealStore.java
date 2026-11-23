@@ -1,29 +1,45 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealLifecycle;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.DealStatus;
 import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.persistence.Database;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * In-memory deal requests and deals. All state changes go through {@link #lifecycle()};
- * this store only answers queries for the portals.
+ * Deal requests and deals. All state changes go through {@link #lifecycle()}; after every
+ * transition this store saves the listing's requests, deals and status to the
+ * {@code deal_requests}, {@code deals} and {@code listings} tables, and {@link #load} rebuilds
+ * them at startup. Otherwise it only answers queries for the portals.
  */
 public class DealStore {
 
     private final DealLifecycle lifecycle = new DealLifecycle();
+    private final Database db;
+    private final ListingStore listings;
+
+    DealStore(Database db, ListingStore listings) {
+        this.db = Objects.requireNonNull(db, "db");
+        this.listings = Objects.requireNonNull(listings, "listings");
+        lifecycle.setListener(this::save);
+    }
 
     /** The transition engine; use it to submit, counter, accept, return or complete. */
     public DealLifecycle lifecycle() {
@@ -36,6 +52,11 @@ public class DealStore {
 
     public List<Deal> allDeals() {
         return lifecycle.deals();
+    }
+
+    /** A request by id (e.g. the one behind a Formal Offer message), or {@code null}. */
+    public DealRequest findRequest(String id) {
+        return lifecycle.findRequest(id);
     }
 
     /** Every request the buyer has made, in submit order. */
@@ -87,6 +108,102 @@ public class DealStore {
         Collections.reverse(past);
         past.sort(Comparator.comparing(Deal::getCompletedDate).reversed());
         return List.copyOf(past);
+    }
+
+    // ---------- Persistence ----------
+
+    /** Saves the listing's requests and deals, then the listing itself (its status changed). */
+    private void save(Listing listing) {
+        db.inTransaction(() -> {
+            for (DealRequest request : lifecycle.requestsFor(listing)) {
+                saveRequest(request);
+            }
+            for (Deal deal : lifecycle.deals()) {
+                if (deal.getListing().getId().equals(listing.getId())) {
+                    saveDeal(deal);
+                }
+            }
+            listings.update(listing);
+        });
+    }
+
+    private void saveRequest(DealRequest request) {
+        BigDecimal offered = null, counter = null;
+        LocalDateTime start = null, end = null, counterStart = null, counterEnd = null;
+        String type;
+        if (request instanceof PriceOffer offer) {
+            type = "OFFER";
+            offered = offer.getOfferedPrice();
+            counter = offer.getCounterPrice();
+        } else if (request instanceof BorrowRequest borrow) {
+            type = "BORROW";
+            start = borrow.getStartDate();
+            end = borrow.getEndDate();
+            counterStart = borrow.getCounterStart();
+            counterEnd = borrow.getCounterEnd();
+        } else {
+            type = "CLAIM";
+        }
+        db.update("INSERT INTO deal_requests (id, type, buyer_username, listing_id, submitted_time, status,"
+                        + " offered_price, counter_price, start_date, end_date, counter_start, counter_end)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                        + " ON CONFLICT (id) DO UPDATE SET status = excluded.status,"
+                        + " counter_price = excluded.counter_price, counter_start = excluded.counter_start,"
+                        + " counter_end = excluded.counter_end",
+                request.getId(), type, request.getBuyerUsername().toLowerCase(), request.getListing().getId(),
+                request.getSubmittedTime(), request.getStatus(), offered, counter, start, end,
+                counterStart, counterEnd);
+    }
+
+    private void saveDeal(Deal deal) {
+        db.update("INSERT INTO deals (id, request_id, start_date, due_date, completed_date, status)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)"
+                        + " ON CONFLICT (id) DO UPDATE SET completed_date = excluded.completed_date,"
+                        + " status = excluded.status",
+                deal.getId(), deal.getRequest().getId(), deal.getStartDate(), deal.getDueDate(),
+                deal.getCompletedDate(), deal.getStatus());
+    }
+
+    /**
+     * Rebuilds the saved requests and deals, in the order they were made, on the already loaded
+     * users and listings. Pending claims and active deals hold their listings again, so the
+     * "first claim wins" and "one active deal per listing" rules still hold after a restart.
+     */
+    void load(UserStore users, ListingStore listingStore) {
+        db.query("SELECT * FROM deal_requests ORDER BY CAST(substr(id, 2) AS INTEGER)",
+                row -> restoreRequest(row, users, listingStore));
+        db.query("SELECT * FROM deals ORDER BY CAST(substr(id, 2) AS INTEGER)", row -> lifecycle.restoreDeal(
+                row.getString("id"),
+                lifecycle.findRequest(row.getString("request_id")),
+                Database.dateTime(row, "start_date"),
+                Database.dateTime(row, "completed_date"),
+                DealStatus.valueOf(row.getString("status"))));
+    }
+
+    private DealRequest restoreRequest(ResultSet row, UserStore users, ListingStore listingStore)
+            throws SQLException {
+        String id = row.getString("id");
+        if (!(users.find(row.getString("buyer_username")) instanceof Buyer buyer)) {
+            throw new IllegalStateException("Request " + id + " has unknown buyer "
+                    + row.getString("buyer_username"));
+        }
+        Listing listing = listingStore.find(row.getString("listing_id"));
+        if (listing == null) {
+            throw new IllegalStateException("Request " + id + " is on unknown listing "
+                    + row.getString("listing_id"));
+        }
+        LocalDateTime submitted = Database.dateTime(row, "submitted_time");
+        RequestStatus status = RequestStatus.valueOf(row.getString("status"));
+        return switch (row.getString("type")) {
+            case "OFFER" -> lifecycle.restoreOffer(id, buyer, listing, Database.decimal(row, "offered_price"),
+                    Database.decimal(row, "counter_price"), submitted, status);
+            case "BORROW" -> lifecycle.restoreBorrow(id, buyer, listing,
+                    Database.dateTime(row, "start_date"), Database.dateTime(row, "end_date"),
+                    Database.dateTime(row, "counter_start"), Database.dateTime(row, "counter_end"),
+                    submitted, status);
+            case "CLAIM" -> lifecycle.restoreClaim(id, buyer, listing, submitted, status);
+            default -> throw new IllegalStateException("Unknown request type " + row.getString("type"));
+        };
     }
 
     private static Predicate<DealRequest> byUser(String username,

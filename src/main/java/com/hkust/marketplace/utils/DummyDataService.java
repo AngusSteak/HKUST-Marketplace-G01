@@ -13,8 +13,8 @@ import java.util.Objects;
  * The application's data, split into per-area stores and backed by a local SQLite database
  * ({@value #DATABASE_FILE}).
  *
- * <p>Users and listings are saved to the database (#55); the other stores are still in-memory
- * until #56, #57 and #58 persist them. Until then the database is recreated and re-seeded on
+ * <p>Users, listings (#55), deals, favourites and follows (#56) are saved to the database; the
+ * other stores are still in-memory until #57 and #58 persist them. Until then the database is recreated and re-seeded on
  * every launch (see {@link #RESET_PROPERTY}), so all stores stay consistent with each other.
  */
 public class DummyDataService {
@@ -25,7 +25,7 @@ public class DummyDataService {
     /**
      * System property: {@code true} recreates the database on every launch, {@code false} keeps
      * saved data across restarts. Defaults to {@code true} until every store is persisted.
-     * TODO(#59): default to false once #56, #57 and #58 are merged.
+     * TODO(#59): default to false once #57 and #58 are merged.
      */
     public static final String RESET_PROPERTY = "marketplace.resetDb";
 
@@ -34,10 +34,10 @@ public class DummyDataService {
     private final Database db;
     private final UserStore users;
     private final ListingStore listings;
-    private final DealStore deals = new DealStore();
+    private final DealStore deals;
     private final NotificationStore notifications = new NotificationStore();
     private final ReviewStore reviews = new ReviewStore();
-    private final FavouriteStore favourites = new FavouriteStore();
+    private final FavouriteStore favourites;
     private final AuditStore audit = new AuditStore();
     private final ReportStore reports = new ReportStore();
     private final ChatStore chats = new ChatStore();
@@ -56,6 +56,8 @@ public class DummyDataService {
         this.db = Objects.requireNonNull(db, "db");
         this.users = new UserStore(db);
         this.listings = new ListingStore(db);
+        this.deals = new DealStore(db, listings);
+        this.favourites = new FavouriteStore(db);
     }
 
     /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
@@ -69,7 +71,7 @@ public class DummyDataService {
 
     /**
      * Opens the stores on {@code db}: a fresh (empty) database is seeded with the demo data,
-     * otherwise the saved users and listings are loaded.
+     * otherwise the saved data is loaded (users first, since everything else refers to them).
      */
     static DummyDataService open(Database db) {
         DummyDataService data = new DummyDataService(db);
@@ -78,6 +80,8 @@ public class DummyDataService {
         } else {
             data.users.load();
             data.listings.load(data.users);
+            data.deals.load(data.users, data.listings);
+            data.favourites.load();
         }
         return data;
     }

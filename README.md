@@ -63,10 +63,10 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 - **Schema:** [`src/main/resources/db/schema.sql`](src/main/resources/db/schema.sql), applied on every start (`CREATE TABLE IF NOT EXISTS`). Open the file with [DB Browser for SQLite](https://sqlitebrowser.org/) or `sqlite3` to inspect it.
 - **How it works:** each store (`users()`, `listings()`, ...) keeps its objects in memory, writes every change to the database straight away, and reads everything back once at startup (`persistence/Database`, `utils/DummyDataService`).
 - **Reset to the demo data:** delete the `data/` folder.
-- **Migration status:** users and listings are saved now (#55). Deals, favourites, chats, notifications, reviews, reports and the audit log follow in #56, #57 and #58. Until then the database is **recreated on every launch** so all stores stay consistent. To keep data across restarts already (users and listings only), run `MarketplaceApp` from IntelliJ with the VM option `-Dmarketplace.resetDb=false` (Run → Edit Configurations → Modify options → Add VM options). #59 makes keeping data the default.
+- **Migration status:** users and listings (#55), and deal requests, deals, favourites and follows (#56) are saved now. Chats, notifications, reviews, reports and the audit log follow in #57 and #58. Until then the database is **recreated on every launch** so all stores stay consistent. To keep data across restarts already (only what is saved so far), run `MarketplaceApp` from IntelliJ with the VM option `-Dmarketplace.resetDb=false` (Run → Edit Configurations → Modify options → Add VM options). #59 makes keeping data the default.
 - **Tests** use a private in-memory SQLite database per `new DummyDataService()`, so they never touch `data/`.
 
-**Team rule:** screens never change a model object and skip the store. Every change goes through a store method, e.g. `listings().update(listing)` after changing a listing or `users().save(user)` after changing an account, so it is written to the database.
+**Team rule:** screens never change a model object and skip the store. Every change goes through a store method, e.g. `listings().update(listing)` after changing a listing or `users().save(user)` after changing an account, so it is written to the database. Requests and deals change only through `deals().lifecycle()`, which saves them (and the listing status they set) itself. A listing with requests or deals cannot be deleted; take it down by status instead.
 
 ## Security State (Demo)
 

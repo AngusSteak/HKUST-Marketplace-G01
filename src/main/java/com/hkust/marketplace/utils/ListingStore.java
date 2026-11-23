@@ -120,10 +120,10 @@ public class ListingStore {
     }
 
     /**
-     * Deletes a listing and its photos. Kept for the current admin "Remove" button only; a
-     * listing with requests or deals should be taken down by status instead (#26, #34), since
-     * once deals and chats are saved (#56, #57) the database will refuse to delete a listing
-     * that their rows point to, and this throws {@link com.hkust.marketplace.persistence.DatabaseException}.
+     * Deletes a listing and its photos, e.g. a seller withdrawing a listing nobody has acted on.
+     * A listing with requests or deals (and, from #57/#58, chats or reports) cannot be deleted:
+     * the database refuses, this throws {@link com.hkust.marketplace.persistence.DatabaseException}
+     * and nothing changes. Take such a listing down by status instead (#26, #34).
      */
     public void remove(String id) {
         db.update("DELETE FROM listings WHERE id = ?", id);
