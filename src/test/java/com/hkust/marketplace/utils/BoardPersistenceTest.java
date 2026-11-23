@@ -54,6 +54,20 @@ class BoardPersistenceTest {
     }
 
     @Test
+    void notificationsFilterByCategoryAndCountUnread() {
+        seeded.notifications().notify("alice", NotificationCategory.ANNOUNCEMENT, "Welcome!", null);
+        Notification offer = seeded.notifications().forUser("alice", NotificationCategory.OFFER_UPDATE).get(0);
+
+        assertEquals(2, seeded.notifications().forUser("alice", null).size());
+        assertEquals(List.of("Welcome!"), seeded.notifications().forUser("alice", NotificationCategory.ANNOUNCEMENT)
+                .stream().map(Notification::getMessage).toList());
+        assertEquals(2, seeded.notifications().unreadCount("alice"));
+        seeded.notifications().markRead(offer, true);
+        assertEquals(1, seeded.notifications().unreadCount("alice"));
+        assertEquals(1, DummyDataService.open(db).notifications().unreadCount("alice"));
+    }
+
+    @Test
     void reviewsReloadAndKeepHiddenAndReply() {
         Review review = seeded.reviews().all().get(0);
         review.setHidden(true);
