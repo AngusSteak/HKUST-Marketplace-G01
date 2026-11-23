@@ -13,8 +13,8 @@ import java.util.Objects;
  * The application's data, split into per-area stores and backed by a local SQLite database
  * ({@value #DATABASE_FILE}).
  *
- * <p>Users, listings (#55), deals, favourites, follows (#56) and chats (#57) are saved to the
- * database; the other stores are still in-memory until #58 persists them. Until then the database is recreated and re-seeded on
+ * <p>Every store is saved to the database: users and listings (#55); deals, favourites and
+ * follows (#56); chats (#57); notifications, reviews, reports and the audit log (#58). Until then the database is recreated and re-seeded on
  * every launch (see {@link #RESET_PROPERTY}), so all stores stay consistent with each other.
  */
 public class DummyDataService {
@@ -25,7 +25,7 @@ public class DummyDataService {
     /**
      * System property: {@code true} recreates the database on every launch, {@code false} keeps
      * saved data across restarts. Defaults to {@code true} until every store is persisted.
-     * TODO(#59): default to false once #58 is merged.
+     * TODO(#59): default to false now that every store is saved.
      */
     public static final String RESET_PROPERTY = "marketplace.resetDb";
 
@@ -35,11 +35,11 @@ public class DummyDataService {
     private final UserStore users;
     private final ListingStore listings;
     private final DealStore deals;
-    private final NotificationStore notifications = new NotificationStore();
-    private final ReviewStore reviews = new ReviewStore();
+    private final NotificationStore notifications;
+    private final ReviewStore reviews;
     private final FavouriteStore favourites;
-    private final AuditStore audit = new AuditStore();
-    private final ReportStore reports = new ReportStore();
+    private final AuditStore audit;
+    private final ReportStore reports;
     private final ChatStore chats;
 
     /**
@@ -59,6 +59,10 @@ public class DummyDataService {
         this.deals = new DealStore(db, listings);
         this.favourites = new FavouriteStore(db);
         this.chats = new ChatStore(db);
+        this.notifications = new NotificationStore(db);
+        this.reviews = new ReviewStore(db);
+        this.reports = new ReportStore(db);
+        this.audit = new AuditStore(db);
     }
 
     /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
@@ -84,6 +88,10 @@ public class DummyDataService {
             data.deals.load(data.users, data.listings);
             data.favourites.load();
             data.chats.load(data.users, data.listings, data.deals);
+            data.notifications.load();
+            data.reviews.load();
+            data.reports.load(data.users, data.listings);
+            data.audit.load();
         }
         return data;
     }

@@ -1,6 +1,7 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.AuditEntry;
+import com.hkust.marketplace.persistence.Database;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -15,7 +16,7 @@ class AuditStoreTest {
 
     @Test
     void appendRecordsAdminTimeActionAndTarget() {
-        AuditStore audit = new AuditStore();
+        AuditStore audit = new AuditStore(Database.inMemory());
         LocalDateTime before = LocalDateTime.now();
 
         audit.append("admin", "Kicked off", "L100");
@@ -32,7 +33,7 @@ class AuditStoreTest {
 
     @Test
     void entriesAreAppendedInOrderAndCannotBeRewritten() {
-        AuditStore audit = new AuditStore();
+        AuditStore audit = new AuditStore(Database.inMemory());
         audit.append("admin", "First", "L100");
         audit.append("admin", "Second", "L101");
 
@@ -45,7 +46,7 @@ class AuditStoreTest {
 
     @Test
     void theFiveAdminActionsHaveStableLabels() {
-        AuditStore audit = new AuditStore();
+        AuditStore audit = new AuditStore(Database.inMemory());
         audit.recordEdit("admin", "L100");
         audit.recordTakeDown("admin", "L101");
         audit.recordReportResolution("admin", "L102");
@@ -60,7 +61,7 @@ class AuditStoreTest {
 
     @Test
     void blankFieldsAreRejectedWithoutWritingAnEntry() {
-        AuditStore audit = new AuditStore();
+        AuditStore audit = new AuditStore(Database.inMemory());
 
         assertThrows(IllegalArgumentException.class, () -> audit.append(null, "Edited", "L100"));
         assertThrows(IllegalArgumentException.class, () -> audit.append("admin", "  ", "L100"));
