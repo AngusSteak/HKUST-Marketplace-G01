@@ -36,11 +36,15 @@ class DummyDataServiceTest {
         assertEquals(5, store.users().all().size());
         assertEquals(List.of("L100", "L101", "L102", "L103", "L104"),
                 store.listings().all().stream().map(l -> l.getId()).toList());
-        assertEquals(3, store.listings().live().size()); // L100 is RESERVED by the seeded deal
+        assertEquals(2, store.listings().live().size()); // L100 and L102 are RESERVED by seeded deals
         assertEquals(1, store.listings().pending().size());
         assertEquals(ListingStatus.PENDING_REVIEW, store.listings().find("L104").getStatus());
         assertEquals("L100", store.deals().allDeals().get(0).getListing().getId());
         assertEquals(ListingStatus.RESERVED, store.listings().find("L100").getStatus());
+        assertEquals(ListingStatus.RESERVED, store.listings().find("L102").getStatus());
+        assertEquals(ListingStatus.LIVE, store.listings().find("L103").getStatus());
+        assertEquals(4, store.deals().allRequests().size());
+        assertEquals(2, store.deals().allDeals().size());
         assertEquals(1, store.notifications().forUser("admin").size());
         assertEquals(5.0, store.reviews().averageRating("charlie").getAsDouble());
     }

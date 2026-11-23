@@ -1,13 +1,21 @@
 package com.hkust.marketplace.controllers.buyer;
 
+import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.DealStatus;
+import com.hkust.marketplace.models.DealType;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Notification;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
@@ -22,6 +30,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -241,14 +250,33 @@ public class BuyerDashboardController {
 
         table.getColumns().addAll(colTitle, colSeller, colType, colStatus, colAction);
 
-        // Dummy rows
-        table.setItems(FXCollections.observableArrayList(
-                new String[]{"Calculus Textbook (Stewart)", "Charlie Lee", "Buy", "Accepted", "Chat / Complete"},
-                new String[]{"Graphing Calculator TI-84", "Diana Ng", "Borrow", "Pending", "View"}
-        ));
+        String buyer = SessionManager.getCurrentUser().getUsername();
+        DealStore deals = DummyDataService.getInstance().deals();
+        List<String[]> rows = new ArrayList<>();
+        for (DealRequest request : deals.openRequestsByBuyer(buyer)) {
+            boolean countered = request.getStatus() == RequestStatus.COUNTERED;
+            rows.add(new String[]{
+                    request.getListing().getTitle(),
+                    request.getListing().getSellerFullName(),
+                    requestTypeLabel(request.dealType()),
+                    (countered ? "Countered: " : "Pending: ") + requestTerms(request),
+                    countered ? "Respond to the seller's counter" : "Waiting for the seller"});
+        }
+        for (Deal deal : deals.activeDealsForBuyer(buyer)) {
+            rows.add(new String[]{
+                    deal.getListing().getTitle(),
+                    deal.getListing().getSellerFullName(),
+                    requestTypeLabel(deal.getDealType()),
+                    deal.getDueDate() != null
+                            ? "Accepted, due " + deal.getDueDate().format(DEAL_TIME)
+                            : "Accepted: " + requestTerms(deal.getRequest()),
+                    deal.getDealType() == DealType.LENT ? "Return the item" : "Mark complete when received"});
+        }
+        table.setItems(FXCollections.observableArrayList(rows));
+        table.setPlaceholder(new Label("You have no current offers, borrow requests or claims."));
 
         root.getChildren().add(table);
-        Label note = new Label("💡 Self-return for borrowed items and mark-complete are available here in the full version.");
+        Label note = new Label("💡 Responding to counters, returning and marking complete arrive with #21.");
         note.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
         root.getChildren().add(note);
 
@@ -287,12 +315,56 @@ public class BuyerDashboardController {
         TableColumn<String[], String> c5 = new TableColumn<>("Outcome");
         c5.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[4]));
         table.getColumns().addAll(c1, c2, c3, c4, c5);
-        table.setItems(FXCollections.observableArrayList(
-                new String[]{"Old Chemistry Book", "Charlie Lee", "2025-11-12", "Bought", "Completed"},
-                new String[]{"USB Hub", "Diana Ng", "2025-10-03", "Received", "Completed"}
-        ));
+        String buyer = SessionManager.getCurrentUser().getUsername();
+        List<String[]> rows = new ArrayList<>();
+        for (Deal deal : DummyDataService.getInstance().deals().pastDealsForBuyer(buyer)) {
+            rows.add(new String[]{
+                    deal.getListing().getTitle(),
+                    deal.getListing().getSellerFullName(),
+                    deal.getCompletedDate().format(DEAL_TIME),
+                    switch (deal.getDealType()) {
+                        case SOLD -> "Bought";
+                        case LENT -> "Borrowed";
+                        case GIVEN -> "Received";
+                    },
+                    statusLabel(deal.getStatus())});
+        }
+        table.setItems(FXCollections.observableArrayList(rows));
+        table.setPlaceholder(new Label("No past deals yet."));
+        // TODO(#22): wire the date range and search filters.
         root.getChildren().add(table);
         contentPane.getChildren().add(root);
+    }
+
+    private static final DateTimeFormatter DEAL_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private static String requestTypeLabel(DealType type) {
+        return switch (type) {
+            case SOLD -> "Buy";
+            case LENT -> "Borrow";
+            case GIVEN -> "Claim";
+        };
+    }
+
+    /** The terms the buyer would get: the counter if there is one, otherwise what they asked for. */
+    private static String requestTerms(DealRequest request) {
+        if (request instanceof PriceOffer offer) {
+            return String.format("HK$ %s", offer.agreedPrice().toPlainString());
+        }
+        if (request instanceof BorrowRequest borrow) {
+            return borrow.agreedStart().format(DEAL_TIME) + " to " + borrow.agreedEnd().format(DEAL_TIME);
+        }
+        return "free";
+    }
+
+    private static String statusLabel(DealStatus status) {
+        return switch (status) {
+            case ACTIVE -> "Active";
+            case RETURNED -> "Returned";
+            case AUTO_RETURNED -> "Auto-returned";
+            case COMPLETED -> "Completed";
+            case CANCELLED -> "Cancelled";
+        };
     }
 
     @FXML

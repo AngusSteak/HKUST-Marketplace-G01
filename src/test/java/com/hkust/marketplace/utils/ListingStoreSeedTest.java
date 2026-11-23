@@ -28,9 +28,11 @@ class ListingStoreSeedTest {
         assertInstanceOf(LendListing.class, listings.find("L103"));
         assertInstanceOf(SaleListing.class, listings.find("L104"));
 
-        assertEquals(3, listings.live().size());
+        // L100 is reserved by alice's accepted offer and L102 by her pending claim (DealStore.seed)
+        assertEquals(2, listings.live().size());
         assertEquals(1, listings.pending().size());
         assertEquals(ListingStatus.RESERVED, listings.find("L100").getStatus());
+        assertEquals(ListingStatus.RESERVED, listings.find("L102").getStatus());
         assertEquals(ListingStatus.PENDING_REVIEW, listings.find("L104").getStatus());
     }
 }
