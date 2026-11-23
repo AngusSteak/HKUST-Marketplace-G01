@@ -166,13 +166,14 @@ public class AdminDashboardController {
             Button remove = new Button("Take down");
             remove.getStyleClass().addAll("btn-danger", "btn-sm");
             remove.setOnAction(e -> {
-                Alert conf = new Alert(Alert.AlertType.CONFIRMATION,
-                        "Take this listing down? It stays in deal history but leaves the marketplace.");
-                conf.showAndWait().ifPresent(r -> {
-                    if (r == ButtonType.OK) {
-                        run(() -> adminService.takeDownListing(admin(), l, "Removed by admin"));
-                        showAllListings();
-                    }
+                TextInputDialog reasonDialog = new TextInputDialog();
+                reasonDialog.setTitle("Take Down Listing");
+                reasonDialog.setHeaderText("Take '" + l.getTitle() + "' off the marketplace?\n"
+                        + "Pending offers are declined and the seller is notified.");
+                reasonDialog.setContentText("Reason:");
+                reasonDialog.showAndWait().ifPresent(reason -> {
+                    run(() -> adminService.takeDownListing(admin(), l, reason));
+                    showAllListings();
                 });
             });
 

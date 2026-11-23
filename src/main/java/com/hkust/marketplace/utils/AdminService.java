@@ -1,14 +1,17 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -25,49 +28,93 @@ public final class AdminService {
         this.data = Objects.requireNonNull(data, "data");
     }
 
-    /** Approves a pending listing: it goes live and the seller is notified (SRS UC-3.1). */
+    /** The take-down note on a listing's open reports (SRS UC-3.7 S1 step 3). */
+    public static final String TAKEN_DOWN_RESOLUTION = "Listing taken down";
+
+    /**
+     * Approves a pending listing: it goes live and the seller is notified (SRS UC-3.2). The status,
+     * review date and notification are saved together.
+     */
     public void approveListing(User admin, Listing listing) {
         AccessControl.require(admin, UserRole.ADMIN);
         requirePending(listing);
-        listing.setStatus(ListingStatus.LIVE);
-        listing.setReviewedAt(LocalDateTime.now());
-        data.listings().update(listing);
-        data.notifications().notify(listing.getSellerUsername(), NotificationCategory.LISTING_APPROVED,
-                "Your listing '" + listing.getTitle() + "' is now live!",
-                new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
+        data.database().inTransaction(() -> {
+            listing.setStatus(ListingStatus.LIVE);
+            listing.setReviewedAt(LocalDateTime.now());
+            data.listings().update(listing);
+            data.notifications().notify(listing.getSellerUsername(), NotificationCategory.LISTING_APPROVED,
+                    "Your listing '" + listing.getTitle() + "' is now live!",
+                    new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
+        });
     }
 
-    /** Rejects a pending listing with a reason the seller sees (SRS UC-3.1). */
+    /** Rejects a pending listing with a reason the seller sees, saved together (SRS UC-3.2). */
     public void rejectListing(User admin, Listing listing, String reason) {
         AccessControl.require(admin, UserRole.ADMIN);
         requirePending(listing);
         String why = requireText(reason, "Rejection reason");
-        listing.setStatus(ListingStatus.REJECTED);
-        listing.setRejectionReason(why);
-        listing.setReviewedAt(LocalDateTime.now());
-        data.listings().update(listing);
-        data.notifications().notify(listing.getSellerUsername(), NotificationCategory.LISTING_REJECTED,
-                "Your listing '" + listing.getTitle() + "' was rejected. Reason: " + why,
-                new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
+        data.database().inTransaction(() -> {
+            listing.setStatus(ListingStatus.REJECTED);
+            listing.setRejectionReason(why);
+            listing.setReviewedAt(LocalDateTime.now());
+            data.listings().update(listing);
+            data.notifications().notify(listing.getSellerUsername(), NotificationCategory.LISTING_REJECTED,
+                    "Your listing '" + listing.getTitle() + "' was rejected. Reason: " + why,
+                    new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
+        });
     }
 
     /**
-     * Takes a listing off the marketplace. It keeps its deals, chats and reports, which is why
-     * listings are taken down by status rather than deleted (#34 adds the full flow).
+     * Takes a live listing off the marketplace (SRS UC-3.7 S1): stores the reason and the
+     * Taken Down status, records it in the audit log, resolves the open reports with
+     * {@value #TAKEN_DOWN_RESOLUTION}, declines the pending and countered requests, and notifies
+     * those buyers and the seller. The listing keeps its deals, chats and reports.
+     *
+     * <p>Only Live listings for now: a Reserved or Lent listing first needs its deal cancelled
+     * (A2), which #34 adds; other statuses cannot be taken down (A3).
      */
     public void takeDownListing(User admin, Listing listing, String reason) {
         AccessControl.require(admin, UserRole.ADMIN);
         Objects.requireNonNull(listing, "listing");
-        listing.setStatus(ListingStatus.TAKEN_DOWN);
-        listing.setTakedownReason(requireText(reason, "Take-down reason"));
-        data.listings().update(listing);
-        data.audit().recordTakeDown(admin.getUsername(), listing.getId());
+        String why = requireText(reason, "Take-down reason");
+        switch (listing.getStatus()) {
+            case LIVE -> { }
+            case RESERVED, LENT -> throw new IllegalStateException(
+                    "A deal is in progress on this listing; cancel the deal before taking it down.");
+            default -> throw new IllegalStateException(
+                    "Only a Live, Reserved or Lent listing can be taken down.");
+        }
+        List<DealRequest> open = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
+                .toList();
+        NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());
+        data.database().inTransaction(() -> {
+            open.forEach(r -> data.deals().lifecycle().decline(r));
+            listing.setStatus(ListingStatus.TAKEN_DOWN);
+            listing.setTakedownReason(why);
+            data.listings().update(listing);
+            data.audit().recordTakeDown(admin.getUsername(), listing.getId());
+            data.reports().resolveAll(listing, TAKEN_DOWN_RESOLUTION);
+            for (DealRequest r : open) {
+                data.notifications().notify(r.getBuyerUsername(), NotificationCategory.LISTING_REMOVED,
+                        "'" + listing.getTitle() + "' was removed from the marketplace, so your request was declined.",
+                        ref);
+            }
+            data.notifications().notify(listing.getSellerUsername(), NotificationCategory.LISTING_REMOVED,
+                    "Your listing '" + listing.getTitle() + "' was taken down. Reason: " + why, ref);
+        });
     }
 
-    /** Activates or deactivates an account (SRS UC-3.4). */
+    /**
+     * Activates or deactivates a buyer or seller account (SRS UC-3.4). The admin account
+     * cannot be disabled.
+     */
     public void setActive(User admin, User account, boolean active) {
         AccessControl.require(admin, UserRole.ADMIN);
         Objects.requireNonNull(account, "account");
+        if (account.getRole() == UserRole.ADMIN) {
+            throw new IllegalStateException("The admin account cannot be disabled or deleted.");
+        }
         account.setActive(active);
         data.users().save(account);
     }

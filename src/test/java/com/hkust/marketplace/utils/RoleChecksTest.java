@@ -3,6 +3,7 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
@@ -98,6 +99,49 @@ class RoleChecksTest {
     }
 
     @Test
+    void takeDownDeclinesOpenRequestsResolvesReportsAndNotifies() {
+        Listing calculator = data.listings().find("L103");   // Live, bob has a pending borrow request
+        data.reports().fileReport((Buyer) alice, calculator, "Looks counterfeit");
+
+        admin.takeDownListing(adminUser, calculator, "  Counterfeit item  ");
+
+        DummyDataService saved = DummyDataService.open(db);
+        Listing back = saved.listings().find("L103");
+        assertEquals(ListingStatus.TAKEN_DOWN, back.getStatus());
+        assertEquals("Counterfeit item", back.getTakedownReason());
+        assertTrue(saved.deals().openRequestsByBuyer("bob").isEmpty(), "bob's request was declined");
+        assertEquals(AdminService.TAKEN_DOWN_RESOLUTION, saved.reports().all().get(0).getResolution());
+        assertEquals(NotificationCategory.LISTING_REMOVED, saved.notifications().forUser("bob").get(0).getCategory());
+        assertTrue(saved.notifications().forUser("diana").get(0).getMessage().contains("Counterfeit item"));
+        assertEquals("Took down", saved.audit().all().get(0).getAction());
+    }
+
+    @Test
+    void onlyLiveListingsCanBeTakenDownForNow() {
+        assertThrows(IllegalStateException.class,
+                () -> admin.takeDownListing(adminUser, data.listings().find("L100"), "Spam"));   // Reserved
+        assertThrows(IllegalStateException.class,
+                () -> admin.takeDownListing(adminUser, data.listings().find("L104"), "Spam"));   // Pending
+        assertThrows(IllegalArgumentException.class,
+                () -> admin.takeDownListing(adminUser, data.listings().find("L101"), "   "));
+
+        DummyDataService saved = DummyDataService.open(db);
+        assertEquals(ListingStatus.RESERVED, saved.listings().find("L100").getStatus());
+        assertEquals(ListingStatus.PENDING_REVIEW, saved.listings().find("L104").getStatus());
+        assertEquals(ListingStatus.LIVE, saved.listings().find("L101").getStatus());
+        assertTrue(saved.audit().all().isEmpty());
+    }
+
+    @Test
+    void theAdminAccountCannotBeDisabledOrDeleted() {
+        assertThrows(IllegalStateException.class, () -> admin.setActive(adminUser, adminUser, false));
+        assertThrows(IllegalStateException.class, () -> admin.deactivateAccount(adminUser, adminUser));
+
+        assertTrue(DummyDataService.open(db).users().find("admin").isActive());
+        assertTrue(data.audit().all().isEmpty());
+    }
+
+    @Test
     void rejectNeedsAReasonAndAPendingListing() {
         Listing pending = data.listings().find("L104");
         assertThrows(IllegalArgumentException.class, () -> admin.rejectListing(adminUser, pending, "  "));
@@ -115,6 +159,10 @@ class RoleChecksTest {
         assertThrows(SecurityException.class, () -> seller.deleteListing(alice, dianasFridge));
         assertThrows(SecurityException.class, () -> seller.deleteListing(adminUser, dianasFridge));
         assertNotNull(data.listings().find("L104"));
+
+        IllegalStateException reserved = assertThrows(IllegalStateException.class,
+                () -> seller.deleteListing(diana, data.listings().find("L102")));   // reserved by a claim
+        assertEquals(SellerService.NOT_CHANGEABLE, reserved.getMessage());
 
         IllegalStateException refused = assertThrows(IllegalStateException.class,
                 () -> seller.deleteListing(diana, data.listings().find("L103")));
