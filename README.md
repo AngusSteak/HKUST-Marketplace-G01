@@ -58,10 +58,12 @@ mvn clean javafx:run
 ## Security State (Demo)
 
 - Passwords are stored only as **BCrypt hashes** (jBCrypt, cost factor 12), produced by `PasswordHasher`. `User.passwordHash` is the only credential field; plaintext passwords are never stored in a `User`, logged, or compared directly. Seeding hashes the demo passwords at startup, buyer/seller registration hashes the chosen password, and every login verifies through `PasswordHasher.verify`.
-- Buyer and Seller registration enforces exactly these password-strength rules:
-  - The password is not empty.
-  - The password is at least 8 characters long.
-  - The password contains at least one uppercase letter, at least one lowercase letter, and at least one digit.
+- Buyer and Seller registration enforces the full UC-1.1 A3 password rules through `UserStore.checkPasswordStrength(password, username)`:
+  - 8 to 64 characters.
+  - At least one uppercase letter, one lowercase letter, one digit and one special character.
+  - No spaces.
+  - Not equal to the username (case-insensitive).
+  - The check returns a set of `PasswordRule` values naming **every** broken rule, so the form can tell the user what to fix instead of failing on the first problem.
 - Deactivated accounts (`active = false`) are refused at the login gate of all three portals with an explicit account-deactivated message. The Admin dashboard's activate/deactivate toggle flips the same flag.
 - Portal access checks run in the UI layer only. There is no backend in this demo, so API-layer RBAC is still to be built.
 

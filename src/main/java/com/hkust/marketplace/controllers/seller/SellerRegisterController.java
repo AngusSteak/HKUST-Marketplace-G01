@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.PasswordRule;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
@@ -12,6 +13,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 
 import java.util.EnumSet;
+import java.util.Set;
 
 public class SellerRegisterController {
 
@@ -42,8 +44,8 @@ public class SellerRegisterController {
             showError("Username already taken."); return;
         }
         if (fullName.isEmpty()) { showError("Full Name cannot be empty."); return; }
-        String pwdCheck = UserStore.checkPasswordStrength(password);
-        if (!"OK".equals(pwdCheck)) { showError(pwdCheck); return; }
+        Set<PasswordRule> failed = UserStore.checkPasswordStrength(password, username);
+        if (!failed.isEmpty()) { showError(UserStore.formatPasswordErrors(failed)); return; }
         if (!password.equals(confirm)) { showError("Passwords do not match."); return; }
 
         Seller user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);
