@@ -33,6 +33,7 @@ public class SellerLoginController {
             case USER_NOT_FOUND -> showError("User not found.");
             case WRONG_PORTAL -> showError("This account is not a Seller account. Use the correct portal.");
             case WRONG_PASSWORD -> showError("Incorrect password.");
+            case DELETED -> showError("This account has been deleted and cannot log in.");
             case DISABLED -> showError("Account deactivated.");
             case OK -> {
                 SessionManager.login(user);

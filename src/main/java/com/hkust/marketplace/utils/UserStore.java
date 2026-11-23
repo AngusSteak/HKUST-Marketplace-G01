@@ -3,6 +3,7 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.Admin;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.PasswordRule;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
@@ -12,6 +13,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** In-memory accounts, keyed by lower-case username. */
@@ -33,14 +35,23 @@ public class UserStore {
         users.putIfAbsent(user.getUsername().toLowerCase(), user);
     }
 
+    /** Active and disabled accounts only; soft-deleted accounts stay in {@link #find}. */
     public Collection<User> all() {
-        return users.values();
+        return users.values().stream()
+                .filter(u -> !u.isDeleted())
+                .collect(Collectors.toList());
     }
 
     public List<User> byRole(UserRole role) {
-        return users.values().stream()
+        return all().stream()
                 .filter(u -> u.getRole() == role)
                 .collect(Collectors.toList());
+    }
+
+    /** Label for a username stored in a historical record (review, deal, chat). */
+    public String historicalLabel(String username) {
+        User user = find(username);
+        return user != null && user.isDeleted() ? "deleted user" : "@" + username;
     }
 
     void seed() {
@@ -67,16 +78,31 @@ public class UserStore {
         users.put("diana", seller2);
     }
 
-    // Password strength helper (demo)
-    public static String checkPasswordStrength(String password) {
-        if (password == null || password.isEmpty()) return "Password cannot be empty.";
-        if (password.length() < 8) return "Password must be at least 8 characters.";
-        boolean hasUpper = password.chars().anyMatch(Character::isUpperCase);
-        boolean hasLower = password.chars().anyMatch(Character::isLowerCase);
-        boolean hasDigit = password.chars().anyMatch(Character::isDigit);
-        if (!hasUpper || !hasLower || !hasDigit) {
-            return "Password should contain uppercase, lowercase and a digit.";
+    /**
+     * Checks a password against UC-1.1 A3. Returns every rule that failed, so the caller
+     * can report all problems at once; an empty set means the password is acceptable.
+     */
+    public static Set<PasswordRule> checkPasswordStrength(String password, String username) {
+        String pwd = password == null ? "" : password;
+        EnumSet<PasswordRule> failed = EnumSet.noneOf(PasswordRule.class);
+
+        if (pwd.length() < 8 || pwd.length() > 64) failed.add(PasswordRule.LENGTH);
+        if (pwd.chars().noneMatch(Character::isUpperCase)) failed.add(PasswordRule.UPPERCASE);
+        if (pwd.chars().noneMatch(Character::isLowerCase)) failed.add(PasswordRule.LOWERCASE);
+        if (pwd.chars().noneMatch(Character::isDigit)) failed.add(PasswordRule.DIGIT);
+        if (pwd.chars().noneMatch(c -> !Character.isLetterOrDigit(c) && !Character.isWhitespace(c))) {
+            failed.add(PasswordRule.SPECIAL);
         }
-        return "OK";
+        if (pwd.chars().anyMatch(Character::isWhitespace)) failed.add(PasswordRule.NO_SPACES);
+        if (username != null && pwd.equalsIgnoreCase(username)) failed.add(PasswordRule.NOT_USERNAME);
+
+        return failed;
+    }
+
+    /** Human-readable, single-message form for the registration forms. */
+    public static String formatPasswordErrors(Set<PasswordRule> failed) {
+        return failed.stream()
+                .map(PasswordRule::getMessage)
+                .collect(Collectors.joining(" "));
     }
 }

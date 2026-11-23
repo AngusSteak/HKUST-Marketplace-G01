@@ -9,9 +9,9 @@ import com.hkust.marketplace.models.UserRole;
  * that account may enter the requested portal. No UI or JavaFX dependency.
  *
  * <p>Check order is deliberate and matches the portals' original inline checks:
- * missing account, then wrong portal, then wrong password, then deactivated account.
- * Keeping the password check before the disabled check avoids revealing account state
- * to someone who does not know the password.
+ * missing account, then wrong portal, then wrong password, then deleted account, then
+ * deactivated account. Keeping the password check before the account-state checks avoids
+ * revealing account state to someone who does not know the password.
  */
 public final class LoginGate {
 
@@ -20,6 +20,7 @@ public final class LoginGate {
         USER_NOT_FOUND,
         WRONG_PORTAL,
         WRONG_PASSWORD,
+        DELETED,
         DISABLED
     }
 
@@ -40,6 +41,9 @@ public final class LoginGate {
         }
         if (!PasswordHasher.verify(rawPassword, user.getPasswordHash())) {
             return Outcome.WRONG_PASSWORD;
+        }
+        if (user.isDeleted()) {
+            return Outcome.DELETED;
         }
         if (!user.isActive()) {
             return Outcome.DISABLED;

@@ -5,6 +5,7 @@ import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
+import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -217,9 +218,10 @@ public class SellerDashboardController {
             }
             DummyDataService.getInstance().listings().add(listing);
             // Notify admin
-            DummyDataService.getInstance().notifications().add(new Notification(
-                    "admin", "New Listing Submitted",
-                    seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.", "System"));
+            DummyDataService.getInstance().notifications().notify(
+                    "admin", NotificationCategory.NEW_SUBMISSION,
+                    seller.getFullName() + " submitted '" + listing.getTitle() + "' for review.",
+                    new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
             new Alert(Alert.AlertType.INFORMATION,
                     "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – in-memory only)").showAndWait();
             showMyListings();
@@ -355,7 +357,9 @@ public class SellerDashboardController {
                 stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
                 Label comment = new Label(r.getComment());
                 comment.setWrapText(true);
-                Label meta = new Label("by @" + r.getBuyerUsername() + " · " + r.getListingTitle());
+                UserStore users = DummyDataService.getInstance().users();
+                Label meta = new Label("by " + users.historicalLabel(r.getBuyerUsername())
+                        + " · " + r.getListingTitle());
                 meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
                 HBox actions = new HBox(8);
                 Button reply = new Button("Reply");
