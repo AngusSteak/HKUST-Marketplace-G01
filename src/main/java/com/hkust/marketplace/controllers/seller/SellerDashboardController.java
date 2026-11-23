@@ -101,6 +101,32 @@ public class SellerDashboardController {
         }
         info.getChildren().addAll(title, meta, price);
 
+        List<DealRequest> openRequests = DummyDataService.getInstance().deals().lifecycle()
+                .requestsFor(l).stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
+                .toList();
+        if (!openRequests.isEmpty()) {
+            VBox offers = new VBox(4);
+            offers.setPadding(new Insets(4, 0, 0, 12));
+            for (DealRequest r : openRequests) {
+                Label line = new Label(r.getBuyerDisplayName() + " · " + offerTerms(r)
+                        + " · " + r.getStatus());
+                line.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+                offers.getChildren().add(line);
+            }
+            offers.setVisible(false);
+            offers.setManaged(false);
+
+            Hyperlink toggle = new Hyperlink("View " + openRequests.size() + " open offers");
+            toggle.setOnAction(e -> {
+                boolean willShow = !offers.isVisible();
+                offers.setVisible(willShow);
+                offers.setManaged(willShow);
+                toggle.setText((willShow ? "Hide " : "View ") + openRequests.size() + " open offers");
+            });
+            info.getChildren().addAll(toggle, offers);
+        }
+
         Label status = new Label(l.getStatus().name().replace('_', ' '));
         status.getStyleClass().add("badge");
         switch (l.getStatus()) {
@@ -118,14 +144,20 @@ public class SellerDashboardController {
         Button delBtn = new Button("Delete");
         delBtn.getStyleClass().addAll("btn-danger", "btn-sm");
         delBtn.setOnAction(e -> {
-            Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Delete this listing?");
+            int affected = openRequests.size();
+            String message = affected == 0
+                    ? "Withdraw this listing? There are no open offers."
+                    : "Withdraw this listing?\n\n" + affected + " open offer"
+                            + (affected == 1 ? "" : "s") + " will be declined and the buyer"
+                            + (affected == 1 ? "" : "s") + " notified.";
+            Alert conf = new Alert(Alert.AlertType.CONFIRMATION, message);
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
                     try {
-                        new SellerService(DummyDataService.getInstance())
-                                .deleteListing(SessionManager.getCurrentUser(), l);
+                        sellerService.deleteListing(SessionManager.getCurrentUser(), l);
                     } catch (SecurityException | IllegalStateException ex) {
                         new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                        return;
                     }
                     showMyListings();
                 }
@@ -134,6 +166,17 @@ public class SellerDashboardController {
 
         row.getChildren().addAll(info, status, editBtn, delBtn);
         return row;
+    }
+
+    private static String offerTerms(DealRequest request) {
+        if (request instanceof PriceOffer offer) {
+            return new Money(offer.agreedPrice()).getDisplay();
+        }
+        if (request instanceof BorrowRequest borrow) {
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMM");
+            return borrow.agreedStart().format(fmt) + " – " + borrow.agreedEnd().format(fmt);
+        }
+        return "Giveaway claim";
     }
 
     @FXML

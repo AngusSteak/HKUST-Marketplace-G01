@@ -2,14 +2,15 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.forms.PhotoDraft;
+import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
-import com.hkust.marketplace.persistence.DatabaseException;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,10 +26,6 @@ import java.util.Objects;
  * otherwise, before changing anything.
  */
 public final class SellerService {
-
-    /** Why a listing someone has acted on cannot be deleted. */
-    public static final String CANNOT_DELETE =
-            "This listing has offers, deals, chats or reports, so it can't be deleted.";
 
     /** SRS UC-2.4 A2: a listing that is no longer live or pending can't be changed. */
     public static final String NOT_CHANGEABLE = "This listing can no longer be changed.";
@@ -88,13 +85,14 @@ public final class SellerService {
     }
 
     /**
-     * Deletes one of the seller's own listings that nobody has acted on yet.
+     * Withdraws one of the seller's own listings (SRS UC-2.4 A1). Open requests are declined,
+     * their buyers get a LISTING_REMOVED notice and the listing is hidden — all in one
+     * transaction, so a failure part-way through changes nothing. The row is kept so chat, deal
+     * and notification history can still resolve the listing by id.
      *
      * @throws SecurityException if {@code seller} is not an active Seller who owns the listing
      * @throws IllegalStateException with {@link #NOT_CHANGEABLE} if the listing is Reserved,
-     *         Sold, Lent, Given or Taken Down (SRS UC-2.4 A2), or with {@link #CANNOT_DELETE} if
-     *         it has requests, deals, chats or reports (the database keeps them pointing at it;
-     *         #26 adds deleting with open offers, UC-2.4 A1)
+     *         Sold, Lent, Given or Taken Down (SRS UC-2.4 A2)
      */
     public void deleteListing(User seller, Listing listing) {
         AccessControl.require(seller, UserRole.SELLER);
@@ -107,10 +105,19 @@ public final class SellerService {
                 && status != ListingStatus.REJECTED) {
             throw new IllegalStateException(NOT_CHANGEABLE);
         }
-        try {
-            data.listings().remove(listing.getId());
-        } catch (DatabaseException e) {
-            throw new IllegalStateException(CANNOT_DELETE, e);
-        }
+        List<DealRequest> open = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
+                .toList();
+        NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());
+        data.database().inTransaction(() -> {
+            open.forEach(r -> data.deals().lifecycle().decline(r));
+            for (DealRequest r : open) {
+                data.notifications().notify(r.getBuyerUsername(), NotificationCategory.LISTING_REMOVED,
+                        "'" + listing.getTitle() + "' was withdrawn from the marketplace, so your request was declined.",
+                        ref);
+            }
+            listing.setDeleted(true);
+            data.listings().update(listing);
+        });
     }
 }
