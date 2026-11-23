@@ -42,22 +42,22 @@ class ListingPhotoPersistenceTest {
 
     @Test
     void reservedIdAndRelativePhotoPathsSurviveReload() {
-        String reservedId = store.peekNextId();
+        String reservedId = store.reserveId();
         Listing listing = new GiveawayListing(charlie, "Lamp", "", Category.FURNITURE,
                 Condition.USED, Location.LIBRARY);
         listing.setId(reservedId);
         listing.setPhotoPaths(List.of(
-                "photos/charlie/L100/a.png",
-                "photos/charlie/L100/b.png"));
+                "data/photos/charlie/L100/a.png",
+                "data/photos/charlie/L100/b.png"));
         store.add(listing);
 
         ListingStore reloaded = reload();
         Listing back = reloaded.find(reservedId);
 
         assertEquals("L100", reservedId);
-        assertEquals(List.of("photos/charlie/L100/a.png", "photos/charlie/L100/b.png"),
+        assertEquals(List.of("data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png"),
                 back.getPhotoPaths());
-        assertEquals("L101", reloaded.peekNextId(),
+        assertEquals("L101", reloaded.reserveId(),
                 "the reserved id must consume its number so the next listing gets a distinct id");
     }
 }

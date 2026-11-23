@@ -184,6 +184,9 @@ public class ListingFormState {
         if (isBlank(title)) {
             errors.put("title", "Item name is required.");
         }
+        if (isBlank(description)) {
+            errors.put("description", "Description is required.");
+        }
         if (category == null) {
             errors.put("category", "Category is required.");
         }

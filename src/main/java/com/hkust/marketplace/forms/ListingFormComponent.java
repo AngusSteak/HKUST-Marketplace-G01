@@ -231,7 +231,7 @@ public class ListingFormComponent {
                 field("Category *", categoryCombo, "category"),
                 field("Condition *", conditionCombo, "condition"),
                 field("Meet-up Location *", locationCombo, "location"),
-                field("Description", descriptionArea, null),
+                field("Description *", descriptionArea, "description"),
                 field("Price (Sell only)", priceRow, "price"),
                 field("Lending Duration (Lend only)", durationRow, "duration"),
                 photoArea,
@@ -334,7 +334,10 @@ public class ListingFormComponent {
             state.setTitle(value);
             clearError("title");
         });
-        descriptionArea.textProperty().addListener((obs, old, value) -> state.setDescription(value));
+        descriptionArea.textProperty().addListener((obs, old, value) -> {
+            state.setDescription(value);
+            clearError("description");
+        });
         categoryCombo.valueProperty().addListener((obs, old, value) -> {
             state.setCategory(value);
             clearError("category");

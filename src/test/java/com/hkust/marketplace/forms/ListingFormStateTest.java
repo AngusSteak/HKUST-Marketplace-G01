@@ -83,6 +83,7 @@ class ListingFormStateTest {
 
         Map<String, String> errors = state.validate(CHARLIE);
         assertEquals("Item name is required.", errors.get("title"));
+        assertEquals("Description is required.", errors.get("description"));
         assertEquals("Category is required.", errors.get("category"));
         assertEquals("Condition is required.", errors.get("condition"));
         assertEquals("Meet-up location is required.", errors.get("location"));
@@ -205,10 +206,10 @@ class ListingFormStateTest {
     @Test
     void storedPhotoPathsAreAttachedToTheBuiltListing() {
         ListingFormState state = validState(ListingType.GIVEAWAY);
-        state.setPhotoPaths(List.of("photos/charlie/L100/a.png", "photos/charlie/L100/b.png"));
+        state.setPhotoPaths(List.of("data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png"));
 
         Listing listing = state.buildListing(CHARLIE);
-        assertEquals(List.of("photos/charlie/L100/a.png", "photos/charlie/L100/b.png"),
+        assertEquals(List.of("data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png"),
                 listing.getPhotoPaths());
     }
 }

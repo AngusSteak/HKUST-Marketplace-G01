@@ -18,7 +18,7 @@ public class LocalPhotoStorage implements PhotoStorage {
     /** Announced default from the design discussion. */
     private static final long MAX_BYTES = 10L * 1024 * 1024;
 
-    private static final Path ROOT = Path.of("photos");
+    private static final Path ROOT = Path.of("data", "photos");
 
     @Override
     public String store(Path source, String sellerUsername, String listingId) {
@@ -54,7 +54,7 @@ public class LocalPhotoStorage implements PhotoStorage {
             throw new IllegalStateException("Could not store the photo", ex);
         }
 
-        return "photos/" + safeUser + "/" + safeId + "/" + filename;
+        return "data/photos/" + safeUser + "/" + safeId + "/" + filename;
     }
 
     private static String extensionOf(String filename) {

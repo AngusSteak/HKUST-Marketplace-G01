@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 class ListingStoreIdTimingTest {
@@ -33,23 +34,28 @@ class ListingStoreIdTimingTest {
     }
 
     @Test
-    void peekNextIdDoesNotIncrementTheCounter() {
-        assertEquals("L100", store.peekNextId());
-        assertEquals("L100", store.peekNextId());
+    void reserveIdClaimsADistinctNumberEachTime() {
+        String first = store.reserveId();
+        String second = store.reserveId();
+        assertEquals("L100", first);
+        assertEquals("L101", second);
+        assertNotEquals(first, second);
     }
 
     @Test
-    void aPreSetPeekedIdSurvivesAddAndTheNextNewListingGetsTheFollowingId() {
-        Listing reserved = listing("Reserved");
-        reserved.setId(store.peekNextId());
-        store.add(reserved);
+    void aReservedIdSurvivesAddAndAddDoesNotAdvanceTheCounterAgain() {
+        String reserved = store.reserveId();
+        Listing listing = listing("Reserved");
+        listing.setId(reserved);
+        store.add(listing);
 
-        assertEquals("L100", reserved.getId());
-        assertSame(reserved, store.find("L100"));
+        assertEquals("L100", reserved);
+        assertSame(listing, store.find("L100"));
 
         Listing next = listing("Next");
         store.add(next);
-        assertEquals("L101", next.getId());
+        assertEquals("L101", next.getId(),
+                "add() must not move the counter for a listing that already has an id");
     }
 
     @Test

@@ -157,7 +157,7 @@ Copy the lines that start with `Exception in thread` or `Caused by`.
 1. Persist the remaining stores to SQLite (#56, #57, #58), then keep data across restarts by default (#59)
 2. Credentials stay BCrypt-hashed through `PasswordHasher`; the database only ever holds the hash
 3. Replace the in-memory `SessionManager` with real session tokens and enforce RBAC at the API layer (the current portal checks are demo-only UI gates)
-4. Chat, auto-return for borrowed items, etc. (Photo choosing is wired into the seller Create Listing form: files are copied to a local `photos/` folder and their relative paths are persisted in the `listing_photos` table — a demo stand-in for real upload storage.)
+4. Chat, auto-return for borrowed items, etc. (Photo choosing is wired into the seller Create Listing form: files are copied to a local `data/photos/` folder and their relative paths are persisted in the `listing_photos` table — a demo stand-in for real upload storage.)
 
 ## Licence
 

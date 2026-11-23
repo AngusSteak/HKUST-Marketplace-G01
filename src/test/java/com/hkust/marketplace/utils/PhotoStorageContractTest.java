@@ -22,10 +22,10 @@ class PhotoStorageContractTest {
     @Test
     void storeReturnsARelativePathThatCanBeAttachedToAListing() {
         PhotoStorage stub = (source, seller, listingId) ->
-                "photos/" + seller + "/" + listingId + "/" + source.getFileName();
+                "data/photos/" + seller + "/" + listingId + "/" + source.getFileName();
         String stored = stub.store(Path.of("tmp", "photo.png"), "charlie", "L100");
 
-        assertEquals("photos/charlie/L100/photo.png", stored);
+        assertEquals("data/photos/charlie/L100/photo.png", stored);
         assertFalse(Path.of(stored).isAbsolute());
 
         Listing listing = new GiveawayListing(CHARLIE, "Item", "", Category.ELECTRONICS,

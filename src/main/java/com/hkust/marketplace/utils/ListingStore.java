@@ -74,25 +74,19 @@ public class ListingStore {
     }
 
     /**
-     * Returns the id the next newly created listing would receive, WITHOUT incrementing
-     * the counter. The submit flow pre-sets this id on a listing before saving so photos
-     * can be keyed to the directory that listing will actually get; {@link #add(Listing)}
-     * preserves a pre-set id but still advances the counter so the following listing gets
-     * a distinct id.
-     *
-     * <p>Assumes the single-threaded demo usage of this store.
+     * Claims and returns the next {@code L...} id in one atomic step. The submit flow reserves
+     * an id before saving so photos can be keyed to the directory the listing will actually
+     * get; two concurrent callers can never receive the same id. {@link #add(Listing)} leaves a
+     * pre-set id untouched and does not advance the counter again.
      */
-    public String peekNextId() {
-        return "L" + idCounter.get();
+    public String reserveId() {
+        return "L" + idCounter.getAndIncrement();
     }
 
     /** Adds a new listing (giving it the next {@code L...} id if it has none) and saves it. */
     public void add(Listing listing) {
-        // Always advance the counter, even for a pre-set id: peekNextId() does not
-        // increment, so the submit flow's reserved id must still consume its number.
-        String nextId = "L" + idCounter.getAndIncrement();
         if (listing.getId() == null) {
-            listing.setId(nextId);
+            listing.setId("L" + idCounter.getAndIncrement());
         }
         db.inTransaction(() -> {
             db.update("INSERT INTO listings (id, type, seller_username, title, description, category,"

@@ -51,11 +51,11 @@ class LocalPhotoStorageTest {
     void storeCopiesBytesAndReturnsARelativePath() throws IOException {
         byte[] bytes = {1, 2, 3, 4, 5};
         Path source = sourceFile("photo.PNG", bytes);
-        createdDirectories.add(Path.of("photos", "charlie", "LTEST1"));
+        createdDirectories.add(Path.of("data", "photos", "charlie", "LTEST1"));
 
         String stored = storage.store(source, "charlie", "LTEST1");
 
-        assertTrue(stored.matches("photos/charlie/LTEST1/[0-9a-f-]+\\.png"),
+        assertTrue(stored.matches("data/photos/charlie/LTEST1/[0-9a-f-]+\\.png"),
                 "unexpected stored path: " + stored);
         assertFalse(Path.of(stored).isAbsolute());
         Path destination = Path.of(stored);
@@ -66,31 +66,31 @@ class LocalPhotoStorageTest {
     @Test
     void aWrongExtensionIsRejectedAndCreatesNoFile() throws IOException {
         Path source = sourceFile("photo.gif", new byte[]{1, 2, 3});
-        createdDirectories.add(Path.of("photos", "charlie", "LTEST2"));
+        createdDirectories.add(Path.of("data", "photos", "charlie", "LTEST2"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> storage.store(source, "charlie", "LTEST2"));
-        assertFalse(Files.exists(Path.of("photos", "charlie", "LTEST2")));
+        assertFalse(Files.exists(Path.of("data", "photos", "charlie", "LTEST2")));
     }
 
     @Test
     void anOversizedFileIsRejectedAndCreatesNoFile() throws IOException {
         Path source = sourceFile("big.png", new byte[11 * 1024 * 1024]);
-        createdDirectories.add(Path.of("photos", "charlie", "LTEST3"));
+        createdDirectories.add(Path.of("data", "photos", "charlie", "LTEST3"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> storage.store(source, "charlie", "LTEST3"));
-        assertFalse(Files.exists(Path.of("photos", "charlie", "LTEST3")));
+        assertFalse(Files.exists(Path.of("data", "photos", "charlie", "LTEST3")));
     }
 
     @Test
     void unsafeCharactersAreSanitisedIntoOneSegment() throws IOException {
         Path source = sourceFile("photo.jpg", new byte[]{9, 8, 7});
-        createdDirectories.add(Path.of("photos", "___evil", "LTEST4"));
+        createdDirectories.add(Path.of("data", "photos", "___evil", "LTEST4"));
 
         String stored = storage.store(source, "../evil", "LTEST4");
 
-        assertTrue(stored.startsWith("photos/___evil/LTEST4/"), "unexpected path: " + stored);
+        assertTrue(stored.startsWith("data/photos/___evil/LTEST4/"), "unexpected path: " + stored);
         assertFalse(stored.contains("/../"));
         assertTrue(Files.exists(Path.of(stored)));
     }
@@ -105,11 +105,11 @@ class LocalPhotoStorageTest {
     @Test
     void punctuationOnlyNamesBecomeOneSafeSegment() throws IOException {
         Path source = sourceFile("photo.png", new byte[]{1});
-        createdDirectories.add(Path.of("photos", "___", "LTEST6"));
+        createdDirectories.add(Path.of("data", "photos", "___", "LTEST6"));
 
         String stored = storage.store(source, "///", "LTEST6");
 
-        assertTrue(stored.startsWith("photos/___/LTEST6/"), "unexpected path: " + stored);
+        assertTrue(stored.startsWith("data/photos/___/LTEST6/"), "unexpected path: " + stored);
         assertTrue(Files.exists(Path.of(stored)));
     }
 }
