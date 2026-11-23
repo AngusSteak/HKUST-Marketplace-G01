@@ -52,7 +52,9 @@ public class SellerRegisterController {
         Location meetup = meetupCombo.getValue();
         if (meetup != null) user.setPreferredMeetup(EnumSet.of(meetup));
         if (bioArea.getText() != null && !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());
-        DummyDataService.getInstance().users().register(user);
+        if (!DummyDataService.getInstance().users().register(user)) {
+            showError("Username already taken."); return;
+        }
 
         showSuccess("Seller account created! You can now login.");
         usernameField.clear(); fullNameField.clear(); passwordField.clear();

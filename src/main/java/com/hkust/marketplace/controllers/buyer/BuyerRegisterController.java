@@ -69,7 +69,10 @@ public class BuyerRegisterController {
         if (residence != null) {
             user.setResidenceHall(residence);
         }
-        DummyDataService.getInstance().users().register(user);
+        if (!DummyDataService.getInstance().users().register(user)) {
+            showError("Username already taken. Please choose another.");
+            return;
+        }
 
         showSuccess("Registration successful! You can now login.");
         // Clear form

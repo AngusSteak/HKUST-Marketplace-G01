@@ -3,44 +3,108 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.persistence.Database;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * In-memory data store for the frontend demo, split into per-area stores.
- * All data is lost when the application closes.
- * TODO: Replace these stores with real repositories / API clients.
+ * The application's data, split into per-area stores and backed by a local SQLite database
+ * ({@value #DATABASE_FILE}).
+ *
+ * <p>Every store is saved to the database: users and listings (#55); deals, favourites and
+ * follows (#56); chats (#57); notifications, reviews, reports and the audit log (#58). The
+ * database is kept across restarts (#59); it is seeded with the demo data only when empty.
  */
 public class DummyDataService {
 
-    private static final DummyDataService INSTANCE = createSeededInstance();
-
-    private final UserStore users = new UserStore();
-    private final ListingStore listings = new ListingStore();
-    private final DealStore deals = new DealStore();
-    private final NotificationStore notifications = new NotificationStore();
-    private final ReviewStore reviews = new ReviewStore();
-    private final FavouriteStore favourites = new FavouriteStore();
-    private final AuditStore audit = new AuditStore();
-    private final ReportStore reports = new ReportStore();
-    private final ChatStore chats = new ChatStore();
+    /** Where the app keeps its database, relative to the working directory. */
+    public static final String DATABASE_FILE = "data/marketplace.db";
 
     /**
-     * Creates an empty store with no demo data. Visible for tests so each test can
-     * work on an isolated instance; application code must use {@link #getInstance()}.
+     * System property: {@code true} deletes the database at launch and starts again from the demo
+     * data; {@code false} (the default) keeps saved data across restarts.
+     */
+    public static final String RESET_PROPERTY = "marketplace.resetDb";
+
+    private static DummyDataService instance;
+
+    private final Database db;
+    private final UserStore users;
+    private final ListingStore listings;
+    private final DealStore deals;
+    private final NotificationStore notifications;
+    private final ReviewStore reviews;
+    private final FavouriteStore favourites;
+    private final AuditStore audit;
+    private final ReportStore reports;
+    private final ChatStore chats;
+
+    /**
+     * Creates an empty store on a private in-memory database, with no demo data. Visible for
+     * tests so each test works on an isolated instance; application code must use
+     * {@link #getInstance()}.
      */
     DummyDataService() {
+        this(Database.inMemory());
     }
 
-    private static DummyDataService createSeededInstance() {
-        DummyDataService store = new DummyDataService();
-        store.seedData();
-        return store;
+    /** Creates the stores on {@code db} without loading or seeding anything. */
+    DummyDataService(Database db) {
+        this.db = Objects.requireNonNull(db, "db");
+        this.users = new UserStore(db);
+        this.listings = new ListingStore(db);
+        this.deals = new DealStore(db, listings);
+        this.favourites = new FavouriteStore(db);
+        this.chats = new ChatStore(db);
+        this.notifications = new NotificationStore(db);
+        this.reviews = new ReviewStore(db);
+        this.reports = new ReportStore(db);
+        this.audit = new AuditStore(db);
     }
 
-    public static DummyDataService getInstance() {
-        return INSTANCE;
+    /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
+    public static synchronized DummyDataService getInstance() {
+        if (instance == null) {
+            boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, "false"));
+            instance = open(Database.openFile(Path.of(DATABASE_FILE), reset));
+        }
+        return instance;
     }
+
+    /**
+     * Opens the stores on {@code db}: a fresh (empty) database is seeded with the demo data,
+     * otherwise the saved data is loaded (users first, since everything else refers to them).
+     */
+    static DummyDataService open(Database db) {
+        DummyDataService data = new DummyDataService(db);
+        if (db.isEmpty("users")) {
+            data.seedData();
+        } else {
+            data.users.load();
+            data.listings.load(data.users);
+            data.deals.load(data.users, data.listings);
+            data.favourites.load();
+            data.chats.load(data.users, data.listings, data.deals);
+            data.notifications.load();
+            data.reviews.load();
+            data.reports.load(data.users, data.listings);
+            data.audit.load();
+        }
+        return data;
+    }
+
+    /** Closes the shared instance's database, e.g. when the application exits. */
+    public static synchronized void shutdown() {
+        if (instance != null) {
+            instance.db.close();
+            instance = null;
+        }
+    }
+
+    /** The database behind the stores, for stores that persist themselves (#56, #57, #58). */
+    public Database database() { return db; }
 
     public UserStore users() { return users; }
     public ListingStore listings() { return listings; }

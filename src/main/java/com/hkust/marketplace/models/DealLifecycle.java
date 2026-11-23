@@ -39,6 +39,16 @@ public final class DealLifecycle {
     private final Map<String, String> pendingClaimByListing = new HashMap<>();
     private int nextRequestId = 1;
     private int nextDealId = 1;
+    private Listener listener = listing -> { };
+
+    /**
+     * Told after every successful transition, so a store can save it. A transition only ever
+     * changes one listing, its requests and its deals, so the listing is all a listener needs.
+     */
+    @FunctionalInterface
+    public interface Listener {
+        void changed(Listing listing);
+    }
 
     public DealLifecycle() {
         this(Clock.systemDefaultZone());
@@ -49,6 +59,11 @@ public final class DealLifecycle {
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
+    /** Sets the one listener told about every transition (replaces any earlier one). */
+    public synchronized void setListener(Listener listener) {
+        this.listener = Objects.requireNonNull(listener, "listener");
+    }
+
     // ---------- Submit ----------
 
     /** Records a pending price offer on a live Sale listing. */
@@ -57,7 +72,7 @@ public final class DealLifecycle {
         BigDecimal money = requirePositiveMoney(price, "Offer");
         PriceOffer offer = new PriceOffer(nextRequestId(), buyer, listing, money, now());
         requireLiveAndNotDealt(listing);
-        return register(offer);
+        return changed(register(offer));
     }
 
     /** Records a pending borrow request on a live Lend listing. */
@@ -67,7 +82,7 @@ public final class DealLifecycle {
         BorrowRequest request = new BorrowRequest(nextRequestId(), buyer, listing, start, end, now());
         validateBorrowPeriod(listing, start, end);
         requireLiveAndNotDealt(listing);
-        return register(request);
+        return changed(register(request));
     }
 
     /**
@@ -81,7 +96,7 @@ public final class DealLifecycle {
         register(claim);
         listing.setStatus(ListingStatus.RESERVED);
         pendingClaimByListing.put(listing.getId(), claim.getId());
-        return claim;
+        return changed(claim);
     }
 
     // ---------- Counter / accept / decline ----------
@@ -92,7 +107,7 @@ public final class DealLifecycle {
         BigDecimal money = requirePositiveMoney(counterPrice, "Counter price");
         offer.setCounterPrice(money);
         offer.setStatus(RequestStatus.COUNTERED);
-        return offer;
+        return changed(offer);
     }
 
     /** Seller counters a borrow request with another period; repeatable while countered. */
@@ -102,19 +117,19 @@ public final class DealLifecycle {
         validateBorrowPeriod(request.getListing(), start, end);
         request.setCounterPeriod(start, end);
         request.setStatus(RequestStatus.COUNTERED);
-        return request;
+        return changed(request);
     }
 
     /** Seller accepts a pending request. A countered request is accepted by the buyer via {@link #acceptCounter}. */
     public synchronized Deal accept(DealRequest request) {
         requireStatus(request, RequestStatus.PENDING);
-        return acceptAsDeal(request);
+        return changed(acceptAsDeal(request));
     }
 
     /** Buyer accepts the seller's counter on their request. */
     public synchronized Deal acceptCounter(DealRequest request) {
         requireStatus(request, RequestStatus.COUNTERED);
-        return acceptAsDeal(request);
+        return changed(acceptAsDeal(request));
     }
 
     /** Declines a pending or countered request. Declining a pending claim relists the giveaway. */
@@ -127,7 +142,7 @@ public final class DealLifecycle {
                 request.getListing().setStatus(ListingStatus.LIVE);
             }
         }
-        return request;
+        return changed(request);
     }
 
     // ---------- Return / complete / cancel ----------
@@ -137,7 +152,7 @@ public final class DealLifecycle {
         requireBorrowedAndActive(deal, "return");
         close(deal, DealStatus.RETURNED);
         releaseListing(deal);
-        return deal;
+        return changed(deal);
     }
 
     /** Due date passed and the item was recorded as returned automatically. */
@@ -145,7 +160,7 @@ public final class DealLifecycle {
         requireBorrowedAndActive(deal, "auto-return");
         close(deal, DealStatus.AUTO_RETURNED);
         releaseListing(deal);
-        return deal;
+        return changed(deal);
     }
 
     /** Completes a sale or giveaway directly; a loan completes after it is returned. */
@@ -172,14 +187,75 @@ public final class DealLifecycle {
             // finalising it must not touch a newer deal on the same listing.
             deal.setStatus(DealStatus.COMPLETED);
         }
-        return deal;
+        return changed(deal);
     }
 
     public synchronized Deal cancel(Deal deal) {
         requireStatus(deal, DealStatus.ACTIVE);
         close(deal, DealStatus.CANCELLED);
         releaseListing(deal);
+        return changed(deal);
+    }
+
+    // ---------- Restore (loading saved data only) ----------
+
+    /**
+     * Rebuilds a saved price offer exactly as stored, without validation, because its dates
+     * and listing status are history. Only for loading the database; never call from a screen.
+     */
+    public synchronized PriceOffer restoreOffer(String id, Buyer buyer, Listing listing,
+                                                BigDecimal offeredPrice, BigDecimal counterPrice,
+                                                LocalDateTime submittedTime, RequestStatus status) {
+        PriceOffer offer = new PriceOffer(id, buyer, listing, offeredPrice, submittedTime);
+        offer.setCounterPrice(counterPrice);
+        return restored(offer, status);
+    }
+
+    /** Rebuilds a saved borrow request; see {@link #restoreOffer}. */
+    public synchronized BorrowRequest restoreBorrow(String id, Buyer buyer, Listing listing,
+                                                    LocalDateTime startDate, LocalDateTime endDate,
+                                                    LocalDateTime counterStart, LocalDateTime counterEnd,
+                                                    LocalDateTime submittedTime, RequestStatus status) {
+        BorrowRequest request = new BorrowRequest(id, buyer, listing, startDate, endDate, submittedTime);
+        if (counterStart != null || counterEnd != null) {
+            request.setCounterPeriod(counterStart, counterEnd);
+        }
+        return restored(request, status);
+    }
+
+    /** Rebuilds a saved claim; a pending one holds its listing's reservation again. */
+    public synchronized Claim restoreClaim(String id, Buyer buyer, Listing listing,
+                                           LocalDateTime submittedTime, RequestStatus status) {
+        Claim claim = restored(new Claim(id, buyer, listing, submittedTime), status);
+        if (status == RequestStatus.PENDING) {
+            pendingClaimByListing.put(listing.getId(), id);
+        }
+        return claim;
+    }
+
+    /**
+     * Rebuilds a saved deal for an already restored request; an active one is its listing's
+     * active deal again. The due date is derived from the request, as for a new deal.
+     */
+    public synchronized Deal restoreDeal(String id, DealRequest request, LocalDateTime startDate,
+                                         LocalDateTime completedDate, DealStatus status) {
+        if (requests.get(request.getId()) != request) {
+            throw new IllegalArgumentException("Restore request " + request.getId() + " first");
+        }
+        Deal deal = new Deal(id, request, startDate);
+        deal.setCompletedDate(completedDate);
+        deal.setStatus(Objects.requireNonNull(status, "status"));
+        deals.put(id, deal);
+        if (status == DealStatus.ACTIVE) {
+            activeDealByListing.put(request.getListing().getId(), id);
+        }
+        nextDealId = Math.max(nextDealId, numericId(id, "D") + 1);
         return deal;
+    }
+
+    /** A request by id, or {@code null}. */
+    public synchronized DealRequest findRequest(String id) {
+        return requests.get(id);
     }
 
     // ---------- Queries ----------
@@ -214,6 +290,29 @@ public final class DealLifecycle {
 
     private LocalDateTime now() {
         return LocalDateTime.now(clock);
+    }
+
+    private <T> T changed(T result) {
+        Listing listing = result instanceof Deal deal ? deal.getListing() : ((DealRequest) result).getListing();
+        listener.changed(listing);
+        return result;
+    }
+
+    private <R extends DealRequest> R restored(R request, RequestStatus status) {
+        if (requests.containsKey(request.getId())) {
+            throw new IllegalArgumentException("Duplicate request id " + request.getId());
+        }
+        request.setStatus(Objects.requireNonNull(status, "status"));
+        requests.put(request.getId(), request);
+        nextRequestId = Math.max(nextRequestId, numericId(request.getId(), "Q") + 1);
+        return request;
+    }
+
+    private static int numericId(String id, String prefix) {
+        if (id == null || !id.startsWith(prefix)) {
+            throw new IllegalArgumentException("Expected a " + prefix + "-id, got " + id);
+        }
+        return Integer.parseInt(id.substring(prefix.length()));
     }
 
     private String nextRequestId() {

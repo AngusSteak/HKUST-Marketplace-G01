@@ -1,2 +1,14 @@
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Local SQLite database (created on first run; never commit or zip)
+data/
+
+# Uploaded demo photos (created on first run; keep the placeholder tracked)
 photos/*
 !photos/.gitkeep

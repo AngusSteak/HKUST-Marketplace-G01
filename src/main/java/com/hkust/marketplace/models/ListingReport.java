@@ -17,6 +17,12 @@ public class ListingReport {
     private String resolution;
 
     public ListingReport(String id, Buyer buyer, Listing listing, String reason) {
+        this(id, buyer, listing, reason, LocalDateTime.now(), ReportStatus.OPEN, null);
+    }
+
+    /** Rebuilds a saved report exactly as stored. Only for loading the database. */
+    public ListingReport(String id, Buyer buyer, Listing listing, String reason,
+                         LocalDateTime reportedTime, ReportStatus status, String resolution) {
         this.id = Objects.requireNonNull(id, "id");
         this.buyer = Objects.requireNonNull(buyer, "buyer");
         this.listing = Objects.requireNonNull(listing, "listing");
@@ -24,7 +30,9 @@ public class ListingReport {
             throw new IllegalArgumentException("Report reason must not be blank");
         }
         this.reason = reason.trim();
-        this.reportedTime = LocalDateTime.now();
+        this.reportedTime = Objects.requireNonNull(reportedTime, "reportedTime");
+        this.status = Objects.requireNonNull(status, "status");
+        this.resolution = resolution;
     }
 
     public String getId() { return id; }

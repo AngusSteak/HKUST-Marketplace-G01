@@ -11,6 +11,7 @@ import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingStore;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
 import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
@@ -122,7 +123,12 @@ public class SellerDashboardController {
             Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Delete this listing?");
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
-                    DummyDataService.getInstance().listings().remove(l.getId());
+                    try {
+                        new SellerService(DummyDataService.getInstance())
+                                .deleteListing(SessionManager.getCurrentUser(), l);
+                    } catch (SecurityException | IllegalStateException ex) {
+                        new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                    }
                     showMyListings();
                 }
             });
