@@ -19,6 +19,7 @@ import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.ChatService;
@@ -30,6 +31,7 @@ import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingSearch;
 import com.hkust.marketplace.utils.MyDealsService;
 import com.hkust.marketplace.utils.ProfileService;
+import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -59,7 +61,7 @@ public class BuyerDashboardController {
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnBrowse, btnDeals, btnChats, btnHistory, btnFavourites, btnNotifications, btnProfile;
+    @FXML private Button btnBrowse, btnDeals, btnChats, btnHistory, btnReviews, btnFavourites, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
@@ -442,9 +444,7 @@ public class BuyerDashboardController {
         chatBtn.setOnAction(e -> openChat(listing, "Browse Marketplace", this::showBrowse));
         Button reportBtn = new Button("Report Listing");
         reportBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        // TODO(#23): open the Report Listing form (SRS UC-1.10).
-        reportBtn.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION,
-                "Reporting listings is coming soon.").showAndWait());
+        reportBtn.setOnAction(e -> showReportDialog(listing));
         if (!fromDeal) {
             // From My Deals the chat is shown below the listing instead.
             actions.getChildren().add(chatBtn);
@@ -476,6 +476,7 @@ public class BuyerDashboardController {
         }
 
         VBox card = new VBox(12, photos, badges, title, price, description, fields, actions);
+        card.getChildren().add(sellerReviews(listing.getSellerUsername(), listing.getSellerFullName()));
         card.getStyleClass().add("listing-card");
         VBox root = new VBox(12, back, card);
         if (fromDeal && SessionManager.getCurrentUser() instanceof Buyer buyer) {
@@ -682,7 +683,7 @@ public class BuyerDashboardController {
      * Submits when the buyer confirms. An invalid entry keeps the dialog open with the reason;
      * if the listing has meanwhile become unavailable the dialog closes and says so.
      */
-    private void onConfirm(Dialog<ButtonType> dialog, Label error, Supplier<DealRequest> submit) {
+    private void onConfirm(Dialog<ButtonType> dialog, Label error, Supplier<?> submit) {
         Button confirm = (Button) dialog.getDialogPane().getButtonTypes().stream()
                 .filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
                 .map(b -> dialog.getDialogPane().lookupButton(b)).findFirst().orElseThrow();
@@ -858,9 +859,12 @@ public class BuyerDashboardController {
 
     /** SRS UC-1.6 step 3.4.4: after completing, the buyer is invited to rate the seller. */
     private void promptRating(Deal deal) {
-        // TODO(#23): open the rating form (Manage Reviews) for this deal.
-        info("Deal complete! You can rate " + deal.getSellerDisplayName()
-                + " for this deal from Deal History.");
+        Alert ask = new Alert(Alert.AlertType.CONFIRMATION, "Deal complete! Would you like to rate "
+                + deal.getSellerDisplayName() + " now?", new ButtonType("Rate Seller", ButtonBar.ButtonData.OK_DONE),
+                new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE));
+        ask.setHeaderText(null);
+        ask.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> showRateDialog(deal));
     }
 
     private VBox rowInfo(Listing listing, String type, Label status) {
@@ -1060,6 +1064,147 @@ public class BuyerDashboardController {
         };
     }
 
+    // ---------- Manage Reviews (SRS UC-1.9) and Report Listing (UC-1.10) ----------
+
+    private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
+
+    /** Deals ready to review, then every review the buyer has written with any seller reply. */
+    @FXML
+    private void showReviews() {
+        setActive(btnReviews, "My Reviews");
+        contentPane.getChildren().clear();
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(4));
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Buyer)) {
+            root.getChildren().add(muted("Log in as a buyer to manage your reviews."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+
+        root.getChildren().add(sectionTitle("Ready to review"));
+        List<Deal> reviewable = reviewService.reviewableDeals(user);
+        if (reviewable.isEmpty()) {
+            root.getChildren().add(muted("No finished deals are waiting for a review."));
+        }
+        for (Deal deal : reviewable) {
+            Label status = new Label(statusLabel(deal.getStatus()));
+            status.getStyleClass().addAll("badge", "badge-live");
+            VBox info = rowInfo(deal.getListing(), requestTypeLabel(deal.getDealType()), status);
+            info.getChildren().add(muted("Finished " + deal.getCompletedDate().format(DEAL_TIME)));
+            Button rate = new Button("Rate Seller");
+            rate.getStyleClass().addAll("btn-primary", "btn-sm");
+            rate.setOnAction(e -> {
+                showRateDialog(deal);
+                showReviews();
+            });
+            root.getChildren().add(actionRow(info, new HBox(8, rate)));
+        }
+
+        root.getChildren().add(sectionTitle("My reviews"));
+        List<Review> mine = reviewService.myReviews(user);
+        if (mine.isEmpty()) {
+            root.getChildren().add(muted("You haven't written any reviews yet."));
+        }
+        for (Review review : mine) {
+            Label stars = new Label(stars(review.getRating()) + "  " + review.getListingTitle());
+            stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            VBox item = new VBox(3, stars,
+                    muted("for " + displayName(review.getSellerUsername())
+                            + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)),
+                    new Label(review.getComment() == null ? "" : review.getComment()));
+            if (review.isHidden()) {
+                item.getChildren().add(muted("Hidden by the admin, so it no longer counts towards the rating."));
+            }
+            if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
+                Label reply = new Label("Seller replied: " + review.getSellerReply());
+                reply.setWrapText(true);
+                reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
+                item.getChildren().add(reply);
+            }
+            item.getStyleClass().add("notif-item");
+            root.getChildren().add(item);
+        }
+
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    /** The review form: 1-5 stars and text, checked on submit (A1, A2). */
+    private void showRateDialog(Deal deal) {
+        ToggleGroup starsGroup = new ToggleGroup();
+        HBox starRow = new HBox(6);
+        for (int i = 1; i <= 5; i++) {
+            ToggleButton star = new ToggleButton("\u2605".repeat(i));
+            star.setMinWidth(Region.USE_PREF_SIZE);
+            star.setUserData(i);
+            star.setToggleGroup(starsGroup);
+            starRow.getChildren().add(star);
+        }
+        TextArea text = new TextArea();
+        text.setPromptText("How was the deal with " + deal.getSellerDisplayName() + "?");
+        text.setPrefRowCount(4);
+        text.setWrapText(true);
+        Label error = dialogError();
+        VBox body = new VBox(8, new Label("Rating"), starRow, new Label("Review"), text, error);
+
+        Dialog<ButtonType> dialog = requestDialog("Rate Seller",
+                "Rate " + deal.getSellerDisplayName() + " for '" + deal.getListing().getTitle() + "'", body,
+                "Submit Review");
+        onConfirm(dialog, error, () -> reviewService.submitReview(SessionManager.getCurrentUser(), deal,
+                starsGroup.getSelectedToggle() == null ? 0 : (Integer) starsGroup.getSelectedToggle().getUserData(),
+                text.getText()));
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> info("Thank you! Your review of " + deal.getSellerDisplayName() + " has been submitted."));
+    }
+
+    /** Report Listing (UC-1.10): a reason is required (A1); Cancel discards the report (A2). */
+    private void showReportDialog(Listing listing) {
+        TextArea reason = new TextArea();
+        reason.setPromptText("What is wrong with this listing?");
+        reason.setPrefRowCount(4);
+        reason.setWrapText(true);
+        Label error = dialogError();
+        VBox body = new VBox(8, muted("The admin will review your report."), new Label("Reason"), reason, error);
+        Dialog<ButtonType> dialog = requestDialog("Report Listing", "Report: " + listing.getTitle(), body,
+                "Submit Report");
+        onConfirm(dialog, error, () -> reviewService.reportListing(SessionManager.getCurrentUser(), listing,
+                reason.getText()));
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> info("Thank you. Your report has been sent to the admin."));
+    }
+
+    /** The seller's latest visible reviews, shown on the listing details (SRS UC-1.9 postconditions). */
+    private VBox sellerReviews(String sellerUsername, String sellerName) {
+        List<Review> visible = DummyDataService.getInstance().reviews().forSeller(sellerUsername).stream()
+                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())
+                .limit(3)
+                .toList();
+        VBox box = new VBox(4);
+        Label heading = new Label("Reviews of " + sellerName);
+        heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        box.getChildren().add(heading);
+        if (visible.isEmpty()) {
+            box.getChildren().add(muted("No reviews yet."));
+        }
+        for (Review review : visible) {
+            box.getChildren().add(muted(stars(review.getRating()) + "  \u201c" + review.getComment() + "\u201d  \u2014 "
+                    + displayName(review.getBuyerUsername())));
+        }
+        return box;
+    }
+
+    /** A user's name as others see it ("deleted user" after a soft delete). */
+    private static String displayName(String username) {
+        User user = DummyDataService.getInstance().users().find(username);
+        return user == null ? username : user.getDisplayName();
+    }
+
+    private static String stars(int rating) {
+        return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
+    }
+
     /** The buyer's favourite listings and followed sellers (SRS UC-1.3 S1 steps 4-5). */
     @FXML
     private void showFavourites() {
@@ -1256,8 +1401,7 @@ public class BuyerDashboardController {
                     openChat(listing, "Notifications", this::showNotifications);
                 }
             }
-            // TODO(#23): open the buyer's review once Manage Reviews exists.
-            case REVIEW -> showHistory();
+            case REVIEW -> showReviews();
             case USER -> {
                 // A buyer is only ever told about their own account.
                 User me = SessionManager.getCurrentUser();
