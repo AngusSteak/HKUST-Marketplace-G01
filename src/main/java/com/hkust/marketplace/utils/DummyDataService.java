@@ -14,8 +14,8 @@ import java.util.Objects;
  * ({@value #DATABASE_FILE}).
  *
  * <p>Every store is saved to the database: users and listings (#55); deals, favourites and
- * follows (#56); chats (#57); notifications, reviews, reports and the audit log (#58). Until then the database is recreated and re-seeded on
- * every launch (see {@link #RESET_PROPERTY}), so all stores stay consistent with each other.
+ * follows (#56); chats (#57); notifications, reviews, reports and the audit log (#58). For now
+ * the database is still recreated and re-seeded on every launch (see {@link #RESET_PROPERTY}).
  */
 public class DummyDataService {
 
