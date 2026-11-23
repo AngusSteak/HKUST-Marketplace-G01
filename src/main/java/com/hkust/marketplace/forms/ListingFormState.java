@@ -255,6 +255,10 @@ public class ListingFormState {
 
     // --- Helpers -------------------------------------------------------------------
 
+    public Duration getLendingDuration() {
+        return LendingRules.requireLendingDuration(parsedDuration());
+    }
+
     /** Parses the raw days/hours strings; numeric-rule checking stays in LendingRules. */
     private Duration parsedDuration() {
         String days = rawDurationDays == null ? "" : rawDurationDays.trim();

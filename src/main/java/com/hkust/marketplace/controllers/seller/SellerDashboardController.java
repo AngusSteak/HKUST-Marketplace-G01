@@ -100,6 +100,17 @@ public class SellerDashboardController {
             price.setText(price.getText() + " · " + DurationText.format(lend.getLendingDuration()));
         }
         info.getChildren().addAll(title, meta, price);
+        String reason = switch (l.getStatus()) {
+            case REJECTED -> l.getRejectionReason();
+            case TAKEN_DOWN -> l.getTakedownReason();
+            default -> null;
+        };
+        if (reason != null && !reason.isBlank()) {
+            Label reasonLabel = new Label("Reason: " + reason);
+            reasonLabel.setStyle("-fx-text-fill: #b3261e; -fx-font-size: 12px;");
+            reasonLabel.setWrapText(true);
+            info.getChildren().add(reasonLabel);
+        }
 
         List<DealRequest> openRequests = DummyDataService.getInstance().deals().lifecycle()
                 .requestsFor(l).stream()
@@ -136,10 +147,20 @@ public class SellerDashboardController {
             default -> status.getStyleClass().add("badge-sold");
         }
 
+        boolean editAllowed = !l.isDeleted()
+                && (l.getStatus() == ListingStatus.LIVE || l.getStatus() == ListingStatus.PENDING_REVIEW
+                    || l.getStatus() == ListingStatus.REJECTED)
+                && openRequests.isEmpty();
         Button editBtn = new Button("Edit");
         editBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        editBtn.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION,
-                "Edit form would open here.\n(Demo placeholder)").showAndWait());
+        editBtn.setDisable(!editAllowed);
+        if (!openRequests.isEmpty()) {
+            editBtn.setTooltip(new Tooltip("Editing is unavailable while offers are open."));
+            Label hint = new Label("Editing is unavailable while offers are open.");
+            hint.setStyle("-fx-text-fill: #b3261e; -fx-font-size: 11px;");
+            info.getChildren().add(hint);
+        }
+        editBtn.setOnAction(e -> showEditListing(l));
 
         Button delBtn = new Button("Delete");
         delBtn.getStyleClass().addAll("btn-danger", "btn-sm");
@@ -309,6 +330,56 @@ public class SellerDashboardController {
 
         new Alert(Alert.AlertType.INFORMATION,
                 "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – saved locally)").showAndWait();
+        showMyListings();
+    }
+
+    private void showEditListing(Listing target) {
+        setActive(btnListings, "My Listings");
+        contentPane.getChildren().clear();
+
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to edit a listing.").showAndWait();
+            showMyListings();
+            return;
+        }
+
+        listingForm = new ListingFormComponent(() -> seller, state -> submitEdit(target, state));
+        listingForm.setOnCancel(this::showMyListings);
+
+        ScrollPane scroll = new ScrollPane(listingForm.getView());
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private void submitEdit(Listing target, ListingFormState state) {
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to edit a listing.").showAndWait();
+            return;
+        }
+
+        Map<String, String> errors = state.validate(seller);
+        if (!errors.isEmpty()) {
+            listingForm.showErrors(errors);
+            return;
+        }
+
+        try {
+            sellerService.updateListing(user, target, state, photoStorage);
+        } catch (SecurityException ex) {
+            new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+            return;
+        } catch (RuntimeException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not save the edit: " + ex.getMessage()).showAndWait();
+            return;
+        }
+
+        new Alert(Alert.AlertType.INFORMATION,
+                "Listing updated and sent back for review.").showAndWait();
         showMyListings();
     }
 

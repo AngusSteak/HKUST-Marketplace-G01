@@ -3,11 +3,14 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
@@ -29,6 +32,8 @@ public final class SellerService {
 
     /** SRS UC-2.4 A2: a listing that is no longer live or pending can't be changed. */
     public static final String NOT_CHANGEABLE = "This listing can no longer be changed.";
+
+    public static final String HAS_ACTIVE_OFFERS = "This listing has open offers and cannot be edited.";
 
     private final DummyDataService data;
 
@@ -81,6 +86,71 @@ public final class SellerService {
             }
             throw e;
         }
+        return listing;
+    }
+
+    public Listing updateListing(User actor, Listing listing, ListingFormState state, PhotoStorage photos) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(listing, "listing");
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(photos, "photos");
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        ListingStatus status = listing.getStatus();
+        if (listing.isDeleted() || (status != ListingStatus.LIVE && status != ListingStatus.PENDING_REVIEW
+                && status != ListingStatus.REJECTED)) {
+            throw new IllegalStateException(NOT_CHANGEABLE);
+        }
+        boolean hasOpenOffers = data.deals().lifecycle().requestsFor(listing).stream()
+                .anyMatch(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED);
+        if (hasOpenOffers) {
+            throw new IllegalStateException(HAS_ACTIVE_OFFERS);
+        }
+
+        Map<String, String> errors = state.validate(seller);
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException("Invalid listing: " + errors);
+        }
+        if (state.getType() != listing.getType()) {
+            throw new IllegalArgumentException("Listing type cannot be changed.");
+        }
+
+        listing.setTitle(state.getTitle());
+        listing.setDescription(state.getDescription());
+        listing.setCategory(state.getCategory());
+        listing.setCondition(state.getCondition());
+        listing.setMeetupLocation(state.getMeetupLocation());
+
+        List<String> paths = new ArrayList<>(listing.getPhotoPaths());
+        for (PhotoDraft draft : state.getChosenPhotos()) {
+            if (paths.size() >= ListingFormState.MAX_PHOTOS) {
+                break;
+            }
+            paths.add(photos.store(draft.source(), seller.getUsername(), listing.getId()));
+        }
+        listing.setPhotoPaths(paths);
+
+        if (listing instanceof SaleListing sale) {
+            sale.setPrice(Money.of(state.getRawPrice()));
+        } else if (listing instanceof LendListing lend) {
+            lend.setLendingDuration(state.getLendingDuration());
+        }
+
+        listing.setStatus(ListingStatus.PENDING_REVIEW);
+        listing.setRejectionReason(null);
+        listing.setTakedownReason(null);
+        listing.setReviewedAt(null);
+
+        data.database().inTransaction(() -> {
+            data.listings().update(listing);
+            NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());
+            for (User admin : data.users().byRole(UserRole.ADMIN)) {
+                data.notifications().notify(admin.getUsername(), NotificationCategory.NEW_SUBMISSION,
+                        seller.getFullName() + " updated '" + listing.getTitle() + "' and resubmitted it for review.",
+                        ref);
+            }
+        });
         return listing;
     }
 
