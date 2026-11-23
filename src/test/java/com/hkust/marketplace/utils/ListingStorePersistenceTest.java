@@ -134,6 +134,32 @@ class ListingStorePersistenceTest {
         assertThrows(IllegalArgumentException.class, () -> store.update(stray));
     }
 
+    @Test
+    void viewsAreCountedAndSaved() {
+        Listing lamp = new GiveawayListing(charlie, "Lamp", "", Category.FURNITURE, Condition.USED, Location.UG_HALL_V);
+        store.add(lamp);
+
+        store.recordView(lamp);
+        store.recordView(lamp);
+
+        assertEquals(2, lamp.getViewCount());
+        assertEquals(2, reload().find(lamp.getId()).getViewCount());
+        Listing stray = new GiveawayListing(charlie, "Stray", "", Category.OTHERS, Condition.USED, Location.LIBRARY);
+        stray.setId("L999");
+        assertThrows(IllegalArgumentException.class, () -> store.recordView(stray));
+    }
+
+    @Test
+    void findAllKeepsTheOrderAndSkipsMissingIds() {
+        for (String title : List.of("A", "B", "C")) {
+            store.add(new GiveawayListing(charlie, title, "", Category.OTHERS, Condition.USED, Location.LIBRARY));
+        }
+
+        List<Listing> found = store.findAll(List.of("L102", "L999", "L100"));
+
+        assertEquals(List.of("C", "A"), found.stream().map(Listing::getTitle).toList());
+    }
+
     private ListingStore reload() {
         UserStore freshUsers = new UserStore(db);
         freshUsers.load();

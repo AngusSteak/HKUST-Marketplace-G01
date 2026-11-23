@@ -233,9 +233,7 @@ public class BuyerDashboardController {
         title.setWrapText(true);
 
         // Lend listings have no price; show how long they can be borrowed instead.
-        Label price = new Label(listing instanceof LendListing lend
-                ? "Borrow for up to " + DurationText.format(lend.getLendingDuration())
-                : listing.getPriceDisplay());
+        Label price = new Label(priceText(listing));
         price.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 16px;");
         price.setWrapText(true);
 
@@ -252,6 +250,21 @@ public class BuyerDashboardController {
                 .format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
         date.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
 
+        Button viewBtn = new Button("View Details");
+        viewBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        viewBtn.setOnAction(e -> showListingDetails(listing));
+        title.setOnMouseClicked(e -> showListingDetails(listing));
+        title.setStyle(title.getStyle() + " -fx-cursor: hand;");
+
+        HBox actionRow = new HBox(8, actionButton(listing), viewBtn);
+
+        card.getChildren().addAll(photo(firstPhoto(listing), 228, 120), top, title, price, meta, seller,
+                location, date, actionRow);
+        return card;
+    }
+
+    /** The type-specific deal button: Make Offer, Request Borrow or Claim Item. */
+    private Button actionButton(Listing listing) {
         Button actionBtn = new Button();
         actionBtn.getStyleClass().addAll("btn-primary", "btn-sm");
         switch (listing.getType()) {
@@ -268,27 +281,31 @@ public class BuyerDashboardController {
                 actionBtn.setOnAction(e -> claimItem(listing));
             }
         }
-
-        Button chatBtn = new Button("Chat");
-        chatBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        chatBtn.setOnAction(e -> openChat(listing));
-
-        HBox actionRow = new HBox(8, actionBtn, chatBtn);
-
-        card.getChildren().addAll(thumbnail(listing), top, title, price, meta, seller, location, date, actionRow);
-        return card;
+        return actionBtn;
     }
 
-    /** The first photo, or a placeholder when the listing has none or the file is missing. */
-    private static StackPane thumbnail(Listing listing) {
+    /** What a listing costs: the price, "Free", or how long a lend listing can be borrowed. */
+    private static String priceText(Listing listing) {
+        return listing instanceof LendListing lend
+                ? "Borrow for up to " + DurationText.format(lend.getLendingDuration())
+                : listing.getPriceDisplay();
+    }
+
+    private static String firstPhoto(Listing listing) {
+        return listing.getPhotoPaths().isEmpty() ? null : listing.getPhotoPaths().get(0);
+    }
+
+    /** A photo, or a placeholder when there is none or the file is missing or unreadable. */
+    private static StackPane photo(String path, double width, double height) {
         StackPane box = new StackPane();
-        box.setPrefSize(228, 120);
-        box.setMinHeight(120);
+        box.setPrefSize(width, height);
+        box.setMinSize(width, height);
+        box.setMaxSize(width, height);
         box.setStyle("-fx-background-color: #eef2f7; -fx-background-radius: 8;");
-        Path photo = listing.getPhotoPaths().isEmpty() ? null : Path.of(listing.getPhotoPaths().get(0));
+        Path file = path == null ? null : Path.of(path);
         // Loaded synchronously so a missing or unreadable file falls back to the placeholder.
-        Image image = photo != null && Files.isRegularFile(photo)
-                ? new Image(photo.toUri().toString(), 228, 120, true, true, false)
+        Image image = file != null && Files.isRegularFile(file)
+                ? new Image(file.toUri().toString(), width, height, true, true, false)
                 : null;
         if (image != null && !image.isError()) {
             box.getChildren().add(new ImageView(image));
@@ -298,6 +315,125 @@ public class BuyerDashboardController {
             box.getChildren().add(none);
         }
         return box;
+    }
+
+    // ---------- Listing details (SRS UC-1.3 S1) ----------
+
+    /**
+     * Shows one listing in full and counts the view. A listing that is no longer live (or whose
+     * seller is disabled) is refused with a message instead (A3).
+     */
+    private void showListingDetails(Listing listing) {
+        if (!ListingSearch.isBrowsable(listing)) {
+            new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
+            return;
+        }
+        DummyDataService data = DummyDataService.getInstance();
+        data.listings().recordView(listing);
+        setActive(btnBrowse, "Listing Details");
+        contentPane.getChildren().clear();
+
+        Button back = new Button("\u2190 Back to Browse Marketplace");
+        back.getStyleClass().addAll("btn-outline", "btn-sm");
+        back.setOnAction(e -> showBrowse());
+
+        FlowPane photos = new FlowPane(10, 10);
+        List<String> paths = listing.getPhotoPaths();
+        if (paths.isEmpty()) {
+            photos.getChildren().add(photo(null, 260, 180));
+        } else {
+            paths.forEach(path -> photos.getChildren().add(photo(path, 260, 180)));
+        }
+
+        Label typeBadge = new Label(listing.getTypeDisplay());
+        typeBadge.getStyleClass().addAll("badge", listing.getType() == ListingType.SELL ? "badge-sold"
+                : listing.getType() == ListingType.LEND ? "badge-pending" : "badge-live");
+        Label status = new Label("Available");
+        status.getStyleClass().addAll("badge", "badge-live");
+        HBox badges = new HBox(6, typeBadge, status);
+
+        Label title = new Label(listing.getTitle());
+        title.setStyle("-fx-font-weight: bold; -fx-font-size: 22px; -fx-text-fill: #1a1a2e;");
+        title.setWrapText(true);
+        Label price = new Label(priceText(listing));
+        price.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 18px;");
+
+        Label description = new Label(listing.getDescription() == null || listing.getDescription().isBlank()
+                ? "No description." : listing.getDescription());
+        description.setWrapText(true);
+        description.setStyle("-fx-text-fill: #1a1a2e; -fx-font-size: 14px;");
+
+        GridPane fields = new GridPane();
+        fields.setHgap(16);
+        fields.setVgap(6);
+        String[][] rows = {
+                {"Category", listing.getCategory().getLabel()},
+                {"Condition", listing.getCondition().getLabel()},
+                {"Listing type", listing.getTypeDisplay()},
+                {"Meet-up location", listing.getMeetupLocation().getLabel()},
+                {"Posted", ListingSearch.postedDate(listing).format(DateTimeFormatter.ofPattern("dd MMM yyyy"))},
+                {"Views", String.valueOf(listing.getViewCount())},
+                {"Seller", listing.getSellerFullName() + "  \u00b7  " + ratingText(listing.getSellerUsername())},
+        };
+        for (int i = 0; i < rows.length; i++) {
+            Label name = new Label(rows[i][0]);
+            name.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            Label value = new Label(rows[i][1]);
+            value.setStyle("-fx-text-fill: #1a1a2e; -fx-font-size: 13px;");
+            fields.addRow(i, name, value);
+        }
+
+        HBox actions = new HBox(8, actionButton(listing));
+        Button chatBtn = new Button("Chat");
+        chatBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        chatBtn.setOnAction(e -> openChat(listing));
+        Button reportBtn = new Button("Report Listing");
+        reportBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        // TODO(#23): open the Report Listing form (SRS UC-1.10).
+        reportBtn.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION,
+                "Reporting listings is coming soon.").showAndWait());
+        actions.getChildren().addAll(chatBtn, reportBtn);
+        if (SessionManager.getCurrentUser() instanceof Buyer buyer
+                && listing.getSeller() instanceof com.hkust.marketplace.models.Seller seller) {
+            Button favBtn = new Button();
+            favBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+            Runnable showFav = () -> favBtn.setText(data.favourites().isFavourite(buyer, listing)
+                    ? "\u2665 Favourited" : "\u2661 Favourite");
+            showFav.run();
+            favBtn.setOnAction(e -> {
+                data.favourites().toggleFavourite(buyer, listing);
+                showFav.run();
+            });
+            Button followBtn = new Button();
+            followBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+            Runnable showFollow = () -> followBtn.setText(data.favourites().isFollowing(buyer, seller)
+                    ? "\u2713 Following " + seller.getDisplayName() : "Follow Seller");
+            showFollow.run();
+            followBtn.setOnAction(e -> {
+                data.favourites().toggleFollow(buyer, seller);
+                showFollow.run();
+            });
+            actions.getChildren().addAll(favBtn, followBtn);
+        }
+
+        VBox card = new VBox(12, photos, badges, title, price, description, fields, actions);
+        card.getStyleClass().add("listing-card");
+        VBox root = new VBox(12, back, card);
+        root.setPadding(new Insets(4));
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    /** "★ 4.5 (2 reviews)" from the seller's visible reviews, or "No ratings yet". */
+    private static String ratingText(String sellerUsername) {
+        DummyDataService data = DummyDataService.getInstance();
+        java.util.OptionalDouble average = data.reviews().averageRating(sellerUsername);
+        if (average.isEmpty()) {
+            return "No ratings yet";
+        }
+        int count = data.reviews().visibleCount(sellerUsername);
+        return String.format("\u2605 %.1f (%d review%s)", average.getAsDouble(), count, count == 1 ? "" : "s");
     }
 
     private void openChat(Listing listing) {
@@ -515,22 +651,90 @@ public class BuyerDashboardController {
         };
     }
 
+    /** The buyer's favourite listings and followed sellers (SRS UC-1.3 S1 steps 4-5). */
     @FXML
     private void showFavourites() {
         setActive(btnFavourites, "Favourites & Following");
         contentPane.getChildren().clear();
-        VBox root = new VBox(16);
+        VBox root = new VBox(12);
         root.setPadding(new Insets(4));
-        root.setAlignment(Pos.CENTER);
-        Label icon = new Label("♥");
-        icon.setStyle("-fx-font-size: 48px; -fx-text-fill: #A68137;");
-        Label title = new Label("Favourites, Bookmarks & Following");
-        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #003974;");
-        Label desc = new Label("Save listings you like and follow favourite sellers.\nThis section is a UI placeholder for students to implement.");
-        desc.setStyle("-fx-text-fill: #5a5a7a; -fx-text-alignment: center;");
-        desc.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
-        root.getChildren().addAll(icon, title, desc);
-        contentPane.getChildren().add(root);
+        if (!(SessionManager.getCurrentUser() instanceof Buyer buyer)) {
+            root.getChildren().add(new Label("Log in as a buyer to see your favourites."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+        DummyDataService data = DummyDataService.getInstance();
+
+        Label favTitle = new Label("Favourite listings");
+        favTitle.getStyleClass().add("section-title");
+        root.getChildren().add(favTitle);
+        List<Listing> favourites = data.listings().findAll(data.favourites().favouriteListingIds(buyer));
+        if (favourites.isEmpty()) {
+            root.getChildren().add(muted("You haven't favourited any listings yet. Use \u2661 Favourite on a listing."));
+        }
+        for (Listing listing : favourites) {
+            boolean available = ListingSearch.isBrowsable(listing);
+            Label name = new Label(listing.getTitle());
+            name.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            Label detail = muted(priceText(listing) + "  \u00b7  " + listing.getSellerFullName()
+                    + "  \u00b7  " + (available ? "Available" : "No longer available"));
+            VBox info = new VBox(2, name, detail);
+            HBox.setHgrow(info, Priority.ALWAYS);
+            Button view = new Button("View");
+            view.getStyleClass().addAll("btn-primary", "btn-sm");
+            view.setDisable(!available);
+            view.setOnAction(e -> showListingDetails(listing));
+            Button remove = new Button("Remove");
+            remove.getStyleClass().addAll("btn-outline", "btn-sm");
+            remove.setOnAction(e -> {
+                data.favourites().toggleFavourite(buyer, listing);
+                showFavourites();
+            });
+            HBox row = new HBox(10, info, view, remove);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("notif-item");
+            root.getChildren().add(row);
+        }
+
+        Label followTitle = new Label("Followed sellers");
+        followTitle.getStyleClass().add("section-title");
+        root.getChildren().add(followTitle);
+        List<String> followed = data.favourites().followedSellers(buyer);
+        if (followed.isEmpty()) {
+            root.getChildren().add(muted("You aren't following any sellers yet. Use Follow Seller on a listing."));
+        }
+        for (String username : followed) {
+            if (!(data.users().find(username) instanceof com.hkust.marketplace.models.Seller seller)) {
+                continue;
+            }
+            long live = data.listings().bySeller(username).stream().filter(ListingSearch::isBrowsable).count();
+            Label name = new Label(seller.getDisplayName() + " (@" + seller.getUsername() + ")");
+            name.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            Label detail = muted(ratingText(username) + "  \u00b7  " + live + " live listing" + (live == 1 ? "" : "s"));
+            VBox info = new VBox(2, name, detail);
+            HBox.setHgrow(info, Priority.ALWAYS);
+            Button unfollow = new Button("Unfollow");
+            unfollow.getStyleClass().addAll("btn-outline", "btn-sm");
+            unfollow.setOnAction(e -> {
+                data.favourites().toggleFollow(buyer, seller);
+                showFavourites();
+            });
+            HBox row = new HBox(10, info, unfollow);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("notif-item");
+            root.getChildren().add(row);
+        }
+
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private static Label muted(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+        label.setWrapText(true);
+        return label;
     }
 
     @FXML
