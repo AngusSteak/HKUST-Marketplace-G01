@@ -139,7 +139,7 @@ Copy the lines that start with `Exception in thread` or `Caused by`.
 1. Replace `DummyDataService` with real repositories / REST clients backed by a database — the current store is in-memory only
 2. Keep credentials BCrypt-hashed through `PasswordHasher` when persistence lands; the demo seed hashes the demo passwords at startup
 3. Replace the in-memory `SessionManager` with real session tokens and enforce RBAC at the API layer (the current portal checks are demo-only UI gates)
-4. Photo upload, chat, auto-return for borrowed items, etc.
+4. Chat, auto-return for borrowed items, etc. (Photo choosing is wired into the seller Create Listing form; stored photos use a local-folder demo stand-in under `photos/`, not a real upload backend.)
 
 ## Licence
 
