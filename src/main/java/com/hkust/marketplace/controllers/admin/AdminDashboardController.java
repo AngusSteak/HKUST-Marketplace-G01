@@ -218,6 +218,7 @@ public class AdminDashboardController {
             toggle.getStyleClass().addAll(u.isActive() ? "btn-danger" : "btn-success", "btn-sm");
             toggle.setOnAction(e -> {
                 u.setActive(!u.isActive());
+                DummyDataService.getInstance().users().save(u);
                 showUsers();
             });
 
@@ -229,6 +230,7 @@ public class AdminDashboardController {
                 conf.showAndWait().ifPresent(r -> {
                     if (r == ButtonType.OK) {
                         u.setActive(false);
+                        DummyDataService.getInstance().users().save(u);
                         DummyDataService.getInstance().audit()
                                 .recordAccountDeletion(adminUsername(), "@" + u.getUsername());
                         new Alert(Alert.AlertType.INFORMATION, "User deactivated (demo safety).").showAndWait();
