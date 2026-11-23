@@ -3,7 +3,9 @@ package com.hkust.marketplace.utils;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingReport;
+import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.ReportStatus;
+import com.hkust.marketplace.models.SaleListing;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -85,6 +87,19 @@ class ReportStoreTest {
                     assertEquals("Listing taken down", r.getResolution());
                 });
         assertEquals(ReportStatus.OPEN, store.reports().openReports(second).get(0).getStatus());
+    }
+
+    @Test
+    void reportsFollowTheListingIdWhenTheListingObjectIsReplaced() {
+        ListingReport report = store.reports().fileReport(alice, first, "Spam");
+        Listing replacement = new SaleListing(first.getSeller(), first.getTitle(), first.getDescription(),
+                first.getCategory(), first.getCondition(), first.getMeetupLocation(), Money.of("150"));
+        replacement.setId(first.getId());
+        store.listings().update(replacement);
+
+        assertEquals(List.of(report), store.reports().openReports(replacement));
+        assertEquals(1, store.reports().resolveAll(replacement, "Edited by seller"));
+        assertTrue(store.reports().openReports(first).isEmpty());
     }
 
     @Test

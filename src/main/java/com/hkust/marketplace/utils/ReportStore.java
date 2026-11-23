@@ -23,11 +23,15 @@ public class ReportStore {
         return report;
     }
 
-    /** Open reports on one listing, in filing order (SRS UC-3.7). */
+    /**
+     * Open reports on one listing, in filing order (SRS UC-3.7). Matched by listing id, not
+     * object identity, so reports survive the listing object being replaced (e.g. on edit).
+     */
     public List<ListingReport> openReports(Listing listing) {
         Objects.requireNonNull(listing, "listing");
+        String listingId = Objects.requireNonNull(listing.getId(), "listing id");
         return reports.stream()
-                .filter(r -> r.getListing() == listing && r.getStatus() == ReportStatus.OPEN)
+                .filter(r -> listingId.equals(r.getListing().getId()) && r.getStatus() == ReportStatus.OPEN)
                 .toList();
     }
 
