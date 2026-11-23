@@ -9,6 +9,7 @@ import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.ReportStatus;
 import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.persistence.Database;
+import com.hkust.marketplace.persistence.DatabaseException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -106,6 +107,23 @@ class BoardPersistenceTest {
         assertEquals(ReportStatus.RESOLVED, DummyDataService.open(db).reports().all().get(0).getStatus());
         ListingReport third = reloaded.reports().fileReport(alice, reloaded.listings().find("L101"), "Again");
         assertEquals("RPT3", third.getId());
+    }
+
+    @Test
+    void aFailedResolutionSaveChangesNothingInMemory() {
+        Buyer alice = (Buyer) seeded.users().find("alice");
+        ListingReport spam = seeded.reports().fileReport(alice, seeded.listings().find("L101"), "Spam");
+        ListingReport fake = seeded.reports().fileReport(alice, seeded.listings().find("L101"), "Fake");
+        // Make the second row's update fail, so the transaction rolls back half-way through.
+        db.update("CREATE TRIGGER fail_resolve BEFORE UPDATE ON listing_reports WHEN OLD.id = '"
+                + fake.getId() + "' BEGIN SELECT RAISE(ABORT, 'simulated failure'); END");
+
+        assertThrows(DatabaseException.class,
+                () -> seeded.reports().resolveAll(seeded.listings().find("L101"), "Checked"));
+
+        assertEquals(ReportStatus.OPEN, spam.getStatus());
+        assertEquals(ReportStatus.OPEN, fake.getStatus());
+        assertEquals(ReportStatus.OPEN, DummyDataService.open(db).reports().all().get(0).getStatus());
     }
 
     @Test
