@@ -29,7 +29,12 @@ public class AuditStore {
         AuditEntry entry = new AuditEntry(admin, LocalDateTime.now(), action, target);
         db.update("INSERT INTO audit_log (admin, time, action, target) VALUES (?, ?, ?, ?)",
                 entry.getAdmin(), entry.getTime(), entry.getAction(), entry.getTarget());
-        entries.add(entry);
+        // Only once saved, so a rolled-back admin action leaves no entry behind.
+        db.afterCommit(() -> {
+            synchronized (this) {
+                entries.add(entry);
+            }
+        });
     }
 
     /** Rebuilds the saved log, oldest first. */
