@@ -14,6 +14,8 @@ import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Notification;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.SaleListing;
@@ -23,6 +25,7 @@ import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingSearch;
+import com.hkust.marketplace.utils.ProfileService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -758,6 +761,15 @@ public class BuyerDashboardController {
         return label;
     }
 
+    /** The categories a buyer receives (SRS UC-1.8 step 2), in the order of the filter box. */
+    private static final List<NotificationCategory> BUYER_CATEGORIES = List.of(
+            NotificationCategory.OFFER_UPDATE, NotificationCategory.CHAT_MESSAGE,
+            NotificationCategory.BORROW_REMINDER, NotificationCategory.LISTING_REMOVED,
+            NotificationCategory.REVIEW_REPLY, NotificationCategory.ANNOUNCEMENT);
+
+    private NotificationCategory notificationFilter;
+
+    /** Notification board (SRS UC-1.8): newest first, filter by category, open marks read. */
     @FXML
     private void showNotifications() {
         setActive(btnNotifications, "Notification Board");
@@ -765,30 +777,59 @@ public class BuyerDashboardController {
 
         VBox root = new VBox(12);
         root.setPadding(new Insets(4));
-
         User user = SessionManager.getCurrentUser();
-        List<Notification> notifs = DummyDataService.getInstance()
-                .notifications().forUser(user != null ? user.getUsername() : "");
+        String username = user != null ? user.getUsername() : "";
+        DummyDataService data = DummyDataService.getInstance();
 
+        if (data.notifications().forUser(username).isEmpty()) {
+            // SRS UC-1.8 A1
+            root.getChildren().add(muted("You have no notifications."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+
+        ComboBox<Option<NotificationCategory>> filter =
+                optionBox("All categories", BUYER_CATEGORIES, NotificationCategory::getLabel);
+        filter.getItems().stream().filter(o -> o.value() == notificationFilter).findFirst()
+                .ifPresent(o -> filter.getSelectionModel().select(o));
+        filter.setOnAction(e -> {
+            notificationFilter = selected(filter);
+            showNotifications();
+        });
+        long unread = data.notifications().unreadCount(username);
+        Label unreadLabel = muted(unread == 0 ? "All read" : unread + " unread");
+        HBox header = new HBox(12, new Label("Category:"), filter, unreadLabel);
+        header.setAlignment(Pos.CENTER_LEFT);
+        root.getChildren().add(header);
+
+        List<Notification> notifs = data.notifications().forUser(username, notificationFilter);
         if (notifs.isEmpty()) {
-            Label empty = new Label("No notifications yet.");
-            empty.setStyle("-fx-text-fill: #5a5a7a;");
-            root.getChildren().add(empty);
-        } else {
-            for (Notification n : notifs) {
-                VBox item = new VBox(4);
-                item.getStyleClass().add("notif-item");
-                Label title = new Label(n.getTitle());
-                title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
-                Label msg = new Label(n.getMessage());
-                msg.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
-                msg.setWrapText(true);
-                Label meta = new Label(n.getCategory() + " · " +
-                        n.getTimestamp().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")));
-                meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
-                item.getChildren().addAll(title, msg, meta);
-                root.getChildren().add(item);
+            root.getChildren().add(muted("No notifications in this category."));
+        }
+        for (Notification n : notifs) {
+            Label title = new Label(n.getTitle());
+            title.setStyle("-fx-text-fill: #1a1a2e; " + (n.isRead() ? "" : "-fx-font-weight: bold;"));
+            HBox titleRow = new HBox(8, title);
+            titleRow.setAlignment(Pos.CENTER_LEFT);
+            if (!n.isRead()) {
+                Label badge = new Label("New");
+                badge.getStyleClass().addAll("badge", "badge-pending");
+                titleRow.getChildren().add(badge);
             }
+            Label msg = muted(n.getMessage());
+            Label meta = new Label(n.getCategory().getLabel() + " \u00b7 "
+                    + n.getTimestamp().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")));
+            meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
+            VBox text = new VBox(4, titleRow, msg, meta);
+            HBox.setHgrow(text, Priority.ALWAYS);
+            Button open = new Button(n.getRelatedRef() == null ? "Mark read" : "Open");
+            open.getStyleClass().addAll("btn-outline", "btn-sm");
+            open.setDisable(n.getRelatedRef() == null && n.isRead());
+            open.setOnAction(e -> openNotification(n));
+            HBox item = new HBox(12, text, open);
+            item.setAlignment(Pos.CENTER_LEFT);
+            item.getStyleClass().add("notif-item");
+            root.getChildren().add(item);
         }
 
         ScrollPane scroll = new ScrollPane(root);
@@ -796,15 +837,57 @@ public class BuyerDashboardController {
         contentPane.getChildren().add(scroll);
     }
 
+    /**
+     * Opens a notification (SRS UC-1.8 step 3.2): marks it read, then shows the related listing,
+     * deal, chat thread or review. If that item is gone, the buyer stays on the board.
+     */
+    private void openNotification(Notification n) {
+        DummyDataService data = DummyDataService.getInstance();
+        if (!n.isRead()) {
+            data.notifications().markRead(n, true);
+        }
+        showNotifications();
+        NotificationRef ref = n.getRelatedRef();
+        if (ref == null) {
+            return;
+        }
+        switch (ref.getTarget()) {
+            case LISTING -> {
+                Listing listing = data.listings().find(ref.getId());
+                if (listing == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This listing no longer exists.").showAndWait();
+                } else {
+                    showListingDetails(listing);
+                }
+            }
+            case REQUEST, DEAL -> showMyDeals();
+            case THREAD -> {
+                // A thread is one buyer's chat on one listing; the id may be "buyer|L101" or just the listing id.
+                String id = ref.getId();
+                Listing listing = data.listings().find(id.substring(id.indexOf('|') + 1));
+                if (listing == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This chat's listing no longer exists.").showAndWait();
+                } else {
+                    openChat(listing);
+                }
+            }
+            // TODO(#23): open the buyer's review once Manage Reviews exists.
+            case REVIEW -> showHistory();
+            case USER -> showProfile();
+        }
+    }
+
+    /** Manage Profile (SRS UC-1.7): full name and an optional password change. */
     @FXML
     private void showProfile() {
         setActive(btnProfile, "Manage Profile");
         contentPane.getChildren().clear();
 
         User user = SessionManager.getCurrentUser();
-        VBox form = new VBox(14);
+        VBox form = new VBox(10);
         form.setPadding(new Insets(8));
-        form.setMaxWidth(420);
+        form.setMaxWidth(440);
+        form.setMaxHeight(Region.USE_PREF_SIZE);
         form.getStyleClass().add("card");
 
         Label title = new Label("Edit your profile");
@@ -812,31 +895,66 @@ public class BuyerDashboardController {
 
         TextField nameField = new TextField(user != null ? user.getFullName() : "");
         nameField.setPromptText("Full Name");
+        String hall = user instanceof Buyer buyer && buyer.getResidenceHall() != null
+                ? buyer.getResidenceHall() : "Not set";
+        Label residence = muted(hall);
+
+        Label passwordTitle = new Label("Change password (optional)");
+        passwordTitle.getStyleClass().add("section-title");
+        PasswordField currentPass = new PasswordField();
+        currentPass.setPromptText("Current password");
         PasswordField newPass = new PasswordField();
-        newPass.setPromptText("New password (leave blank to keep)");
+        newPass.setPromptText("New password");
         PasswordField confirmPass = new PasswordField();
         confirmPass.setPromptText("Confirm new password");
-        ComboBox<String> residence = new ComboBox<>(FXCollections.observableArrayList(
-                "Hall 1", "Hall 2", "Hall 3", "Hall 4", "Hall 5",
-                "Hall 6", "Hall 7", "Hall 8", "Hall 9", "UG Hall 1", "UG Hall 2", "Off-campus"));
-        if (user instanceof Buyer buyer && buyer.getResidenceHall() != null) {
-            residence.setValue(buyer.getResidenceHall());
-        }
+        Label rules = muted("8\u201364 characters with an uppercase letter, a lowercase letter, a digit and a"
+                + " special character; no spaces; not your username.");
+
+        Label message = new Label();
+        message.setWrapText(true);
+        message.setManaged(false);
+        message.setVisible(false);
 
         Button saveBtn = new Button("Save Changes");
         saveBtn.getStyleClass().add("btn-primary");
         saveBtn.setOnAction(e -> {
-            new Alert(Alert.AlertType.INFORMATION, "Profile updated successfully!\n(Demo only – changes are in-memory)").showAndWait();
+            try {
+                List<String> changed = new ProfileService(DummyDataService.getInstance()).updateProfile(
+                        user, nameField.getText(), currentPass.getText(), newPass.getText(), confirmPass.getText());
+                currentPass.clear();
+                newPass.clear();
+                confirmPass.clear();
+                if (!changed.isEmpty()) {
+                    welcomeLabel.setText("Hello, " + user.getFullName());
+                }
+                showMessage(message, changed.isEmpty() ? "Nothing to save." : "Profile updated.", false);
+            } catch (SecurityException | IllegalArgumentException ex) {
+                // SRS UC-1.7 A1 / A2: say which check failed; nothing was changed.
+                showMessage(message, ex.getMessage(), true);
+            }
         });
+        // SRS UC-1.7 A3: discard the edits.
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.getStyleClass().add("btn-outline");
+        cancelBtn.setOnAction(e -> showProfile());
 
         form.getChildren().addAll(title,
                 new Label("Full Name"), nameField,
-                new Label("New Password"), newPass,
-                new Label("Confirm Password"), confirmPass,
-                new Label("Residence"), residence,
-                saveBtn);
+                new Label("Residence hall"), residence,
+                passwordTitle,
+                new Label("Current password"), currentPass,
+                new Label("New password"), newPass,
+                new Label("Confirm new password"), confirmPass, rules,
+                message, new HBox(10, saveBtn, cancelBtn));
 
         contentPane.getChildren().add(form);
+    }
+
+    private static void showMessage(Label label, String text, boolean error) {
+        label.setText(text);
+        label.setStyle(error ? "-fx-text-fill: #c0392b;" : "-fx-text-fill: #1e7e34;");
+        label.setManaged(true);
+        label.setVisible(true);
     }
 
     @FXML

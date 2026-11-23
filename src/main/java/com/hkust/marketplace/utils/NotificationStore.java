@@ -34,6 +34,18 @@ public class NotificationStore {
                 .collect(Collectors.toList());
     }
 
+    /** The user's notifications of one category, newest first; {@code null} means every category. */
+    public synchronized List<Notification> forUser(String username, NotificationCategory category) {
+        return forUser(username).stream()
+                .filter(n -> category == null || n.getCategory() == category)
+                .collect(Collectors.toList());
+    }
+
+    /** How many of the user's notifications are still unread. */
+    public synchronized long unreadCount(String username) {
+        return forUser(username).stream().filter(n -> !n.isRead()).count();
+    }
+
     /**
      * The single way the application creates notifications: every one has an SRS category
      * and, where applicable, a reference to the object an OPEN should navigate to.
