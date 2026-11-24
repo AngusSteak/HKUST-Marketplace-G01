@@ -1,7 +1,7 @@
 # HKUST Marketplace — JavaFX Demo
 
 A **JavaFX + Maven** desktop demo of the HKUST Campus Marketplace platform.  
-Data is stored in a local **SQLite** database (`data/marketplace.db`, kept across restarts; see [Database](#database)). The shared user model, credential hashing, portal login/registration flows and seller rating derivation are implemented; the remaining backend integration points are marked with `TODO` comments.
+Data is stored in a local **SQLite** database (`data/marketplace.db`, kept across restarts; see [Database](#database)). Buyer, Seller and Admin portals are implemented end to end against the local stores: accounts and login, listings and moderation, offers/borrow/claims and deals, chats, reviews, notifications, seller stats and profiles. There is no network backend.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Data is stored in a local **SQLite** database (`data/marketplace.db`, kept acros
 ## How to Run (Windows)
 
 Open **PowerShell** or **Command Prompt** in the project folder  
-(`...\HKUST-Marketplace\HKUST-Marketplace`):
+(`...\HKUST-Marketplace-G01`):
 
 ```powershell
 .\mvnw.cmd clean javafx:run
@@ -82,6 +82,7 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 - Tests use an in-memory SQLite database (`Database.inMemory()` or a private `DummyDataService`), so they never create or read `data/marketplace.db`.
 - JaCoCo writes the coverage report to `target/site/jacoco/index.html` (CSV: `target/site/jacoco/jacoco.csv`) during the same `test` run.
 - Latest run: **489 tests, 0 failures**. Line coverage: models **96%**, utils/services **91%**, persistence **83%**, overall **44%** (the lightly covered controllers pull the total down).
+- API documentation: `.\mvnw.cmd javadoc:javadoc` writes HTML to `target/reports/apidocs/index.html`.
 
 ## Security State (Demo)
 
@@ -93,9 +94,32 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
   - Not equal to the username (case-insensitive).
   - The check returns a set of `PasswordRule` values naming **every** broken rule, so the form can tell the user what to fix instead of failing on the first problem.
 - Deactivated accounts (`active = false`) are refused at the login gate of all three portals with an explicit account-deactivated message. The Admin dashboard's activate/deactivate toggle flips the same flag.
-- Portal access checks run in the UI layer only. There is no backend in this demo, so API-layer RBAC is still to be built.
+- Portal access checks also run in the service layer: `AdminService` and `SellerService` call `AccessControl.require` before every change, so a wrong-role call fails even if a screen offered the action. These are in-process checks; the demo has no network backend or session tokens.
 
 > **Demo-only credentials:** `admin / admin123` and the buyer/seller accounts use `password1`. These are hashed at seed time like any other credential, and they exist solely for the demo walkthrough — they bypass registration validation and must not be reused in a real deployment.
+
+## Screenshots
+
+Every screen per portal is in [`docs/screenshots/`](docs/screenshots). The images were rendered from the FXML views with the seeded demo data.
+
+| Portal | Screens |
+|--------|---------|
+| Shared | [Welcome](docs/screenshots/welcome.png) |
+| Buyer | [Login](docs/screenshots/buyer-login.png) · [Register](docs/screenshots/buyer-register.png) · [Browse](docs/screenshots/buyer-browse.png) · [My Deals](docs/screenshots/buyer-my-deals.png) · [Deal History](docs/screenshots/buyer-history.png) · [Favourites & Following](docs/screenshots/buyer-favourites.png) · [Chats](docs/screenshots/buyer-chats.png) · [My Reviews](docs/screenshots/buyer-reviews.png) · [Notifications](docs/screenshots/buyer-notifications.png) · [Profile](docs/screenshots/buyer-profile.png) |
+| Seller | [Login](docs/screenshots/seller-login.png) · [Register](docs/screenshots/seller-register.png) · [My Listings](docs/screenshots/seller-my-listings.png) · [Requests](docs/screenshots/seller-requests.png) · [Create Listing](docs/screenshots/seller-create-listing.png) · [Chats](docs/screenshots/seller-chats.png) · [Seller Stats](docs/screenshots/seller-stats.png) · [Reviews & Feedback](docs/screenshots/seller-reviews.png) · [Notifications](docs/screenshots/seller-notifications.png) · [Profile](docs/screenshots/seller-profile.png) |
+| Admin | [Login](docs/screenshots/admin-login.png) · [Listing Review](docs/screenshots/admin-review.png) · [All Listings](docs/screenshots/admin-all-listings.png) · [Manage Users](docs/screenshots/admin-users.png) · [All Deals](docs/screenshots/admin-deals.png) · [Seller Ratings](docs/screenshots/admin-ratings.png) · [Notifications](docs/screenshots/admin-notifications.png) · [Profile](docs/screenshots/admin-profile.png) |
+
+**Buyer browse**
+
+![Buyer browse](docs/screenshots/buyer-browse.png)
+
+**Seller stats**
+
+![Seller stats](docs/screenshots/seller-stats.png)
+
+**Admin listing review**
+
+![Admin listing review](docs/screenshots/admin-review.png)
 
 ## Features Implemented (Demo)
 
@@ -107,20 +131,25 @@ All state is reached through `DummyDataService` and its per-area stores, backed 
 - Seller ratings derived from non-hidden reviews; "No rating yet" is shown when no visible reviews exist
 - Welcome screen with role selection (Buyer / Seller / Admin)
 - HKUST branding (logo + colour palette: deep blue `#003974` + gold `#A68137`)
-- Modern card-based UI, icons (Ikonli), consistent sidebars & top bars
+- Modern card-based UI with the HKUST palette and consistent sidebars and top bars
 - Local SQLite database with seeded demo data (no server, no network)
 
 ### Buyer Portal
-- Registration, Login, Browse Marketplace, Make Offer / Borrow / Claim
-- My Deals, Deal History, Favourites (placeholder), Notifications, Profile
+- Registration, Login, Browse Marketplace with search, filters and sort
+- Make a price offer, borrow request or giveaway claim on a listing
+- My Deals (accept/decline counters, mark returned/completed), Deal History with filters, Favourites
+- Chats with sellers, reviews for completed deals, notifications, profile
 
 ### Seller Portal
-- Registration, Login, Create Listing, My Listings
-- Seller Stats (charts), Reviews & Feedback, Notifications, Profile
+- Registration, Login, Create Listing (sale / lend / giveaway, up to six photos)
+- My Listings: edit, mark sold, soft-delete; Requests: accept, decline, counter price or borrow period
+- Seller Stats (views, offers, completed deals, per-listing chart), Reviews & Feedback with seller reply
+- Chats with buyers, notifications, profile
 
 ### Admin Portal
-- Login only (seeded), Listing Review (approve/reject)
-- Manage Users, All Listings, All Deals, Seller Ratings, Notifications, Profile
+- Login (seeded), Listing Review (approve/reject), All Listings (edit, take down, add on behalf, resolve reports)
+- Manage Users (add, edit, activate/deactivate, soft-delete), All Deals, Seller Ratings (hide flagged reviews)
+- Notifications, profile, and an audit log recording admin actions
 
 ## Project Structure
 
@@ -141,6 +170,7 @@ HKUST-Marketplace/
         ├── fxml/
         ├── css/styles.css
         └── images/hkust_logo.png
+docs/screenshots/            ← one PNG per screen, per portal
 ```
 
 ## Troubleshooting
@@ -166,10 +196,10 @@ Copy the lines that start with `Exception in thread` or `Caused by`.
 
 ## Next Steps (Backend)
 
-1. Persist the remaining stores to SQLite (#56, #57, #58), then keep data across restarts by default (#59)
-2. Credentials stay BCrypt-hashed through `PasswordHasher`; the database only ever holds the hash
-3. Replace the in-memory `SessionManager` with real session tokens and enforce RBAC at the API layer (the current portal checks are demo-only UI gates)
-4. Chat, auto-return for borrowed items, etc. (Photo choosing is wired into the seller Create Listing form: files are copied to a local `data/photos/` folder and their relative paths are persisted in the `listing_photos` table — a demo stand-in for real upload storage.)
+1. All stores already persist to SQLite and data survives restarts (#56–#59). A real deployment would still move this to a server API.
+2. Replace the in-memory `SessionManager` with session tokens and network-level authentication; the in-process `AccessControl` checks are the current guard.
+3. Replace the local photo folder with real upload storage; files currently go to `data/photos/` and their relative paths are saved in `listing_photos`.
+4. Add the remaining platform features that need a backend, such as push notifications and payment.
 
 ## Licence
 
