@@ -37,6 +37,9 @@ import java.util.function.Consumer;
 
 public class SellerDashboardController {
 
+    private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
+    private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
+
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
@@ -105,7 +108,7 @@ public class SellerDashboardController {
                     getClass().getResource("/fxml/seller/SellerRequestsView.fxml"));
             Parent view = loader.load();
             SellerRequestsController requests = loader.getController();
-            requests.setOnOpenChat(this::showThread);
+            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render)));
             render.accept(requests);
             contentPane.getChildren().add(view);
         } catch (IOException ex) {
@@ -307,12 +310,24 @@ public class SellerDashboardController {
         return row;
     }
 
+    static String threadBackLabel(boolean fromRequests) {
+        return fromRequests ? BACK_TO_REQUESTS : BACK_TO_CHATS;
+    }
+
     private void showThread(ChatThread thread) {
+        renderThread(thread, threadBackLabel(false), this::showChats);
+    }
+
+    private void showThread(ChatThread thread, Runnable backAction) {
+        renderThread(thread, threadBackLabel(true), backAction);
+    }
+
+    private void renderThread(ChatThread thread, String backLabel, Runnable backAction) {
         contentPane.getChildren().clear();
 
-        Button back = new Button("\u2190 Back to Chats");
+        Button back = new Button(backLabel);
         back.getStyleClass().addAll("btn-outline", "btn-sm");
-        back.setOnAction(e -> showChats());
+        back.setOnAction(e -> backAction.run());
 
         VBox root = new VBox(12);
         root.getChildren().addAll(back,
