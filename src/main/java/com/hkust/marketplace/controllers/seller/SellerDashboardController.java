@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.models.*;
@@ -8,13 +9,13 @@ import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.ProfileService;
 import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerReviewService;
 import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
@@ -29,7 +30,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.io.IOException;
-import java.time.format.DateTimeFormatter;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,13 @@ public class SellerDashboardController {
 
     private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
     private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
+    private static final String BACK_TO_NOTIFICATIONS = "\u2190 Back to Notifications";
+
+    static final List<NotificationCategory> SELLER_CATEGORIES = List.of(
+            NotificationCategory.LISTING_APPROVED, NotificationCategory.LISTING_REJECTED,
+            NotificationCategory.NEW_REQUEST, NotificationCategory.REVIEW_RECEIVED,
+            NotificationCategory.DEAL_COMPLETED, NotificationCategory.CHAT_MESSAGE,
+            NotificationCategory.ANNOUNCEMENT);
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
@@ -48,6 +56,7 @@ public class SellerDashboardController {
 
     private Button currentActiveBtn;
     private VBox reviewsRoot;
+    private NotificationCategory notificationFilter;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
     private final SellerReviewService sellerReviewService = new SellerReviewService(DummyDataService.getInstance());
@@ -665,74 +674,239 @@ public class SellerDashboardController {
         return "Could not " + action + " this review" + (detail == null ? "." : ": " + detail);
     }
 
-    @FXML
-    private void showNotifications() {
-        setActive(btnNotifications, "Notifications");
-        contentPane.getChildren().clear();
-        VBox root = new VBox(12);
-        root.setPadding(new Insets(4));
-        User user = SessionManager.getCurrentUser();
-        List<Notification> notifs = DummyDataService.getInstance()
-                .notifications().forUser(user != null ? user.getUsername() : "");
-        if (notifs.isEmpty()) {
-            root.getChildren().add(new Label("No notifications."));
-        } else {
-            for (Notification n : notifs) {
-                VBox item = new VBox(4);
-                item.getStyleClass().add("notif-item");
-                Label t = new Label(n.getTitle());
-                t.setStyle("-fx-font-weight: bold;");
-                Label m = new Label(n.getMessage());
-                m.setWrapText(true);
-                m.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
-                Label meta = new Label(n.getCategory() + " · " +
-                        n.getTimestamp().format(DateTimeFormatter.ofPattern("dd MMM HH:mm")));
-                meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
-                item.getChildren().addAll(t, m, meta);
-                root.getChildren().add(item);
-            }
-        }
-        contentPane.getChildren().add(new ScrollPane(root));
+    static List<NotificationCategory> sellerCategories() {
+        return SELLER_CATEGORIES;
     }
 
+    /** Parses a THREAD ref id of the form {@code buyerUsername|listingId}, splitting at the first '|'. */
+    static String[] parseThreadRef(String id) {
+        if (id == null) {
+            return null;
+        }
+        int bar = id.indexOf('|');
+        if (bar < 0) {
+            return null;
+        }
+        String buyer = id.substring(0, bar).trim();
+        String listingId = id.substring(bar + 1).trim();
+        if (buyer.isEmpty() || listingId.isEmpty()) {
+            return null;
+        }
+        return new String[]{buyer, listingId};
+    }
+
+    /** Notification board (SRS UC-2.7): newest first, filter by category, open marks read. */
     @FXML
-    private void showProfile() {
-        setActive(btnProfile, "My Profile");
+    private void showNotifications() {
+        setActive(btnNotifications, "Notification Board");
         contentPane.getChildren().clear();
         User user = SessionManager.getCurrentUser();
-        VBox form = new VBox(12);
-        form.setMaxWidth(420);
-        form.getStyleClass().add("card");
-        form.setPadding(new Insets(20));
-        form.getChildren().add(new Label("Edit Seller Profile") {{ getStyleClass().add("section-title"); }});
+        String username = user != null ? user.getUsername() : "";
+        contentPane.getChildren().add(NotificationBoardView.build(username, SELLER_CATEGORIES,
+                notificationFilter,
+                f -> { notificationFilter = f; showNotifications(); },
+                this::openNotification));
+    }
 
-        TextField name = new TextField(user != null ? user.getFullName() : "");
-        PasswordField pass = new PasswordField();
-        pass.setPromptText("New password (optional)");
-        TextArea bio = new TextArea(user instanceof Seller seller && seller.getBio() != null ? seller.getBio() : "");
-        bio.setPrefRowCount(3);
-        ComboBox<Location> meetup = new ComboBox<>(FXCollections.observableArrayList(Location.values()));
-        if (user instanceof Seller seller) {
-            seller.getPreferredMeetup().stream().findFirst().ifPresent(meetup::setValue);
-        }
-        meetup.setMaxWidth(Double.MAX_VALUE);
-
-        Button save = new Button("Save Changes");
-        save.getStyleClass().add("btn-gold");
-        save.setOnAction(e -> {
-            if (user instanceof Seller seller && meetup.getValue() != null) {
-                seller.setPreferredMeetup(EnumSet.of(meetup.getValue()));
+    /**
+     * Opens a notification (SRS UC-2.7 step 3.2): marks it read, then navigates to the related
+     * listing, request, deal, chat thread, review or own profile. A missing target is explained
+     * instead of throwing.
+     */
+    private void openNotification(Notification n) {
+        DummyDataService data = DummyDataService.getInstance();
+        if (!n.isRead()) {
+            try {
+                data.notifications().markRead(n, true);
+            } catch (RuntimeException ex) {
+                new Alert(Alert.AlertType.INFORMATION, "Could not update the notification.").showAndWait();
             }
-            new Alert(Alert.AlertType.INFORMATION, "Profile saved (demo).").showAndWait();
-        });
+        }
+        showNotifications();
+        NotificationRef ref = n.getRelatedRef();
+        if (ref == null) {
+            return;
+        }
+        switch (ref.getTarget()) {
+            case LISTING -> {
+                Listing listing = data.listings().find(ref.getId());
+                if (listing == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This listing no longer exists.").showAndWait();
+                } else if (listing.isDeleted() || listing.getStatus() == ListingStatus.TAKEN_DOWN) {
+                    new Alert(Alert.AlertType.INFORMATION, "This listing was taken down by an admin.").showAndWait();
+                } else {
+                    showMyListings();
+                }
+            }
+            case REQUEST -> {
+                DealRequest request = data.deals().findRequest(ref.getId());
+                if (request == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This request no longer exists.").showAndWait();
+                    showRequests();
+                } else {
+                    showRequestsFiltered(request.getListing());
+                }
+            }
+            case DEAL -> showRequests();
+            case THREAD -> {
+                User user = SessionManager.getCurrentUser();
+                if (!(user instanceof Seller seller)) {
+                    return;
+                }
+                String[] parts = parseThreadRef(ref.getId());
+                ChatThread target = null;
+                if (parts != null) {
+                    for (ChatThread thread : chatService.threadsForSeller(seller)) {
+                        if (thread.getListing().getId().equals(parts[1])
+                                && thread.getBuyer().getUsername().equalsIgnoreCase(parts[0])) {
+                            target = thread;
+                            break;
+                        }
+                    }
+                }
+                if (target == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This conversation no longer exists.").showAndWait();
+                } else {
+                    renderThread(target, BACK_TO_NOTIFICATIONS, this::showNotifications);
+                }
+            }
+            case REVIEW -> showReviews();
+            case USER -> {
+                User user = SessionManager.getCurrentUser();
+                if (user != null && user.getUsername().equalsIgnoreCase(ref.getId())) {
+                    showProfile();
+                }
+            }
+        }
+    }
 
-        form.getChildren().addAll(
-                new Label("Full Name"), name,
-                new Label("New Password"), pass,
-                new Label("Bio"), bio,
-                new Label("Preferred Meet-up"), meetup,
-                save);
-        contentPane.getChildren().add(form);
+    /** Manage Profile (SRS UC-2.6): name, bio, preferred meet-ups and an optional password change. */
+    @FXML
+    private void showProfile() {
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to manage your profile.").showAndWait();
+            showMyListings();
+            return;
+        }
+
+        setActive(btnProfile, "My Profile");
+        contentPane.getChildren().clear();
+
+        VBox form = new VBox(10);
+        form.setPadding(new Insets(8));
+        form.setMaxWidth(560);
+        form.setMaxHeight(Region.USE_PREF_SIZE);
+        form.getStyleClass().add("card");
+
+        Label title = new Label("Edit your profile");
+        title.getStyleClass().add("section-title");
+
+        TextField nameField = new TextField(seller.getFullName());
+        nameField.setPromptText("Full Name");
+        nameField.setMaxWidth(Double.MAX_VALUE);
+
+        TextArea bio = new TextArea(seller.getBio() == null ? "" : seller.getBio());
+        bio.setWrapText(true);
+        bio.setPrefRowCount(3);
+        bio.setMaxWidth(Double.MAX_VALUE);
+        Label counter = new Label(bio.getText().length() + "/500");
+        counter.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        counter.setMaxWidth(Double.MAX_VALUE);
+        counter.setAlignment(Pos.CENTER_RIGHT);
+        bio.textProperty().addListener((obs, oldText, text) -> counter.setText(text.length() + "/500"));
+
+        GridPane meetupGrid = new GridPane();
+        meetupGrid.setHgap(16);
+        meetupGrid.setVgap(8);
+        EnumMap<Location, CheckBox> boxes = new EnumMap<>(Location.class);
+        int i = 0;
+        for (Location location : Location.values()) {
+            CheckBox box = new CheckBox(location.getLabel());
+            box.setSelected(seller.getPreferredMeetup().contains(location));
+            meetupGrid.add(box, i % 2, i / 2);
+            boxes.put(location, box);
+            i++;
+        }
+        ScrollPane meetupScroll = new ScrollPane(meetupGrid);
+        meetupScroll.setFitToWidth(true);
+        meetupScroll.setPrefViewportHeight(160);
+        Button clearAll = new Button("Clear all");
+        clearAll.getStyleClass().addAll("btn-outline", "btn-sm");
+        clearAll.setOnAction(e -> boxes.values().forEach(box -> box.setSelected(false)));
+
+        Label passwordTitle = new Label("Change password (optional)");
+        passwordTitle.getStyleClass().add("section-title");
+        PasswordField currentPass = new PasswordField();
+        currentPass.setPromptText("Current password");
+        PasswordField newPass = new PasswordField();
+        newPass.setPromptText("New password");
+        PasswordField confirmPass = new PasswordField();
+        confirmPass.setPromptText("Confirm new password");
+        Label rules = new Label("8\u201364 characters with an uppercase letter, a lowercase letter, a digit and a"
+                + " special character; no spaces; not your username.");
+        rules.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+        rules.setWrapText(true);
+
+        Label message = new Label();
+        message.setWrapText(true);
+        message.setManaged(false);
+        message.setVisible(false);
+
+        Button saveBtn = new Button("Save Changes");
+        saveBtn.getStyleClass().add("btn-primary");
+        saveBtn.setOnAction(e -> {
+            EnumSet<Location> chosen = EnumSet.noneOf(Location.class);
+            for (Map.Entry<Location, CheckBox> entry : boxes.entrySet()) {
+                if (entry.getValue().isSelected()) {
+                    chosen.add(entry.getKey());
+                }
+            }
+            try {
+                List<String> changed = new ProfileService(DummyDataService.getInstance()).updateSellerProfile(
+                        seller, nameField.getText(), bio.getText(), chosen,
+                        currentPass.getText(), newPass.getText(), confirmPass.getText());
+                currentPass.clear();
+                newPass.clear();
+                confirmPass.clear();
+                if (changed.contains("full name")) {
+                    welcomeLabel.setText("Hello, " + seller.getFullName());
+                }
+                showMessage(message, changed.isEmpty() ? "Nothing to save." : "Profile updated.", false);
+            } catch (SecurityException | IllegalArgumentException ex) {
+                // SRS UC-2.6 A1 / A2: say which check failed; nothing was changed.
+                showMessage(message, ex.getMessage(), true);
+            } catch (RuntimeException ex) {
+                // The save itself failed and was rolled back.
+                showMessage(message, "Your profile could not be saved. Please try again.", true);
+            }
+        });
+        // SRS UC-2.6 A3: discard the edits.
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.getStyleClass().add("btn-outline");
+        cancelBtn.setOnAction(e -> showProfile());
+
+        form.getChildren().addAll(title,
+                new Label("Full Name"), nameField,
+                new Label("Bio"), bio, counter,
+                new Label("Preferred Meet-up Locations"), meetupScroll, clearAll,
+                passwordTitle,
+                new Label("Current password"), currentPass,
+                new Label("New password"), newPass,
+                new Label("Confirm new password"), confirmPass, rules,
+                message, new HBox(10, saveBtn, cancelBtn));
+
+        ScrollPane scroll = new ScrollPane(form);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private static void showMessage(Label label, String text, boolean error) {
+        label.setText(text);
+        label.setStyle(error ? "-fx-text-fill: #c0392b;" : "-fx-text-fill: #1e7e34;");
+        label.setManaged(true);
+        label.setVisible(true);
     }
 
     @FXML

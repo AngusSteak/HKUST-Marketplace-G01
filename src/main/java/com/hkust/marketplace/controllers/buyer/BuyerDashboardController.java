@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
@@ -1304,67 +1305,12 @@ public class BuyerDashboardController {
     private void showNotifications() {
         setActive(btnNotifications, "Notification Board");
         contentPane.getChildren().clear();
-
-        VBox root = new VBox(12);
-        root.setPadding(new Insets(4));
         User user = SessionManager.getCurrentUser();
         String username = user != null ? user.getUsername() : "";
-        DummyDataService data = DummyDataService.getInstance();
-
-        if (data.notifications().forUser(username).isEmpty()) {
-            // SRS UC-1.8 A1
-            root.getChildren().add(muted("You have no notifications."));
-            contentPane.getChildren().add(root);
-            return;
-        }
-
-        ComboBox<Option<NotificationCategory>> filter =
-                optionBox("All categories", BUYER_CATEGORIES, NotificationCategory::getLabel);
-        filter.getItems().stream().filter(o -> o.value() == notificationFilter).findFirst()
-                .ifPresent(o -> filter.getSelectionModel().select(o));
-        filter.setOnAction(e -> {
-            notificationFilter = selected(filter);
-            showNotifications();
-        });
-        long unread = data.notifications().unreadCount(username);
-        Label unreadLabel = muted(unread == 0 ? "All read" : unread + " unread");
-        HBox header = new HBox(12, new Label("Category:"), filter, unreadLabel);
-        header.setAlignment(Pos.CENTER_LEFT);
-        root.getChildren().add(header);
-
-        List<Notification> notifs = data.notifications().forUser(username, notificationFilter);
-        if (notifs.isEmpty()) {
-            root.getChildren().add(muted("No notifications in this category."));
-        }
-        for (Notification n : notifs) {
-            Label title = new Label(n.getTitle());
-            title.setStyle("-fx-text-fill: #1a1a2e; " + (n.isRead() ? "" : "-fx-font-weight: bold;"));
-            HBox titleRow = new HBox(8, title);
-            titleRow.setAlignment(Pos.CENTER_LEFT);
-            if (!n.isRead()) {
-                Label badge = new Label("New");
-                badge.getStyleClass().addAll("badge", "badge-pending");
-                titleRow.getChildren().add(badge);
-            }
-            Label msg = muted(n.getMessage());
-            Label meta = new Label(n.getCategory().getLabel() + " \u00b7 "
-                    + n.getTimestamp().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")));
-            meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
-            VBox text = new VBox(4, titleRow, msg, meta);
-            HBox.setHgrow(text, Priority.ALWAYS);
-            Button open = new Button(n.getRelatedRef() == null ? "Mark read" : "Open");
-            open.getStyleClass().addAll("btn-outline", "btn-sm");
-            open.setDisable(n.getRelatedRef() == null && n.isRead());
-            open.setOnAction(e -> openNotification(n));
-            HBox item = new HBox(12, text, open);
-            item.setAlignment(Pos.CENTER_LEFT);
-            item.getStyleClass().add("notif-item");
-            root.getChildren().add(item);
-        }
-
-        ScrollPane scroll = new ScrollPane(root);
-        scroll.setFitToWidth(true);
-        contentPane.getChildren().add(scroll);
+        contentPane.getChildren().add(NotificationBoardView.build(username, BUYER_CATEGORIES,
+                notificationFilter,
+                f -> { notificationFilter = f; showNotifications(); },
+                this::openNotification));
     }
 
     /**

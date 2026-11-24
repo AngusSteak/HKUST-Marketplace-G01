@@ -1,5 +1,6 @@
 package com.hkust.marketplace.controllers.admin;
 
+import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.models.*;
@@ -35,6 +36,10 @@ public class AdminDashboardController {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
 
+    private static final List<NotificationCategory> ADMIN_CATEGORIES = List.of(
+            NotificationCategory.NEW_SUBMISSION, NotificationCategory.REPORTED_LISTING,
+            NotificationCategory.ACCOUNT_CHANGE, NotificationCategory.ANNOUNCEMENT);
+
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
@@ -43,6 +48,7 @@ public class AdminDashboardController {
     private Button currentActiveBtn;
     private final LocalPhotoStorage photoStorage = new LocalPhotoStorage();
     private ListingFormComponent listingForm;
+    private NotificationCategory notificationFilter;
 
     @FXML
     public void initialize() {
@@ -900,55 +906,12 @@ public class AdminDashboardController {
     private void showNotifications() {
         setActive(btnNotifications, "Admin Notifications");
         contentPane.getChildren().clear();
-
-        VBox root = new VBox(12);
-        root.setPadding(new Insets(4));
-        ComboBox<String> filter = new ComboBox<>();
-        filter.getItems().add("All notifications");
-        filter.getItems().addAll(NotificationCategory.NEW_SUBMISSION.getLabel(),
-                NotificationCategory.REPORTED_LISTING.getLabel(),
-                NotificationCategory.ACCOUNT_CHANGE.getLabel(),
-                NotificationCategory.ANNOUNCEMENT.getLabel());
-        filter.getSelectionModel().selectFirst();
-        VBox items = new VBox(8);
-        Runnable refresh = () -> {
-            items.getChildren().clear();
-            List<Notification> notifications = DummyDataService.getInstance().notifications()
-                    .forUser(admin().getUsername());
-            String chosen = filter.getValue();
-            if (chosen != null && !chosen.equals("All notifications")) {
-                notifications = notifications.stream()
-                        .filter(n -> n.getCategory().getLabel().equals(chosen)).toList();
-            }
-            if (notifications.isEmpty()) {
-                items.getChildren().add(label("No notifications.", "-fx-text-fill: #5a5a7a;"));
-            }
-            for (Notification notification : notifications) items.getChildren().add(notificationRow(notification));
-        };
-        filter.valueProperty().addListener((o, a, b) -> refresh.run());
-        refresh.run();
-        root.getChildren().addAll(filter, items);
-        contentPane.getChildren().add(scroll(root));
-    }
-
-    private HBox notificationRow(Notification notification) {
-        HBox row = new HBox(12);
-        row.getStyleClass().add("notif-item");
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.setPadding(new Insets(10));
-        VBox info = new VBox(3);
-        HBox.setHgrow(info, Priority.ALWAYS);
-        Label title = label(notification.getTitle(), "-fx-font-weight: bold;");
-        if (!notification.isRead()) title.setText("● " + title.getText());
-        info.getChildren().addAll(title,
-                label(notification.getMessage(), "-fx-text-fill: #5a5a7a;"),
-                label(notification.getCategory() + " · " + notification.getTimestamp().format(DATE_TIME),
-                        "-fx-text-fill: #9aa0b0; -fx-font-size: 11px;"));
-        Button open = new Button("Open");
-        open.getStyleClass().addAll("btn-outline", "btn-sm");
-        open.setOnAction(e -> openNotification(notification));
-        row.getChildren().addAll(info, open);
-        return row;
+        User user = admin();
+        String username = user != null ? user.getUsername() : "";
+        contentPane.getChildren().add(NotificationBoardView.build(username, ADMIN_CATEGORIES,
+                notificationFilter,
+                f -> { notificationFilter = f; showNotifications(); },
+                this::openNotification));
     }
 
     private void openNotification(Notification notification) {
