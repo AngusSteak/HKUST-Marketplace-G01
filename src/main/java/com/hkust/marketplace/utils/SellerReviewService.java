@@ -18,6 +18,7 @@ public final class SellerReviewService {
 
     public static final String REPLY_REQUIRED = "Please write a reply before saving.";
     public static final String ALREADY_REPLIED = "A reply has already been saved for this review.";
+    public static final String ALREADY_FLAGGED = "This review is already flagged.";
 
     private final DummyDataService data;
 
@@ -53,6 +54,30 @@ public final class SellerReviewService {
                     seller.getDisplayName() + " replied to your review of '" + review.getListingTitle()
                             + "': " + text,
                     new NotificationRef(NotificationRef.Target.REVIEW, review.getId()));
+        });
+        return review;
+    }
+
+    /**
+     * Flags a review once for admin attention, saved through the review store in one transaction.
+     * Flagging does not hide the review, change the derived rating or notify anyone. A review that
+     * is already flagged is read-only for flagging.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the review
+     * @throws IllegalStateException with {@link #ALREADY_FLAGGED} if the review is already flagged
+     */
+    public Review flagReview(User actor, Review review) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(review, "review");
+        if (!seller.getUsername().equalsIgnoreCase(review.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own review " + review.getId());
+        }
+        if (review.isFlagged()) {
+            throw new IllegalStateException(ALREADY_FLAGGED);
+        }
+        data.database().inTransaction(() -> {
+            review.setFlagged(true);
+            data.reviews().save(review);
         });
         return review;
     }
