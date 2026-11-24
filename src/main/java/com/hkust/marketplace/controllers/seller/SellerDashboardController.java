@@ -15,8 +15,10 @@ import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
@@ -25,6 +27,7 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
@@ -36,7 +39,7 @@ public class SellerDashboardController {
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnListings, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
+    @FXML private Button btnListings, btnRequests, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
@@ -82,6 +85,24 @@ public class SellerDashboardController {
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
+    }
+
+    @FXML
+    private void showRequests() {
+        setActive(btnRequests, "Requests");
+        contentPane.getChildren().clear();
+        try {
+            FXMLLoader loader = new FXMLLoader(
+                    getClass().getResource("/fxml/seller/SellerRequestsView.fxml"));
+            Parent view = loader.load();
+            SellerRequestsController requests = loader.getController();
+            requests.setOnOpenChat(this::showThread);
+            requests.render();
+            contentPane.getChildren().add(view);
+        } catch (IOException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not open Requests: " + ex.getMessage()).showAndWait();
+        }
     }
 
     private HBox createListingRow(Listing l) {
