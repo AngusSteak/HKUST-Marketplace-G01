@@ -18,6 +18,7 @@ import com.hkust.marketplace.utils.SellerStats;
 import com.hkust.marketplace.utils.SellerStatsService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class SellerDashboardController {
 
@@ -463,7 +465,8 @@ public class SellerDashboardController {
         root.setPadding(new Insets(4));
 
         User user = SessionManager.getCurrentUser();
-        SellerStats.Totals totals = statsService.statsFor(user).totals();
+        SellerStats stats = statsService.statsFor(user);
+        SellerStats.Totals totals = stats.totals();
 
         // Metric cards
         OptionalDouble average = totals.averageRating();
@@ -504,9 +507,40 @@ public class SellerDashboardController {
         HBox charts = new HBox(20, barChart, pie);
         root.getChildren().add(charts);
 
+        if (stats.listings().isEmpty()) {
+            Label noData = new Label("No data yet");
+            noData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            root.getChildren().add(noData);
+        } else {
+            root.getChildren().add(listingTable(stats.listings()));
+        }
+
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
+    }
+
+    private TableView<SellerStats.ListingStat> listingTable(List<SellerStats.ListingStat> rows) {
+        TableView<SellerStats.ListingStat> table = new TableView<>();
+        table.setEditable(false);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.getColumns().addAll(List.of(
+                statColumn("Listing", SellerStats.ListingStat::title),
+                statColumn("Status", row -> row.status().name().replace('_', ' ')),
+                statColumn("Views", row -> String.valueOf(row.views())),
+                statColumn("Offers", row -> String.valueOf(row.offers())),
+                statColumn("Completed", row -> String.valueOf(row.completed()))));
+        table.getItems().setAll(rows);
+        table.setPrefHeight(220);
+        return table;
+    }
+
+    private static TableColumn<SellerStats.ListingStat, String> statColumn(
+            String title, Function<SellerStats.ListingStat, String> value) {
+        TableColumn<SellerStats.ListingStat, String> column = new TableColumn<>(title);
+        column.setSortable(false);
+        column.setCellValueFactory(cell -> new SimpleStringProperty(value.apply(cell.getValue())));
+        return column;
     }
 
     private VBox metricCard(String label, String value, String color) {
