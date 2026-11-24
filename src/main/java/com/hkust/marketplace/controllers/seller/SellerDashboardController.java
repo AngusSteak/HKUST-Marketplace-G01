@@ -333,7 +333,8 @@ public class SellerDashboardController {
     }
 
     private void showThread(ChatThread thread) {
-        renderThread(thread, threadBackLabel(false), this::showChats);
+        renderThread(thread, threadBackLabel(false), this::showChats,
+                request -> openRequestsView(r -> r.renderFiltered(request.getListing())));
     }
 
     private void showThread(ChatThread thread, Runnable backAction) {
@@ -341,6 +342,11 @@ public class SellerDashboardController {
     }
 
     private void renderThread(ChatThread thread, String backLabel, Runnable backAction) {
+        renderThread(thread, backLabel, backAction, null);
+    }
+
+    private void renderThread(ChatThread thread, String backLabel, Runnable backAction,
+                              Consumer<DealRequest> onViewRequest) {
         contentPane.getChildren().clear();
 
         Button back = new Button(backLabel);
@@ -349,7 +355,8 @@ public class SellerDashboardController {
 
         VBox root = new VBox(12);
         root.getChildren().addAll(back,
-                ChatViewBuilder.build(chatService, SessionManager.getCurrentUser(), thread));
+                ChatViewBuilder.build(chatService, SessionManager.getCurrentUser(), thread,
+                        onViewRequest));
         contentPane.getChildren().add(root);
     }
 
