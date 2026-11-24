@@ -1,0 +1,64 @@
+T8 — Glossary wording, PR notes and full verification
+Feature: seller-offer-requests (GitHub #27)
+Branch: feature/27-seller-offer-requests
+Date: 2026-11-24
+
+## Ticket claim
+- No docs ticket exists in .scratch/seller-offer-requests/issues/ (only the 7 staged
+  implementation tickets 01-pending-request-list.md .. 07-open-chat-back.md).
+- Claim skipped: T8 is a docs todo, not one of the staged tickets.
+
+## Evidence files T0-T7 (verified present before running gates)
+OK   .omo/evidence/task-0-seller-offer-requests.txt
+OK   .omo/evidence/task-1-seller-offer-requests.txt
+OK   .omo/evidence/task-2-seller-offer-requests.txt
+OK   .omo/evidence/task-3-seller-offer-requests.txt
+OK   .omo/evidence/task-4-seller-offer-requests.txt
+OK   .omo/evidence/task-5-seller-offer-requests.txt
+OK   .omo/evidence/task-6-seller-offer-requests.txt
+OK   .omo/evidence/task-7-seller-offer-requests.txt
+OK   .omo/evidence/task-8-seller-offer-requests.txt (this file)
+- Missing: none.
+
+## Glossary change (GLOSSARY.md)
+- Insertion point: end of the "Deals" section, immediately after **Claim** (was GLOSSARY.md:79-93).
+- Exact definition wording applied from .omo/drafts/seller-offer-requests.md:73:
+
+  **Counter**:
+  the Seller's proposed alternative price (Counter Price) on a Price Offer, or lending period (Counter Period) on a Borrow Request; recorded on the DealRequest, moving it to COUNTERED while it awaits the Buyer's acceptance. The Buyer never counters.
+  _Avoid_: Counter Offer, counteroffer
+
+- The definition text is verbatim (the draft's "Counter — " prefix is the bold term heading,
+  matching the existing GLOSSARY.md entry format; the _Avoid_ line follows house style and
+  enforces the "no Counter Offer noun" decision).
+- No other canonical term was added, removed or reworded. No product code changed in T8.
+
+## Gates (commands, real exit codes)
+- ./mvnw -q test     -> EXIT 0
+  (surefire reports: 61 TEST-*.xml; tests=427 failures=0 errors=0 skipped=0)
+- ./mvnw -q compile  -> EXIT 0
+  (no output; -q suppresses success output)
+- Both gates were run after the glossary edit and before the commit.
+
+## Worktree state (pre-existing, left untouched)
+- M  mvnw            (mode change 100644 -> 100755 only, no content change)
+- ?? .codex/
+- ?? REVIEW-NOTES.md
+- None of these were staged or modified by T8.
+
+## PR notes — paste into the PR description for #27
+1. Stacked base: this PR is stacked on the branch for #26 (feature/seller-my-listings).
+   Retarget it to main after #26 is approved, rather than merging #26 into this branch.
+2. Replaces #26's display: the inline "View N open offers" expander in My Listings is
+   replaced outright by a link opening the Requests view filtered to that listing, with a
+   Decline all button. The expander is not kept alongside the new page.
+3. Known debt (out of scope): buyer-side acceptance/decline of a seller counter is unwired
+   (My Deals shows only a placeholder note). A stalled COUNTERED request can currently only
+   be cleared by the seller declining it. No buyer-side counter acceptance is implemented.
+
+## Commit
+- docs(seller): stage glossary wording and PR notes for requests tab
+- Scope note: GLOSSARY.md and .omo/ are listed in .git/info/exclude as local-only ignores
+  ("AI-authored project docs"), so they are untracked by default. Both in-scope artifacts
+  were force-added so the docs commit actually carries the glossary wording and these
+  hand-off notes. No other excluded or untracked file was staged.
