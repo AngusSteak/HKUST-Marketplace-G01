@@ -14,8 +14,11 @@ import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerReviewService;
 import com.hkust.marketplace.utils.SellerService;
+import com.hkust.marketplace.utils.SellerStats;
+import com.hkust.marketplace.utils.SellerStatsService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
@@ -30,12 +33,14 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class SellerDashboardController {
 
@@ -61,6 +66,7 @@ public class SellerDashboardController {
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
     private final SellerReviewService sellerReviewService = new SellerReviewService(DummyDataService.getInstance());
     private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
+    private final SellerStatsService statsService = new SellerStatsService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -105,14 +111,14 @@ public class SellerDashboardController {
 
     @FXML
     private void showRequests() {
-        openRequestsView(SellerRequestsController::render);
+        openRequestsView(SellerRequestsController::render, null);
     }
 
     private void showRequestsFiltered(Listing listing) {
-        openRequestsView(requests -> requests.renderFiltered(listing));
+        openRequestsView(requests -> requests.renderFiltered(listing), null);
     }
 
-    private void openRequestsView(Consumer<SellerRequestsController> render) {
+    private void openRequestsView(Consumer<SellerRequestsController> render, Runnable backToChat) {
         setActive(btnRequests, "Requests");
         contentPane.getChildren().clear();
         try {
@@ -120,7 +126,8 @@ public class SellerDashboardController {
                     getClass().getResource("/fxml/seller/SellerRequestsView.fxml"));
             Parent view = loader.load();
             SellerRequestsController requests = loader.getController();
-            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render)));
+            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render, backToChat)));
+            requests.setOnBackToChat(backToChat);
             render.accept(requests);
             contentPane.getChildren().add(view);
         } catch (IOException ex) {
@@ -327,7 +334,11 @@ public class SellerDashboardController {
     }
 
     private void showThread(ChatThread thread) {
-        renderThread(thread, threadBackLabel(false), this::showChats);
+        setActive(btnChats, "Chats");
+        // Back to Chat re-opens this same view, so the title, sidebar and View request link return too.
+        renderThread(thread, threadBackLabel(false), this::showChats,
+                request -> openRequestsView(r -> r.renderFiltered(request.getListing()),
+                        () -> showThread(thread)));
     }
 
     private void showThread(ChatThread thread, Runnable backAction) {
@@ -335,6 +346,11 @@ public class SellerDashboardController {
     }
 
     private void renderThread(ChatThread thread, String backLabel, Runnable backAction) {
+        renderThread(thread, backLabel, backAction, null);
+    }
+
+    private void renderThread(ChatThread thread, String backLabel, Runnable backAction,
+                              Consumer<DealRequest> onViewRequest) {
         contentPane.getChildren().clear();
 
         Button back = new Button(backLabel);
@@ -343,7 +359,8 @@ public class SellerDashboardController {
 
         VBox root = new VBox(12);
         root.getChildren().addAll(back,
-                ChatViewBuilder.build(chatService, SessionManager.getCurrentUser(), thread));
+                ChatViewBuilder.build(chatService, SessionManager.getCurrentUser(), thread,
+                        onViewRequest));
         contentPane.getChildren().add(root);
     }
 
@@ -460,53 +477,182 @@ public class SellerDashboardController {
         root.setPadding(new Insets(4));
 
         User user = SessionManager.getCurrentUser();
-        String sellerUsername = user != null ? user.getUsername() : "";
-        List<Listing> myListings = DummyDataService.getInstance()
-                .listings().bySeller(sellerUsername);
+        SellerStats stats = statsService.statsFor(user);
+        SellerStats.Totals totals = stats.totals();
 
         // Metric cards
-        OptionalDouble average = DummyDataService.getInstance().reviews().averageRating(sellerUsername);
-        int reviewCount = DummyDataService.getInstance().reviews().visibleCount(sellerUsername);
+        OptionalDouble average = totals.averageRating();
         String averageRating = average.isPresent()
                 ? String.format("%.1f", average.getAsDouble())
                 : "No rating yet";
         HBox metrics = new HBox(16);
         metrics.getChildren().addAll(
-                metricCard("Listings", String.valueOf(myListings.size()), "#003974"),
-                metricCard("Avg Rating", averageRating, "#A68137"),
-                metricCard("Reviews", String.valueOf(reviewCount), "#2e7d32"),
-                metricCard("Views (demo)", "128", "#1565c0")
+                metricCard("Total Views", String.valueOf(totals.views()), "#003974"),
+                metricCard("Offers Received", String.valueOf(totals.offers()), "#A68137"),
+                metricCard("Completed Deals", String.valueOf(totals.completed()), "#2e7d32"),
+                metricCard("Average Rating", averageRating, "#1565c0")
         );
         root.getChildren().add(metrics);
 
-        // Bar chart
-        CategoryAxis xAxis = new CategoryAxis();
-        NumberAxis yAxis = new NumberAxis();
-        BarChart<String, Number> barChart = new BarChart<>(xAxis, yAxis);
-        barChart.setTitle("Listings by Category (demo data)");
-        barChart.setLegendVisible(false);
-        barChart.setPrefHeight(280);
-        XYChart.Series<String, Number> series = new XYChart.Series<>();
-        series.getData().add(new XYChart.Data<>("Textbooks", 3));
-        series.getData().add(new XYChart.Data<>("Electronics", 5));
-        series.getData().add(new XYChart.Data<>("Furniture", 2));
-        series.getData().add(new XYChart.Data<>("Others", 1));
-        barChart.getData().add(series);
+        TableView<SellerStats.ListingStat> table =
+                stats.listings().isEmpty() ? null : listingTable(stats.listings());
+        Button showAll = new Button("Show all listings");
+        showAll.getStyleClass().addAll("btn-outline", "btn-sm");
+        showAll.setVisible(false);
+        showAll.setManaged(false);
+        if (table != null) {
+            showAll.setOnAction(e -> {
+                table.getItems().setAll(stats.listings());
+                showAll.setVisible(false);
+                showAll.setManaged(false);
+            });
+        }
+
+        List<SellerStats.ListingStat> rowsByViews = stats.listings().stream()
+                .sorted(Comparator.comparingInt(SellerStats.ListingStat::views).reversed())
+                .toList();
+        BarChart<Number, String> barChart = null;
+        if (rowsByViews.isEmpty()) {
+            // SRS UC-2.8 A1
+            Label noChartData = new Label("No listings yet. Charts will appear once you post listings.");
+            noChartData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            root.getChildren().add(noChartData);
+        } else {
+            NumberAxis viewsOffersAxis = new NumberAxis();
+            CategoryAxis listingAxis = new CategoryAxis();
+            barChart = new BarChart<>(viewsOffersAxis, listingAxis);
+            barChart.setTitle("Views and Offers per Listing");
+            barChart.setPrefHeight(280);
+            XYChart.Series<Number, String> viewsSeries = new XYChart.Series<>();
+            viewsSeries.setName("Views");
+            XYChart.Series<Number, String> offersSeries = new XYChart.Series<>();
+            offersSeries.setName("Offers");
+            // A horizontal bar chart draws its first category at the bottom, so add them in
+            // ascending order to show the most-viewed listing at the top.
+            for (SellerStats.ListingStat row : rowsByViews.reversed()) {
+                String label = row.title().length() > 20 ? row.title().substring(0, 20) : row.title();
+                viewsSeries.getData().add(bar(label, row.views(), row.title(), row.listingId()));
+                offersSeries.getData().add(bar(label, row.offers(), row.title(), row.listingId()));
+            }
+            barChart.getData().addAll(List.of(viewsSeries, offersSeries));
+            for (XYChart.Series<Number, String> series : barChart.getData()) {
+                for (XYChart.Data<Number, String> data : series.getData()) {
+                    whenBarShown(data, newNode -> {
+                        newNode.setOnMouseClicked(event -> {
+                            if (table == null) {
+                                return;
+                            }
+                            String listingId = String.valueOf(data.getExtraValue());
+                            stats.listings().stream()
+                                    .filter(row -> row.listingId().equals(listingId))
+                                    .findFirst()
+                                    .ifPresent(row -> {
+                                        table.getItems().setAll(List.of(row));
+                                        showAll.setVisible(true);
+                                        showAll.setManaged(true);
+                                    });
+                        });
+                    });
+                }
+            }
+        }
 
         // Pie chart
-        PieChart pie = new PieChart();
-        pie.setTitle("Listing Status Distribution");
-        pie.setPrefHeight(280);
-        pie.getData().add(new PieChart.Data("Live", 4));
-        pie.getData().add(new PieChart.Data("Pending", 1));
-        pie.getData().add(new PieChart.Data("Sold", 2));
+        Map<DealType, Integer> completedByType = stats.completedByType();
+        int completedTotal = 0;
+        for (DealType type : DealType.values()) {
+            Integer count = completedByType.get(type);
+            if (count != null) {
+                completedTotal += count;
+            }
+        }
+        PieChart pie = null;
+        if (completedTotal == 0) {
+            Label noPieData = new Label("No completed deals yet.");
+            noPieData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            root.getChildren().add(noPieData);
+        } else {
+            pie = new PieChart();
+            pie.setTitle("Completed Deals by Type");
+            pie.setPrefHeight(280);
+            addPieSlice(pie, "Sold", completedByType.get(DealType.SOLD));
+            addPieSlice(pie, "Lent", completedByType.get(DealType.LENT));
+            addPieSlice(pie, "Given", completedByType.get(DealType.GIVEN));
+        }
 
-        HBox charts = new HBox(20, barChart, pie);
-        root.getChildren().add(charts);
+        HBox charts = new HBox(20);
+        if (barChart != null) {
+            charts.getChildren().add(barChart);
+        }
+        if (pie != null) {
+            charts.getChildren().add(pie);
+        }
+        if (!charts.getChildren().isEmpty()) {
+            root.getChildren().add(charts);
+        }
+
+        if (table != null) {
+            root.getChildren().addAll(showAll, table);
+        }
 
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
+    }
+
+    private static void addPieSlice(PieChart pie, String label, Integer count) {
+        if (count != null && count > 0) {
+            pie.getData().add(new PieChart.Data(label, count));
+        }
+    }
+
+    private static XYChart.Data<Number, String> bar(String label, int value, String title, String listingId) {
+        XYChart.Data<Number, String> data = new XYChart.Data<>(value, label);
+        data.setExtraValue(listingId);
+        whenBarShown(data, node -> {
+            node.setUserData(listingId);
+            Tooltip.install(node, new Tooltip(title));
+        });
+        return data;
+    }
+
+    /**
+     * Runs {@code action} on the bar's node now if the chart already created it, and on any node
+     * it creates later. A chart creates bar nodes as soon as data is added, so a node-property
+     * listener alone would miss them and the bars would get no handler.
+     */
+    static void whenBarShown(XYChart.Data<Number, String> data, Consumer<javafx.scene.Node> action) {
+        if (data.getNode() != null) {
+            action.accept(data.getNode());
+        }
+        data.nodeProperty().addListener((obs, oldNode, newNode) -> {
+            if (newNode != null) {
+                action.accept(newNode);
+            }
+        });
+    }
+
+    private TableView<SellerStats.ListingStat> listingTable(List<SellerStats.ListingStat> rows) {
+        TableView<SellerStats.ListingStat> table = new TableView<>();
+        table.setEditable(false);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.getColumns().addAll(List.of(
+                statColumn("Listing", SellerStats.ListingStat::title),
+                statColumn("Status", row -> row.status().name().replace('_', ' ')),
+                statColumn("Views", row -> String.valueOf(row.views())),
+                statColumn("Offers", row -> String.valueOf(row.offers())),
+                statColumn("Completed", row -> String.valueOf(row.completed()))));
+        table.getItems().setAll(rows);
+        table.setPrefHeight(220);
+        return table;
+    }
+
+    private static TableColumn<SellerStats.ListingStat, String> statColumn(
+            String title, Function<SellerStats.ListingStat, String> value) {
+        TableColumn<SellerStats.ListingStat, String> column = new TableColumn<>(title);
+        column.setSortable(false);
+        column.setCellValueFactory(cell -> new SimpleStringProperty(value.apply(cell.getValue())));
+        return column;
     }
 
     private VBox metricCard(String label, String value, String color) {
@@ -516,7 +662,10 @@ public class SellerDashboardController {
         card.setPrefWidth(140);
         card.setPadding(new Insets(16));
         Label val = new Label(value);
-        val.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        // Numbers are large; a text value such as "No rating yet" is smaller so it fits the card.
+        String size = value.chars().anyMatch(Character::isLetter) ? "16px" : "28px";
+        val.setStyle("-fx-font-size: " + size + "; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        val.setWrapText(true);
         Label lbl = new Label(label);
         lbl.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
         card.getChildren().addAll(val, lbl);

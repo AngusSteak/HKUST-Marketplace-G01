@@ -20,6 +20,7 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
@@ -34,6 +35,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Builds the one chat view shared by the buyer and seller portals, so both sides see the
@@ -51,6 +53,16 @@ public final class ChatViewBuilder {
      * is allowed is decided by {@link ChatService}, not by hiding the input alone.
      */
     public static VBox build(ChatService chatService, User currentUser, ChatThread thread) {
+        return build(chatService, currentUser, thread, null);
+    }
+
+    /**
+     * Builds the chat view for {@code thread}, optionally letting the caller act on a formal
+     * offer (the seller portal opens the matching request). A {@code null} callback keeps the
+     * buyer portal's behaviour unchanged.
+     */
+    public static VBox build(ChatService chatService, User currentUser, ChatThread thread,
+                             Consumer<DealRequest> onViewRequest) {
         VBox root = new VBox(12);
         root.setPadding(new Insets(4));
         root.getChildren().add(header(thread));
@@ -65,7 +77,8 @@ public final class ChatViewBuilder {
         banner.setManaged(offersClosed);
         root.getChildren().add(banner);
 
-        root.getChildren().add(searchPanel(chatService, currentUser, () -> refresh[0].run()));
+        root.getChildren().add(searchPanel(chatService, currentUser, () -> refresh[0].run(),
+                onViewRequest));
 
         VBox messageList = new VBox(8);
         messageList.setPadding(new Insets(4));
@@ -88,7 +101,8 @@ public final class ChatViewBuilder {
             } else {
                 for (Message message : history) {
                     messageList.getChildren().add(
-                            messageRow(message, currentUser, chatService, () -> refresh[0].run()));
+                            messageRow(message, currentUser, chatService, () -> refresh[0].run(),
+                                    onViewRequest));
                 }
             }
             // Messages always stay open; only the banner and the Make Offer button follow the listing.
@@ -121,9 +135,10 @@ public final class ChatViewBuilder {
     }
 
     private static HBox messageRow(Message message, User currentUser,
-                                   ChatService chatService, Runnable refresh) {
+                                   ChatService chatService, Runnable refresh,
+                                   Consumer<DealRequest> onViewRequest) {
         return message.isFormalOffer()
-                ? formalOfferRow(message, currentUser, chatService, refresh)
+                ? formalOfferRow(message, currentUser, chatService, refresh, onViewRequest)
                 : textBubbleRow(message, currentUser);
     }
 
@@ -149,7 +164,8 @@ public final class ChatViewBuilder {
 
     /** Renders a Formal Offer as one card, never as a text bubble. */
     private static HBox formalOfferRow(Message message, User currentUser,
-                                       ChatService chatService, Runnable refresh) {
+                                       ChatService chatService, Runnable refresh,
+                                       Consumer<DealRequest> onViewRequest) {
         DealRequest request = message.getDealRequest();
         boolean own = message.getSenderUsername().equalsIgnoreCase(currentUser.getUsername());
 
@@ -183,6 +199,12 @@ public final class ChatViewBuilder {
             card.getChildren().add(actions);
         }
 
+        if (showsRequestLink(currentUser, request) && onViewRequest != null) {
+            Hyperlink viewRequest = new Hyperlink("View request");
+            viewRequest.setOnAction(e -> onViewRequest.accept(request));
+            card.getChildren().add(viewRequest);
+        }
+
         HBox row = new HBox(card);
         row.setAlignment(own ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
         return row;
@@ -209,6 +231,21 @@ public final class ChatViewBuilder {
         return actions;
     }
 
+    /**
+     * True only for the listing's seller looking at a request that still needs an answer.
+     * Null-safe so an absent viewer or request never renders the action.
+     */
+    static boolean showsRequestLink(User viewer, DealRequest request) {
+        if (viewer == null || request == null) {
+            return false;
+        }
+        boolean isListingSeller = viewer.getUsername() != null
+                && viewer.getUsername().equalsIgnoreCase(request.getSellerUsername());
+        return isListingSeller
+                && (request.getStatus() == RequestStatus.PENDING
+                    || request.getStatus() == RequestStatus.COUNTERED);
+    }
+
     private static String termsText(DealRequest request) {
         if (request instanceof PriceOffer offer) {
             return "Price offer: " + new Money(offer.getOfferedPrice()).getDisplay();
@@ -229,7 +266,8 @@ public final class ChatViewBuilder {
         };
     }
 
-    private static VBox searchPanel(ChatService chatService, User currentUser, Runnable refresh) {
+    private static VBox searchPanel(ChatService chatService, User currentUser, Runnable refresh,
+                                    Consumer<DealRequest> onViewRequest) {
         VBox panel = new VBox(8);
         panel.getStyleClass().add("card");
         panel.setPadding(new Insets(10));
@@ -272,7 +310,7 @@ public final class ChatViewBuilder {
                             () -> {
                                 refresh.run();
                                 searchAgain[0].run();
-                            }));
+                            }, onViewRequest));
                 }
             }
         };
