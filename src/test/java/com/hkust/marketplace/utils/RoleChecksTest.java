@@ -63,7 +63,7 @@ class RoleChecksTest {
                     () -> admin.rejectListing(notAdmin, pending, "Blurry"),
                     () -> admin.takeDownListing(notAdmin, live, "Spam"),
                     () -> admin.setActive(notAdmin, bob, false),
-                    () -> admin.deactivateAccount(notAdmin, bob),
+                    () -> admin.softDeleteAccount(notAdmin, bob),
                     () -> admin.setReviewHidden(notAdmin, review, true));
             for (Executable action : actions) {
                 assertThrows(SecurityException.class, action);
@@ -82,7 +82,7 @@ class RoleChecksTest {
     void adminActionsSaveNotifyAndAudit() {
         admin.approveListing(adminUser, data.listings().find("L104"));
         admin.takeDownListing(adminUser, data.listings().find("L101"), "Counterfeit");
-        admin.deactivateAccount(adminUser, data.users().find("bob"));
+        admin.setActive(adminUser, data.users().find("bob"), false);
         admin.setReviewHidden(adminUser, data.reviews().all().get(0), true);
 
         DummyDataService saved = DummyDataService.open(db);
@@ -94,7 +94,7 @@ class RoleChecksTest {
         assertEquals("Counterfeit", saved.listings().find("L101").getTakedownReason());
         assertFalse(saved.users().find("bob").isActive());
         assertTrue(saved.reviews().all().get(0).isHidden());
-        assertEquals(List.of("Took down", "Deleted account"),
+        assertEquals(List.of("Took down", "Deactivated account"),
                 saved.audit().all().stream().map(e -> e.getAction()).toList());
     }
 
@@ -117,25 +117,25 @@ class RoleChecksTest {
     }
 
     @Test
-    void onlyLiveListingsCanBeTakenDownForNow() {
-        assertThrows(IllegalStateException.class,
-                () -> admin.takeDownListing(adminUser, data.listings().find("L100"), "Spam"));   // Reserved
+    void reservedListingsCanBeTakenDownByCancellingTheirDeal() {
+        Listing textbook = data.listings().find("L100");   // Reserved by alice's accepted offer
+        admin.takeDownListing(adminUser, textbook, "Spam");
+
+        DummyDataService saved = DummyDataService.open(db);
+        assertEquals(ListingStatus.TAKEN_DOWN, saved.listings().find("L100").getStatus());
+        assertTrue(saved.deals().activeDealsForBuyer("alice").isEmpty(), "the active deal was cancelled");
+        assertEquals(NotificationCategory.LISTING_REMOVED, saved.notifications().forUser("alice").get(0).getCategory());
+
         assertThrows(IllegalStateException.class,
                 () -> admin.takeDownListing(adminUser, data.listings().find("L104"), "Spam"));   // Pending
         assertThrows(IllegalArgumentException.class,
                 () -> admin.takeDownListing(adminUser, data.listings().find("L101"), "   "));
-
-        DummyDataService saved = DummyDataService.open(db);
-        assertEquals(ListingStatus.RESERVED, saved.listings().find("L100").getStatus());
-        assertEquals(ListingStatus.PENDING_REVIEW, saved.listings().find("L104").getStatus());
-        assertEquals(ListingStatus.LIVE, saved.listings().find("L101").getStatus());
-        assertTrue(saved.audit().all().isEmpty());
     }
 
     @Test
     void theAdminAccountCannotBeDisabledOrDeleted() {
         assertThrows(IllegalStateException.class, () -> admin.setActive(adminUser, adminUser, false));
-        assertThrows(IllegalStateException.class, () -> admin.deactivateAccount(adminUser, adminUser));
+        assertThrows(IllegalStateException.class, () -> admin.softDeleteAccount(adminUser, adminUser));
 
         assertTrue(DummyDataService.open(db).users().find("admin").isActive());
         assertTrue(data.audit().all().isEmpty());

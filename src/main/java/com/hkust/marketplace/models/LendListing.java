@@ -3,7 +3,7 @@ package com.hkust.marketplace.models;
 import java.time.Duration;
 
 public final class LendListing extends Listing {
-    private final Duration lendingDuration;
+    private Duration lendingDuration;
 
     public LendListing(Seller seller, String title, String description, Category category,
                        Condition condition, Location meetupLocation, Duration lendingDuration) {
@@ -13,6 +13,11 @@ public final class LendListing extends Listing {
 
     public Duration getLendingDuration() {
         return lendingDuration;
+    }
+
+    /** Admin edit (SRS UC-3.7); the listing keeps its type and seller. */
+    public void setLendingDuration(Duration lendingDuration) {
+        this.lendingDuration = LendingRules.requireLendingDuration(lendingDuration);
     }
 
     @Override

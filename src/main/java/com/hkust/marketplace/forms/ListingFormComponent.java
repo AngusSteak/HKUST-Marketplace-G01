@@ -104,6 +104,11 @@ public class ListingFormComponent {
         this.onSubmit = onSubmit;
     }
 
+    /** Lets the admin-on-behalf flow label the button for its own outcome (saved as Live). */
+    public void setSubmitLabel(String label) {
+        submitButton.setText(label);
+    }
+
     /** Renders a field-key to message map into the per-field error labels. */
     public void showErrors(Map<String, String> errors) {
         clearErrors();

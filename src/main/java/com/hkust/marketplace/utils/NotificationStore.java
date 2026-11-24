@@ -30,8 +30,19 @@ public class NotificationStore {
     public synchronized List<Notification> forUser(String username) {
         return notifications.stream()
                 .filter(n -> n.getUsername().equalsIgnoreCase(username))
-                .sorted(Comparator.comparing(Notification::getTimestamp).reversed())
+                .sorted(Comparator.comparing(Notification::getTimestamp).reversed()
+                        .thenComparing(Comparator.comparingInt(NotificationStore::idOrder).reversed()))
                 .collect(Collectors.toList());
+    }
+
+    /** Insertion order as a number, so two notices saved in the same instant still order newest first. */
+    private static int idOrder(Notification notification) {
+        String id = notification.getId();
+        try {
+            return id != null && id.startsWith("N") ? Integer.parseInt(id.substring(1)) : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** The user's notifications of one category, newest first; {@code null} means every category. */

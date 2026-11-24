@@ -8,6 +8,7 @@ import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
@@ -40,6 +41,7 @@ public class SellerDashboardController {
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
+    private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -371,9 +373,16 @@ public class SellerDashboardController {
                 Button reply = new Button("Reply");
                 reply.getStyleClass().addAll("btn-outline", "btn-sm");
                 reply.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Reply sent to buyer (demo).").showAndWait());
-                Button flag = new Button("Flag");
+                Button flag = new Button(r.isFlagged() ? "Unflag" : "Flag");
                 flag.getStyleClass().addAll("btn-danger", "btn-sm");
-                flag.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Review flagged for admin (demo).").showAndWait());
+                flag.setOnAction(e -> {
+                    try {
+                        reviewService.flagReview(SessionManager.getCurrentUser(), r, !r.isFlagged());
+                    } catch (SecurityException | IllegalArgumentException ex) {
+                        new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                    }
+                    showReviews();
+                });
                 actions.getChildren().addAll(reply, flag);
                 item.getChildren().addAll(stars, comment, meta, actions);
                 root.getChildren().add(item);

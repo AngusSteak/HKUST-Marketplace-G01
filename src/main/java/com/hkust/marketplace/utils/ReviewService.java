@@ -8,6 +8,7 @@ import com.hkust.marketplace.models.ListingReport;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.Review;
+import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 
@@ -91,6 +92,30 @@ public final class ReviewService {
     /** Step 3.2: every review the buyer has submitted, newest first, with any seller reply. */
     public List<Review> myReviews(User actor) {
         return data.reviews().byBuyer(requireBuyer(actor).getUsername());
+    }
+
+    /**
+     * Seller flags (or unflags) a review they received, so the admin sees it first (SRS UC-3.8).
+     * The review stays visible and keeps counting towards the seller's rating until the admin
+     * hides it.
+     */
+    public synchronized void flagReview(User actor, Review review, boolean flagged) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(review, "review");
+        if (!seller.getUsername().equalsIgnoreCase(review.getSellerUsername())) {
+            throw new SecurityException("This review is not about you.");
+        }
+        review.setFlagged(flagged);
+        data.database().inTransaction(() -> {
+            data.reviews().save(review);
+            if (flagged) {
+                NotificationRef ref = new NotificationRef(NotificationRef.Target.REVIEW, review.getId());
+                for (User admin : data.users().byRole(UserRole.ADMIN)) {
+                    data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,
+                            "Seller @" + seller.getUsername() + " flagged a review: " + review.getComment(), ref);
+                }
+            }
+        });
     }
 
     /**

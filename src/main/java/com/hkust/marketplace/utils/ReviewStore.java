@@ -56,10 +56,11 @@ public class ReviewStore {
         }
         // deal_id is UNIQUE, so the database itself refuses a second review of the same deal.
         db.update("INSERT INTO reviews (id, deal_id, seller_username, buyer_username, listing_title, rating,"
-                        + " comment, seller_reply, hidden, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + " comment, seller_reply, hidden, flagged, created_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 r.getId(), r.getDealId(), r.getSellerUsername().toLowerCase(), r.getBuyerUsername().toLowerCase(),
                 r.getListingTitle(), r.getRating(), r.getComment(), r.getSellerReply(), r.isHidden(),
-                r.getCreatedAt());
+                r.isFlagged(), r.getCreatedAt());
         // Only once saved: inside a transaction that later rolls back, the review never appears.
         db.afterCommit(() -> {
             synchronized (this) {
@@ -81,13 +82,13 @@ public class ReviewStore {
                 .collect(Collectors.toList());
     }
 
-    /** Saves a review's changeable fields: hidden (admin) and the seller's reply. */
+    /** Saves a review's changeable fields: hidden (admin), flagged (seller) and the seller's reply. */
     public synchronized void save(Review r) {
         if (!reviews.contains(r)) {
             throw new IllegalArgumentException("Unknown review: " + r.getId());
         }
-        db.update("UPDATE reviews SET hidden = ?, seller_reply = ? WHERE id = ?",
-                r.isHidden(), r.getSellerReply(), r.getId());
+        db.update("UPDATE reviews SET hidden = ?, flagged = ?, seller_reply = ? WHERE id = ?",
+                r.isHidden(), r.isFlagged(), r.getSellerReply(), r.getId());
     }
 
     /** Rebuilds the saved reviews in the order added and resumes the {@code R} id counter. */
@@ -103,6 +104,7 @@ public class ReviewStore {
             r.setSellerReply(row.getString("seller_reply"));
             r.setDealId(row.getString("deal_id"));
             r.setHidden(Database.bool(row, "hidden"));
+            r.setFlagged(Database.bool(row, "flagged"));
             r.setCreatedAt(Database.dateTime(row, "created_at"));
             reviews.add(r);
             idCounter.set(Math.max(idCounter.get(), Integer.parseInt(r.getId().substring(1)) + 1));
