@@ -2,6 +2,7 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.forms.PhotoDraft;
+import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
@@ -21,10 +22,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Seller-only actions on the seller's own listings. Every method checks that {@code seller}
@@ -241,6 +246,52 @@ public final class SellerService {
         });
     }
 
+    /**
+     * Accepts one of the seller's own PENDING requests; the deal and Reserved/Lent status come
+     * from {@link DealLifecycle#accept}. Other open requests are captured before the transition
+     * because accepting declines them. Each affected buyer gets one OFFER_UPDATE notice: a DEAL
+     * ref for the accepted buyer, a REQUEST ref for a buyer whose request was declined. The
+     * seller is never notified, and all writes share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is an active Seller who does not own the listing
+     * @throws IllegalStateException if the request is not PENDING
+     */
+    public Deal acceptRequest(User actor, DealRequest request) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(request, "request");
+        Listing listing = request.getListing();
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (request.getStatus() != RequestStatus.PENDING) {
+            throw new IllegalStateException("Only a PENDING request can be accepted; was " + request.getStatus());
+        }
+
+        List<DealRequest> others = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(r -> r != request && isOpen(r))
+                .toList();
+
+        AtomicReference<Deal> accepted = new AtomicReference<>();
+        data.database().inTransaction(() -> {
+            Deal deal = data.deals().lifecycle().accept(request);
+            accepted.set(deal);
+            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                    "Your request for '" + listing.getTitle() + "' was accepted.",
+                    new NotificationRef(NotificationRef.Target.DEAL, deal.getId()));
+            Set<String> notified = new HashSet<>();
+            notified.add(normalize(request.getBuyerUsername()));
+            for (DealRequest other : others) {
+                if (notified.add(normalize(other.getBuyerUsername()))) {
+                    data.notifications().notify(other.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                            "Your request for '" + listing.getTitle()
+                                    + "' was declined because another request was accepted.",
+                            new NotificationRef(NotificationRef.Target.REQUEST, other.getId()));
+                }
+            }
+        });
+        return accepted.get();
+    }
+
     public LinkedHashMap<Listing, List<DealRequest>> pendingRequestsByListing(User actor) {
         Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
         List<DealRequest> all = data.deals().allRequests();
@@ -303,6 +354,10 @@ public final class SellerService {
     private static boolean isOpen(DealRequest request) {
         RequestStatus status = request.getStatus();
         return status == RequestStatus.PENDING || status == RequestStatus.COUNTERED;
+    }
+
+    private static String normalize(String username) {
+        return username.toLowerCase(Locale.ROOT);
     }
 
     private static boolean isAvailable(Listing listing) {
