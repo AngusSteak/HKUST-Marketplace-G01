@@ -1,12 +1,15 @@
 package com.hkust.marketplace.utils;
 
+import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.PasswordRule;
+import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -21,6 +24,8 @@ public final class ProfileService {
     public static final String NAME_REQUIRED = "Full name is required.";
     public static final String CURRENT_PASSWORD_WRONG = "Current password is incorrect.";
     public static final String CONFIRMATION_MISMATCH = "New password and confirmation do not match.";
+    public static final int BIO_MAX_LENGTH = 500;
+    public static final String BIO_TOO_LONG = "Bio must be 500 characters or fewer.";
 
     private final DummyDataService data;
 
@@ -74,6 +79,87 @@ public final class ProfileService {
             // The database rolled back; put the account object back the way it was too.
             actor.setFullName(oldName);
             actor.setPasswordHash(oldHash);
+            throw e;
+        }
+        return List.copyOf(changed);
+    }
+
+    /**
+     * SRS UC-2.6: a seller changes their full name, bio, preferred meet-up locations and,
+     * optionally, their password. Every check runs before anything changes; on success the
+     * account is saved in one transaction and every admin is told which fields changed, never
+     * the password itself.
+     *
+     * @return the fields that changed in a fixed order, empty if nothing changed
+     * @throws SecurityException if {@code actor} is not an active seller
+     * @throws IllegalArgumentException with the reason if a check fails; nothing changes
+     */
+    public List<String> updateSellerProfile(User actor, String fullName, String bio, Set<Location> meetup,
+                                            String currentPassword, String newPassword, String confirmPassword) {
+        AccessControl.require(actor, UserRole.SELLER);
+        if (!(actor instanceof Seller seller)) {
+            throw new SecurityException("@" + actor.getUsername() + " is not a seller");
+        }
+
+        String name = fullName == null ? "" : fullName.trim();
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException(NAME_REQUIRED);
+        }
+        String trimmedBio = bio == null ? "" : bio.trim();
+        if (trimmedBio.isBlank()) {
+            trimmedBio = null;
+        } else if (trimmedBio.length() > BIO_MAX_LENGTH) {
+            throw new IllegalArgumentException(BIO_TOO_LONG);
+        }
+        final String normalizedBio = trimmedBio;
+        Set<Location> meetups = meetup == null ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(meetup);
+
+        boolean changePassword = !isBlank(currentPassword) || !isBlank(newPassword) || !isBlank(confirmPassword);
+        if (changePassword) {
+            checkPasswordChange(actor, currentPassword, newPassword, confirmPassword);
+        }
+
+        List<String> changed = new ArrayList<>();
+        if (!Objects.equals(name, actor.getFullName())) {
+            changed.add("full name");
+        }
+        String currentBio = seller.getBio();
+        String normalizedCurrentBio = currentBio == null || currentBio.isBlank() ? null : currentBio.trim();
+        if (!Objects.equals(normalizedBio, normalizedCurrentBio)) {
+            changed.add("bio");
+        }
+        if (!Objects.equals(meetups, seller.getPreferredMeetup())) {
+            changed.add("preferred meet-up locations");
+        }
+        if (changePassword) {
+            changed.add("password");
+        }
+        if (changed.isEmpty()) {
+            return List.of();
+        }
+
+        String oldName = actor.getFullName();
+        String oldHash = actor.getPasswordHash();
+        String oldBio = seller.getBio();
+        Set<Location> oldMeetup = seller.getPreferredMeetup().isEmpty()
+                ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(seller.getPreferredMeetup());
+        try {
+            data.database().inTransaction(() -> {
+                actor.setFullName(name);
+                seller.setBio(normalizedBio);
+                seller.setPreferredMeetup(meetups);
+                if (changePassword) {
+                    actor.setPasswordHash(PasswordHasher.hash(newPassword));
+                }
+                data.users().save(actor);
+                notifyAdmins(actor, changed);
+            });
+        } catch (RuntimeException e) {
+            // The database rolled back; put the account object back the way it was too.
+            actor.setFullName(oldName);
+            actor.setPasswordHash(oldHash);
+            seller.setBio(oldBio);
+            seller.setPreferredMeetup(oldMeetup);
             throw e;
         }
         return List.copyOf(changed);
