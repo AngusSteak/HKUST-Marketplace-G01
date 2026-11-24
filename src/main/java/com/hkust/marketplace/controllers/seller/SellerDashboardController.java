@@ -8,13 +8,13 @@ import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.ProfileService;
 import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerReviewService;
 import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
@@ -30,6 +30,7 @@ import javafx.scene.layout.*;
 
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -695,44 +696,133 @@ public class SellerDashboardController {
         contentPane.getChildren().add(new ScrollPane(root));
     }
 
+    /** Manage Profile (SRS UC-2.6): name, bio, preferred meet-ups and an optional password change. */
     @FXML
     private void showProfile() {
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to manage your profile.").showAndWait();
+            showMyListings();
+            return;
+        }
+
         setActive(btnProfile, "My Profile");
         contentPane.getChildren().clear();
-        User user = SessionManager.getCurrentUser();
-        VBox form = new VBox(12);
-        form.setMaxWidth(420);
+
+        VBox form = new VBox(10);
+        form.setPadding(new Insets(8));
+        form.setMaxWidth(560);
+        form.setMaxHeight(Region.USE_PREF_SIZE);
         form.getStyleClass().add("card");
-        form.setPadding(new Insets(20));
-        form.getChildren().add(new Label("Edit Seller Profile") {{ getStyleClass().add("section-title"); }});
 
-        TextField name = new TextField(user != null ? user.getFullName() : "");
-        PasswordField pass = new PasswordField();
-        pass.setPromptText("New password (optional)");
-        TextArea bio = new TextArea(user instanceof Seller seller && seller.getBio() != null ? seller.getBio() : "");
+        Label title = new Label("Edit your profile");
+        title.getStyleClass().add("section-title");
+
+        TextField nameField = new TextField(seller.getFullName());
+        nameField.setPromptText("Full Name");
+        nameField.setMaxWidth(Double.MAX_VALUE);
+
+        TextArea bio = new TextArea(seller.getBio() == null ? "" : seller.getBio());
+        bio.setWrapText(true);
         bio.setPrefRowCount(3);
-        ComboBox<Location> meetup = new ComboBox<>(FXCollections.observableArrayList(Location.values()));
-        if (user instanceof Seller seller) {
-            seller.getPreferredMeetup().stream().findFirst().ifPresent(meetup::setValue);
+        bio.setMaxWidth(Double.MAX_VALUE);
+        Label counter = new Label(bio.getText().length() + "/500");
+        counter.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        counter.setMaxWidth(Double.MAX_VALUE);
+        counter.setAlignment(Pos.CENTER_RIGHT);
+        bio.textProperty().addListener((obs, oldText, text) -> counter.setText(text.length() + "/500"));
+
+        GridPane meetupGrid = new GridPane();
+        meetupGrid.setHgap(16);
+        meetupGrid.setVgap(8);
+        EnumMap<Location, CheckBox> boxes = new EnumMap<>(Location.class);
+        int i = 0;
+        for (Location location : Location.values()) {
+            CheckBox box = new CheckBox(location.getLabel());
+            box.setSelected(seller.getPreferredMeetup().contains(location));
+            meetupGrid.add(box, i % 2, i / 2);
+            boxes.put(location, box);
+            i++;
         }
-        meetup.setMaxWidth(Double.MAX_VALUE);
+        ScrollPane meetupScroll = new ScrollPane(meetupGrid);
+        meetupScroll.setFitToWidth(true);
+        meetupScroll.setPrefViewportHeight(160);
+        Button clearAll = new Button("Clear all");
+        clearAll.getStyleClass().addAll("btn-outline", "btn-sm");
+        clearAll.setOnAction(e -> boxes.values().forEach(box -> box.setSelected(false)));
 
-        Button save = new Button("Save Changes");
-        save.getStyleClass().add("btn-gold");
-        save.setOnAction(e -> {
-            if (user instanceof Seller seller && meetup.getValue() != null) {
-                seller.setPreferredMeetup(EnumSet.of(meetup.getValue()));
+        Label passwordTitle = new Label("Change password (optional)");
+        passwordTitle.getStyleClass().add("section-title");
+        PasswordField currentPass = new PasswordField();
+        currentPass.setPromptText("Current password");
+        PasswordField newPass = new PasswordField();
+        newPass.setPromptText("New password");
+        PasswordField confirmPass = new PasswordField();
+        confirmPass.setPromptText("Confirm new password");
+        Label rules = new Label("8\u201364 characters with an uppercase letter, a lowercase letter, a digit and a"
+                + " special character; no spaces; not your username.");
+        rules.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+        rules.setWrapText(true);
+
+        Label message = new Label();
+        message.setWrapText(true);
+        message.setManaged(false);
+        message.setVisible(false);
+
+        Button saveBtn = new Button("Save Changes");
+        saveBtn.getStyleClass().add("btn-primary");
+        saveBtn.setOnAction(e -> {
+            EnumSet<Location> chosen = EnumSet.noneOf(Location.class);
+            for (Map.Entry<Location, CheckBox> entry : boxes.entrySet()) {
+                if (entry.getValue().isSelected()) {
+                    chosen.add(entry.getKey());
+                }
             }
-            new Alert(Alert.AlertType.INFORMATION, "Profile saved (demo).").showAndWait();
+            try {
+                List<String> changed = new ProfileService(DummyDataService.getInstance()).updateSellerProfile(
+                        seller, nameField.getText(), bio.getText(), chosen,
+                        currentPass.getText(), newPass.getText(), confirmPass.getText());
+                currentPass.clear();
+                newPass.clear();
+                confirmPass.clear();
+                if (changed.contains("full name")) {
+                    welcomeLabel.setText("Hello, " + seller.getFullName());
+                }
+                showMessage(message, changed.isEmpty() ? "Nothing to save." : "Profile updated.", false);
+            } catch (SecurityException | IllegalArgumentException ex) {
+                // SRS UC-2.6 A1 / A2: say which check failed; nothing was changed.
+                showMessage(message, ex.getMessage(), true);
+            } catch (RuntimeException ex) {
+                // The save itself failed and was rolled back.
+                showMessage(message, "Your profile could not be saved. Please try again.", true);
+            }
         });
+        // SRS UC-2.6 A3: discard the edits.
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.getStyleClass().add("btn-outline");
+        cancelBtn.setOnAction(e -> showProfile());
 
-        form.getChildren().addAll(
-                new Label("Full Name"), name,
-                new Label("New Password"), pass,
-                new Label("Bio"), bio,
-                new Label("Preferred Meet-up"), meetup,
-                save);
-        contentPane.getChildren().add(form);
+        form.getChildren().addAll(title,
+                new Label("Full Name"), nameField,
+                new Label("Bio"), bio, counter,
+                new Label("Preferred Meet-up Locations"), meetupScroll, clearAll,
+                passwordTitle,
+                new Label("Current password"), currentPass,
+                new Label("New password"), newPass,
+                new Label("Confirm new password"), confirmPass, rules,
+                message, new HBox(10, saveBtn, cancelBtn));
+
+        ScrollPane scroll = new ScrollPane(form);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private static void showMessage(Label label, String text, boolean error) {
+        label.setText(text);
+        label.setStyle(error ? "-fx-text-fill: #c0392b;" : "-fx-text-fill: #1e7e34;");
+        label.setManaged(true);
+        label.setVisible(true);
     }
 
     @FXML
