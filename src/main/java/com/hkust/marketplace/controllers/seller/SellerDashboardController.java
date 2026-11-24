@@ -334,9 +334,11 @@ public class SellerDashboardController {
     }
 
     private void showThread(ChatThread thread) {
+        setActive(btnChats, "Chats");
+        // Back to Chat re-opens this same view, so the title, sidebar and View request link return too.
         renderThread(thread, threadBackLabel(false), this::showChats,
                 request -> openRequestsView(r -> r.renderFiltered(request.getListing()),
-                        () -> renderThread(thread, threadBackLabel(false), this::showChats)));
+                        () -> showThread(thread)));
     }
 
     private void showThread(ChatThread thread, Runnable backAction) {
@@ -511,7 +513,8 @@ public class SellerDashboardController {
                 .toList();
         BarChart<Number, String> barChart = null;
         if (rowsByViews.isEmpty()) {
-            Label noChartData = new Label("No listings to chart yet.");
+            // SRS UC-2.8 A1
+            Label noChartData = new Label("No listings yet. Charts will appear once you post listings.");
             noChartData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
             root.getChildren().add(noChartData);
         } else {
@@ -524,7 +527,9 @@ public class SellerDashboardController {
             viewsSeries.setName("Views");
             XYChart.Series<Number, String> offersSeries = new XYChart.Series<>();
             offersSeries.setName("Offers");
-            for (SellerStats.ListingStat row : rowsByViews) {
+            // A horizontal bar chart draws its first category at the bottom, so add them in
+            // ascending order to show the most-viewed listing at the top.
+            for (SellerStats.ListingStat row : rowsByViews.reversed()) {
                 String label = row.title().length() > 20 ? row.title().substring(0, 20) : row.title();
                 viewsSeries.getData().add(bar(label, row.views(), row.title(), row.listingId()));
                 offersSeries.getData().add(bar(label, row.offers(), row.title(), row.listingId()));
@@ -532,10 +537,7 @@ public class SellerDashboardController {
             barChart.getData().addAll(List.of(viewsSeries, offersSeries));
             for (XYChart.Series<Number, String> series : barChart.getData()) {
                 for (XYChart.Data<Number, String> data : series.getData()) {
-                    data.nodeProperty().addListener((obs, oldNode, newNode) -> {
-                        if (newNode == null) {
-                            return;
-                        }
+                    whenBarShown(data, newNode -> {
                         newNode.setOnMouseClicked(event -> {
                             if (table == null) {
                                 return;
@@ -591,10 +593,6 @@ public class SellerDashboardController {
 
         if (table != null) {
             root.getChildren().addAll(showAll, table);
-        } else {
-            Label noData = new Label("No data yet");
-            noData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
-            root.getChildren().add(noData);
         }
 
         ScrollPane scroll = new ScrollPane(root);
@@ -611,13 +609,27 @@ public class SellerDashboardController {
     private static XYChart.Data<Number, String> bar(String label, int value, String title, String listingId) {
         XYChart.Data<Number, String> data = new XYChart.Data<>(value, label);
         data.setExtraValue(listingId);
-        data.nodeProperty().addListener((obs, oldNode, newNode) -> {
-            if (newNode != null) {
-                newNode.setUserData(listingId);
-                Tooltip.install(newNode, new Tooltip(title));
-            }
+        whenBarShown(data, node -> {
+            node.setUserData(listingId);
+            Tooltip.install(node, new Tooltip(title));
         });
         return data;
+    }
+
+    /**
+     * Runs {@code action} on the bar's node now if the chart already created it, and on any node
+     * it creates later. A chart creates bar nodes as soon as data is added, so a node-property
+     * listener alone would miss them and the bars would get no handler.
+     */
+    static void whenBarShown(XYChart.Data<Number, String> data, Consumer<javafx.scene.Node> action) {
+        if (data.getNode() != null) {
+            action.accept(data.getNode());
+        }
+        data.nodeProperty().addListener((obs, oldNode, newNode) -> {
+            if (newNode != null) {
+                action.accept(newNode);
+            }
+        });
     }
 
     private TableView<SellerStats.ListingStat> listingTable(List<SellerStats.ListingStat> rows) {
@@ -650,7 +662,10 @@ public class SellerDashboardController {
         card.setPrefWidth(140);
         card.setPadding(new Insets(16));
         Label val = new Label(value);
-        val.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        // Numbers are large; a text value such as "No rating yet" is smaller so it fits the card.
+        String size = value.chars().anyMatch(Character::isLetter) ? "16px" : "28px";
+        val.setStyle("-fx-font-size: " + size + "; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        val.setWrapText(true);
         Label lbl = new Label(label);
         lbl.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
         card.getChildren().addAll(val, lbl);
