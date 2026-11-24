@@ -72,6 +72,17 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 
 **Role checks (#60):** admin-only and seller-only actions live in `AdminService` and `SellerService`. Each method takes the acting user (`SessionManager.getCurrentUser()`) and calls `AccessControl.require(actor, role)` first, which throws `SecurityException` for the wrong role or an inactive account. New role-specific actions should follow the same pattern (`ChatService` already does for chat participants), so the check holds even if a screen shows a button it shouldn't.
 
+## Tests and Coverage
+
+```powershell
+.\mvnw.cmd test
+```
+
+- JUnit 5 tests cover the models and services (stores, deal lifecycle, chat, reviews, notifications, admin actions, profile, seller stats) plus the database layer. JavaFX controllers are covered lightly, since most of their work is rendering; a few controller tests cover chat links, seller stats charts and the notification board.
+- Tests use an in-memory SQLite database (`Database.inMemory()` or a private `DummyDataService`), so they never create or read `data/marketplace.db`.
+- JaCoCo writes the coverage report to `target/site/jacoco/index.html` (CSV: `target/site/jacoco/jacoco.csv`) during the same `test` run.
+- Latest run: **489 tests, 0 failures**. Line coverage: models **96%**, utils/services **91%**, persistence **83%**, overall **44%** (the lightly covered controllers pull the total down).
+
 ## Security State (Demo)
 
 - Passwords are stored only as **BCrypt hashes** (jBCrypt, cost factor 12), produced by `PasswordHasher`. `User.passwordHash` is the only credential field; plaintext passwords are never stored in a `User`, logged, or compared directly. Seeding hashes the demo passwords at startup, buyer/seller registration hashes the chosen password, and every login verifies through `PasswordHasher.verify`.
