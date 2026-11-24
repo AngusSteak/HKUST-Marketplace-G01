@@ -368,37 +368,43 @@ public class AdminDashboardController {
                     label(party(report.getReporterUsername()) + " · " + report.getReportedTime().format(DATE),
                             "-fx-text-fill: #9aa0b0; -fx-font-size: 11px;"),
                     label(report.getReason(), "-fx-text-fill: #5a5a7a;"));
-            Button dismiss = new Button("Dismiss with note");
-            dismiss.getStyleClass().addAll("btn-outline", "btn-sm");
-            dismiss.setOnAction(e -> {
-                TextInputDialog note = new TextInputDialog();
-                note.setTitle("Dismiss report");
-                note.setHeaderText("Tell the record why this report needs no action.");
-                note.setContentText("Note:");
-                note.showAndWait().ifPresent(text -> {
-                    if (text.isBlank()) {
-                        new Alert(Alert.AlertType.WARNING, "A note is required.").showAndWait();
-                        return;
-                    }
-                    run(() -> adminService.dismissReport(admin(), report, text));
-                    content.getChildren().remove(card);
-                    if (content.getChildren().isEmpty()) {
-                        dialog.close();
-                    }
-                });
-            });
-            card.getChildren().add(dismiss);
             content.getChildren().add(card);
         }
+        // SRS UC-3.7 3.3.2: dismiss all open reports with one note, or take the listing down.
+        ButtonType dismissAll = new ButtonType("Dismiss all with note", ButtonBar.ButtonData.LEFT);
         ButtonType takeDown = new ButtonType("Take down listing", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().getButtonTypes().addAll(takeDown, ButtonType.CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(dismissAll, takeDown, ButtonType.CLOSE);
         dialog.setOnHidden(e -> showAllListings());
         dialog.showAndWait().ifPresent(result -> {
             if (result == takeDown) {
                 promptTakeDown(listing, this::showAllListings);
+            } else if (result == dismissAll) {
+                promptDismissReports(listing, open.size());
             }
         });
+    }
+
+    /** Asks for the resolution note until one is given (A6) or the admin cancels. */
+    private void promptDismissReports(Listing listing, int count) {
+        while (true) {
+            TextInputDialog note = new TextInputDialog();
+            note.setTitle("Dismiss reports");
+            note.setHeaderText("Dismiss " + count + " open report(s) on '" + listing.getTitle()
+                    + "'? The listing stays as it is.");
+            note.setContentText("Resolution note:");
+            Optional<String> text = note.showAndWait();
+            if (text.isEmpty()) {
+                return;
+            }
+            if (text.get().isBlank()) {
+                new Alert(Alert.AlertType.WARNING, AdminService.RESOLUTION_NOTE_REQUIRED).showAndWait();
+                continue;
+            }
+            run(() -> adminService.dismissReports(admin(), listing, text.get()));
+            showAllListings();
+            return;
+        }
     }
 
     private void showAddOnBehalf() {

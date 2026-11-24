@@ -77,7 +77,7 @@ class AdminBlock2Test {
         assertEquals(UserRole.BUYER, back.getRole());
         assertTrue(back.isActive());
         assertFalse(back.isDeleted());
-        assertEquals(NotificationCategory.ACCOUNT_CHANGE,
+        assertEquals(NotificationCategory.ANNOUNCEMENT,
                 saved.notifications().forUser("alice").get(0).getCategory());
 
         assertThrows(IllegalArgumentException.class,
@@ -98,7 +98,7 @@ class AdminBlock2Test {
         assertEquals(ListingStatus.LIVE, saved.listings().find("L101").getStatus(),
                 "the listing keeps its status; the account state hides it");
         assertFalse(ListingSearch.isBrowsable(saved.listings().find("L101")));
-        assertEquals(NotificationCategory.ACCOUNT_CHANGE,
+        assertEquals(NotificationCategory.ANNOUNCEMENT,
                 saved.notifications().forUser("charlie").get(0).getCategory());
         assertEquals("Deactivated account", saved.audit().all().get(0).getAction());
 
@@ -129,7 +129,8 @@ class AdminBlock2Test {
                 .filter(d -> d.getStatus() == DealStatus.CANCELLED).findFirst().orElseThrow();
         assertEquals("L100", cancelled.getListing().getId());
         assertTrue(saved.notifications().forUser("alice").stream()
-                .anyMatch(n -> n.getCategory() == NotificationCategory.ACCOUNT_CHANGE));
+                .anyMatch(n -> n.getCategory() == NotificationCategory.OFFER_UPDATE
+                        && n.getMessage().contains("was deleted")), "the buyer hears it as an Offer Update");
         assertEquals("Deleted account", saved.audit().all().get(0).getAction());
         assertEquals("@charlie", saved.audit().all().get(0).getTarget());
     }
@@ -146,7 +147,8 @@ class AdminBlock2Test {
                         || r.getStatus() == com.hkust.marketplace.models.RequestStatus.ACCEPTED));
         assertEquals(ListingStatus.LIVE, saved.listings().find("L103").getStatus());
         assertTrue(saved.notifications().forUser("diana").stream()
-                .anyMatch(n -> n.getCategory() == NotificationCategory.ACCOUNT_CHANGE));
+                .anyMatch(n -> n.getCategory() == NotificationCategory.ANNOUNCEMENT
+                        && n.getMessage().contains("was deleted")), "the seller hears it as an Announcement");
         assertTrue(saved.users().find("bob").isDeleted());
     }
 
@@ -163,7 +165,7 @@ class AdminBlock2Test {
         assertEquals(299.0, back instanceof com.hkust.marketplace.models.SaleListing sale
                 ? sale.getPrice().amount().doubleValue() : -1);
         assertEquals("Edited", saved.audit().all().get(0).getAction());
-        assertEquals(NotificationCategory.ACCOUNT_CHANGE,
+        assertEquals(NotificationCategory.ANNOUNCEMENT,
                 saved.notifications().forUser("charlie").get(0).getCategory());
 
         assertThrows(IllegalArgumentException.class, () -> admin.editListing(adminUser, back,
@@ -214,16 +216,43 @@ class AdminBlock2Test {
     }
 
     @Test
-    void reportsCanBeDismissedWithANote() {
+    void allOpenReportsOnAListingAreDismissedWithOneNote() {
         Buyer alice = (Buyer) data.users().find("alice");
-        ListingReport report = data.reports().fileReport(alice, data.listings().find("L101"), "Looks fake");
-        admin.dismissReport(adminUser, report, "Checked with the seller, it is genuine");
+        Buyer bob = (Buyer) data.users().find("bob");
+        Listing charger = data.listings().find("L101");
+        data.reports().fileReport(alice, charger, "Looks fake");
+        data.reports().fileReport(bob, charger, "Wrong price");
+        ListingReport other = data.reports().fileReport(bob, data.listings().find("L103"), "Spam");
+
+        assertEquals(AdminService.RESOLUTION_NOTE_REQUIRED, assertThrows(IllegalArgumentException.class,
+                () -> admin.dismissReports(adminUser, charger, "  ")).getMessage());
+        assertEquals(2, admin.dismissReports(adminUser, charger, "  Checked with the seller, it is genuine "));
 
         DummyDataService saved = DummyDataService.open(db);
-        assertEquals("Checked with the seller, it is genuine", saved.reports().all().get(0).getResolution());
+        assertTrue(saved.reports().openReports(saved.listings().find("L101")).isEmpty());
+        assertTrue(saved.reports().all().stream().filter(r -> r.getListing().getId().equals("L101"))
+                .allMatch(r -> "Checked with the seller, it is genuine".equals(r.getResolution())));
+        assertEquals(1, saved.reports().openReports(saved.listings().find("L103")).size(), "other listings untouched");
+        assertEquals(ListingStatus.LIVE, saved.listings().find("L101").getStatus(), "dismissing keeps the listing");
         assertEquals("Resolved report", saved.audit().all().get(0).getAction());
-        assertThrows(IllegalArgumentException.class,
-                () -> admin.dismissReport(adminUser, saved.reports().all().get(0), "  "));
+        assertEquals("L101", saved.audit().all().get(0).getTarget());
+        assertEquals(1, saved.audit().all().size(), "one audit entry for the whole dismissal");
+
+        assertThrows(IllegalStateException.class, () -> admin.dismissReports(adminUser, charger, "Again"));
+        assertThrows(SecurityException.class,
+                () -> admin.dismissReports(data.users().find("alice"), other.getListing(), "Not mine"));
+    }
+
+    @Test
+    void adminEditsNeedADescriptionLikePostListing() {
+        Listing charger = data.listings().find("L101");
+        String before = charger.getDescription();
+
+        assertThrows(IllegalArgumentException.class, () -> admin.editListing(adminUser, charger, "Charger", "   ",
+                Category.ELECTRONICS, Condition.USED, Location.LIBRARY, "250", null));
+
+        assertEquals(before, DummyDataService.open(db).listings().find("L101").getDescription());
+        assertTrue(data.audit().all().isEmpty());
     }
 
     @Test

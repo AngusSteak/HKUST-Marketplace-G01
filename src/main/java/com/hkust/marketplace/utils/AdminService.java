@@ -164,6 +164,8 @@ public final class AdminService {
         AccessControl.require(admin, UserRole.ADMIN);
         Objects.requireNonNull(listing, "listing");
         String newTitle = requireText(title, "Title");
+        // Validated as in Post Listing (SRS UC-3.7 step 3.1.2), which requires a description.
+        String newDescription = requireText(description, "Description");
         Objects.requireNonNull(category, "category");
         Objects.requireNonNull(condition, "condition");
         Objects.requireNonNull(location, "meetup location");
@@ -181,7 +183,7 @@ public final class AdminService {
         try {
             data.database().inTransaction(() -> {
                 listing.setTitle(newTitle);
-                listing.setDescription(description == null ? "" : description.trim());
+                listing.setDescription(newDescription);
                 listing.setCategory(category);
                 listing.setCondition(condition);
                 listing.setMeetupLocation(location);
@@ -192,7 +194,7 @@ public final class AdminService {
                 }
                 data.listings().update(listing);
                 data.audit().recordEdit(admin.getUsername(), listing.getId());
-                data.notifications().notify(listing.getSellerUsername(), NotificationCategory.ACCOUNT_CHANGE,
+                data.notifications().notify(listing.getSellerUsername(), NotificationCategory.ANNOUNCEMENT,
                         "An admin edited your listing '" + listing.getTitle() + "'.",
                         new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
             });
@@ -211,15 +213,32 @@ public final class AdminService {
         }
     }
 
-    /** Resolves one report as dismissed with the admin's note (SRS UC-3.7). */
-    public void dismissReport(User admin, ListingReport report, String note) {
+    /** SRS UC-3.7 A6. */
+    public static final String RESOLUTION_NOTE_REQUIRED = "A resolution note is required to dismiss the reports.";
+
+    /**
+     * Dismisses every open report on the listing with one resolution note (SRS UC-3.7 steps
+     * 3.3.2-3.3.3) and records it in the audit log. The listing itself is unchanged.
+     *
+     * @return how many reports were resolved
+     * @throws IllegalArgumentException with {@link #RESOLUTION_NOTE_REQUIRED} if the note is blank (A6)
+     * @throws IllegalStateException if the listing has no open reports
+     */
+    public int dismissReports(User admin, Listing listing, String note) {
         AccessControl.require(admin, UserRole.ADMIN);
-        Objects.requireNonNull(report, "report");
-        String resolution = requireText(note, "Resolution note");
+        Objects.requireNonNull(listing, "listing");
+        if (note == null || note.isBlank()) {
+            throw new IllegalArgumentException(RESOLUTION_NOTE_REQUIRED);
+        }
+        if (data.reports().openReports(listing).isEmpty()) {
+            throw new IllegalStateException("This listing has no open reports.");
+        }
+        int[] resolved = new int[1];
         data.database().inTransaction(() -> {
-            data.reports().resolve(report, resolution);
-            data.audit().recordReportResolution(admin.getUsername(), report.getId());
+            resolved[0] = data.reports().resolveAll(listing, note.trim());
+            data.audit().recordReportResolution(admin.getUsername(), listing.getId());
         });
+        return resolved[0];
     }
 
     /**
@@ -254,7 +273,7 @@ public final class AdminService {
             data.database().inTransaction(() -> {
                 data.listings().add(listing);
                 data.audit().recordAddOnBehalf(admin.getUsername(), listing.getId());
-                data.notifications().notify(seller.getUsername(), NotificationCategory.ACCOUNT_CHANGE,
+                data.notifications().notify(seller.getUsername(), NotificationCategory.ANNOUNCEMENT,
                         "An admin added the listing '" + listing.getTitle() + "' on your behalf.",
                         new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));
             });
@@ -342,7 +361,7 @@ public final class AdminService {
                 }
                 data.users().save(account);
                 data.audit().recordEdit(admin.getUsername(), "@" + account.getUsername());
-                data.notifications().notify(account.getUsername(), NotificationCategory.ACCOUNT_CHANGE,
+                data.notifications().notify(account.getUsername(), NotificationCategory.ANNOUNCEMENT,
                         "An admin updated your account details.",
                         new NotificationRef(NotificationRef.Target.USER, account.getUsername()));
             });
@@ -381,7 +400,7 @@ public final class AdminService {
                 data.users().save(account);
                 data.audit().append(admin.getUsername(), active ? "Reactivated account" : "Deactivated account",
                         "@" + account.getUsername());
-                data.notifications().notify(account.getUsername(), NotificationCategory.ACCOUNT_CHANGE,
+                data.notifications().notify(account.getUsername(), NotificationCategory.ANNOUNCEMENT,
                         active ? "Your account was reactivated by an admin."
                                 : "Your account was deactivated by an admin.",
                         new NotificationRef(NotificationRef.Target.USER, account.getUsername()));
@@ -486,7 +505,7 @@ public final class AdminService {
                 data.audit().recordAccountDeletion(admin.getUsername(), "@" + username);
 
                 for (String name : affected) {
-                    data.notifications().notify(name, NotificationCategory.ACCOUNT_CHANGE,
+                    data.notifications().notify(name, closedDealCategory(name),
                             "An account involved in your request or deal was deleted, so it was closed.",
                             new NotificationRef(NotificationRef.Target.USER, username));
                 }
@@ -573,6 +592,17 @@ public final class AdminService {
             throw e;
         }
         return List.copyOf(changed);
+    }
+
+    /**
+     * The category for telling someone their request or deal was closed by a soft delete: an
+     * Offer Update for a buyer, an Announcement for a seller. Account Change is the admin's own
+     * category (SRS UC-3.x View Notifications), so it is never sent to buyers or sellers.
+     */
+    private NotificationCategory closedDealCategory(String username) {
+        User user = data.users().find(username);
+        return user != null && user.getRole() == UserRole.BUYER
+                ? NotificationCategory.OFFER_UPDATE : NotificationCategory.ANNOUNCEMENT;
     }
 
     private List<DealRequest> openRequestsOn(Listing listing) {

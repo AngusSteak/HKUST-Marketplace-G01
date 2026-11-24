@@ -125,10 +125,17 @@ class RoleChecksTest {
         assertTrue(saved.deals().activeDealsForBuyer("alice").isEmpty(), "the active deal was cancelled");
         assertEquals(NotificationCategory.LISTING_REMOVED, saved.notifications().forUser("alice").get(0).getCategory());
 
+        int auditBefore = data.audit().all().size();
         assertThrows(IllegalStateException.class,
                 () -> admin.takeDownListing(adminUser, data.listings().find("L104"), "Spam"));   // Pending
         assertThrows(IllegalArgumentException.class,
                 () -> admin.takeDownListing(adminUser, data.listings().find("L101"), "   "));
+
+        // refused take-downs change nothing
+        DummyDataService after = DummyDataService.open(db);
+        assertEquals(ListingStatus.PENDING_REVIEW, after.listings().find("L104").getStatus());
+        assertEquals(ListingStatus.LIVE, after.listings().find("L101").getStatus());
+        assertEquals(auditBefore, after.audit().all().size());
     }
 
     @Test
