@@ -55,7 +55,7 @@ public class ListingStore {
 
     /** Every listing, in the order added; a copy, safe to iterate while others change the store. */
     public Collection<Listing> all() {
-        return snapshot();
+        return snapshot().stream().filter(l -> !l.isDeleted()).collect(Collectors.toList());
     }
 
     private List<Listing> snapshot() {
@@ -65,23 +65,23 @@ public class ListingStore {
     }
 
     public List<Listing> live() {
-        return snapshot().stream()
-                .filter(l -> l.getStatus() == ListingStatus.LIVE)
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.LIVE).collect(Collectors.toList());
     }
 
     public List<Listing> pending() {
-        return snapshot().stream()
-                .filter(l -> l.getStatus() == ListingStatus.PENDING_REVIEW)
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.PENDING_REVIEW).collect(Collectors.toList());
     }
 
     public List<Listing> bySeller(String username) {
-        return snapshot().stream()
-                .filter(l -> l.getSellerUsername().equalsIgnoreCase(username))
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted() && l.getSellerUsername().equalsIgnoreCase(username)).collect(Collectors.toList());
     }
 
+    /**
+     * Resolves a listing by id, including deleted ones: chat threads, deals and notification
+     * links keep working after a listing is hidden. Callers that want visible listings only must
+     * use one of the filtered collections ({@link #all()}, {@link #live()}, {@link #pending()},
+     * {@link #bySeller(String)} or {@link #findAll(List)}).
+     */
     public Listing find(String id) {
         return listings.get(id);
     }
@@ -96,9 +96,11 @@ public class ListingStore {
         return "L" + idCounter.getAndIncrement();
     }
 
-    /** The listings with these ids, in the same order, skipping ids that no longer exist. */
+    /** The listings with these ids, in the same order, skipping missing and deleted ids. */
     public List<Listing> findAll(List<String> ids) {
-        return ids.stream().map(listings::get).filter(Objects::nonNull).toList();
+        return ids.stream().map(listings::get)
+                .filter(l -> l != null && !l.isDeleted())
+                .toList();
     }
 
     /**
@@ -128,13 +130,13 @@ public class ListingStore {
         db.inTransaction(() -> {
             db.update("INSERT INTO listings (id, type, seller_username, title, description, category,"
                             + " condition, meetup_location, status, submitted_date, reviewed_at,"
-                            + " rejection_reason, takedown_reason, view_count, price,"
-                            + " lending_duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            + " rejection_reason, takedown_reason, view_count, deleted, price,"
+                            + " lending_duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     listing.getId(), listing.getType(), listing.getSellerUsername().toLowerCase(),
                     listing.getTitle(), listing.getDescription(), listing.getCategory(),
                     listing.getCondition(), listing.getMeetupLocation(), listing.getStatus(),
                     listing.getSubmittedDate(), listing.getReviewedAt(), listing.getRejectionReason(),
-                    listing.getTakedownReason(), listing.getViewCount(), price(listing),
+                    listing.getTakedownReason(), listing.getViewCount(), listing.isDeleted(), price(listing),
                     lendingDuration(listing));
             savePhotos(listing);
         });
@@ -153,13 +155,14 @@ public class ListingStore {
             db.update("UPDATE listings SET type = ?, seller_username = ?, title = ?, description = ?,"
                             + " category = ?, condition = ?, meetup_location = ?, status = ?,"
                             + " submitted_date = ?, reviewed_at = ?, rejection_reason = ?,"
-                            + " takedown_reason = ?, view_count = ?, price = ?,"
+                            + " takedown_reason = ?, view_count = ?, deleted = ?, price = ?,"
                             + " lending_duration_seconds = ? WHERE id = ?",
                     listing.getType(), listing.getSellerUsername().toLowerCase(), listing.getTitle(),
                     listing.getDescription(), listing.getCategory(), listing.getCondition(),
                     listing.getMeetupLocation(), listing.getStatus(), listing.getSubmittedDate(),
                     listing.getReviewedAt(), listing.getRejectionReason(), listing.getTakedownReason(),
-                    listing.getViewCount(), price(listing), lendingDuration(listing), listing.getId());
+                    listing.getViewCount(), listing.isDeleted(), price(listing), lendingDuration(listing),
+                    listing.getId());
             db.update("DELETE FROM listing_photos WHERE listing_id = ?", listing.getId());
             savePhotos(listing);
         });
@@ -220,6 +223,7 @@ public class ListingStore {
         listing.setRejectionReason(row.getString("rejection_reason"));
         listing.setTakedownReason(row.getString("takedown_reason"));
         listing.setViewCount(row.getInt("view_count"));
+        listing.setDeleted(Database.bool(row, "deleted"));
         return listing;
     }
 

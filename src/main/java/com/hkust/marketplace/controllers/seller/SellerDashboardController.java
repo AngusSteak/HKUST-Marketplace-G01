@@ -8,6 +8,7 @@ import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerReviewService;
 import com.hkust.marketplace.utils.SellerService;
@@ -15,8 +16,10 @@ import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
@@ -25,24 +28,30 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
+import java.util.function.Consumer;
 
 public class SellerDashboardController {
+
+    private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
+    private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnListings, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
+    @FXML private Button btnListings, btnRequests, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
     private VBox reviewsRoot;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
     private final SellerReviewService sellerReviewService = new SellerReviewService(DummyDataService.getInstance());
+    private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -85,6 +94,32 @@ public class SellerDashboardController {
         contentPane.getChildren().add(scroll);
     }
 
+    @FXML
+    private void showRequests() {
+        openRequestsView(SellerRequestsController::render);
+    }
+
+    private void showRequestsFiltered(Listing listing) {
+        openRequestsView(requests -> requests.renderFiltered(listing));
+    }
+
+    private void openRequestsView(Consumer<SellerRequestsController> render) {
+        setActive(btnRequests, "Requests");
+        contentPane.getChildren().clear();
+        try {
+            FXMLLoader loader = new FXMLLoader(
+                    getClass().getResource("/fxml/seller/SellerRequestsView.fxml"));
+            Parent view = loader.load();
+            SellerRequestsController requests = loader.getController();
+            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render)));
+            render.accept(requests);
+            contentPane.getChildren().add(view);
+        } catch (IOException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not open Requests: " + ex.getMessage()).showAndWait();
+        }
+    }
+
     private HBox createListingRow(Listing l) {
         HBox row = new HBox(16);
         row.getStyleClass().add("card");
@@ -103,6 +138,27 @@ public class SellerDashboardController {
             price.setText(price.getText() + " · " + DurationText.format(lend.getLendingDuration()));
         }
         info.getChildren().addAll(title, meta, price);
+        String reason = switch (l.getStatus()) {
+            case REJECTED -> l.getRejectionReason();
+            case TAKEN_DOWN -> l.getTakedownReason();
+            default -> null;
+        };
+        if (reason != null && !reason.isBlank()) {
+            Label reasonLabel = new Label("Reason: " + reason);
+            reasonLabel.setStyle("-fx-text-fill: #b3261e; -fx-font-size: 12px;");
+            reasonLabel.setWrapText(true);
+            info.getChildren().add(reasonLabel);
+        }
+
+        List<DealRequest> openRequests = DummyDataService.getInstance().deals().lifecycle()
+                .requestsFor(l).stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
+                .toList();
+        if (!openRequests.isEmpty()) {
+            Hyperlink link = new Hyperlink("View " + openRequests.size() + " open offers");
+            link.setOnAction(e -> showRequestsFiltered(l));
+            info.getChildren().add(link);
+        }
 
         Label status = new Label(l.getStatus().name().replace('_', ' '));
         status.getStyleClass().add("badge");
@@ -113,29 +169,81 @@ public class SellerDashboardController {
             default -> status.getStyleClass().add("badge-sold");
         }
 
+        boolean editAllowed = !l.isDeleted()
+                && (l.getStatus() == ListingStatus.LIVE || l.getStatus() == ListingStatus.PENDING_REVIEW
+                    || l.getStatus() == ListingStatus.REJECTED)
+                && openRequests.isEmpty();
         Button editBtn = new Button("Edit");
         editBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        editBtn.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION,
-                "Edit form would open here.\n(Demo placeholder)").showAndWait());
+        editBtn.setDisable(!editAllowed);
+        if (!openRequests.isEmpty()) {
+            editBtn.setTooltip(new Tooltip("Editing is unavailable while offers are open."));
+            Label hint = new Label("Editing is unavailable while offers are open.");
+            hint.setStyle("-fx-text-fill: #b3261e; -fx-font-size: 11px;");
+            info.getChildren().add(hint);
+        }
+        editBtn.setOnAction(e -> showEditListing(l));
 
         Button delBtn = new Button("Delete");
         delBtn.getStyleClass().addAll("btn-danger", "btn-sm");
         delBtn.setOnAction(e -> {
-            Alert conf = new Alert(Alert.AlertType.CONFIRMATION, "Delete this listing?");
+            int affected = openRequests.size();
+            String message = affected == 0
+                    ? "Withdraw this listing? There are no open offers."
+                    : "Withdraw this listing?\n\n" + affected + " open offer"
+                            + (affected == 1 ? "" : "s") + " will be declined and the buyer"
+                            + (affected == 1 ? "" : "s") + " notified.";
+            Alert conf = new Alert(Alert.AlertType.CONFIRMATION, message);
             conf.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
                     try {
-                        new SellerService(DummyDataService.getInstance())
-                                .deleteListing(SessionManager.getCurrentUser(), l);
+                        sellerService.deleteListing(SessionManager.getCurrentUser(), l);
                     } catch (SecurityException | IllegalStateException ex) {
                         new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                        return;
+                    } catch (RuntimeException ex) {
+                        new Alert(Alert.AlertType.ERROR,
+                                "Could not withdraw the listing: " + ex.getMessage()).showAndWait();
+                        return;
                     }
                     showMyListings();
                 }
             });
         });
 
-        row.getChildren().addAll(info, status, editBtn, delBtn);
+        boolean markSoldAllowed = !l.isDeleted()
+                && l.getStatus() == ListingStatus.LIVE
+                && l instanceof SaleListing;
+        Button soldBtn = new Button("Mark sold");
+        soldBtn.getStyleClass().addAll("btn-primary", "btn-sm");
+        soldBtn.setDisable(!markSoldAllowed);
+        soldBtn.setOnAction(e -> {
+            int affected = openRequests.size();
+            String message = affected == 0
+                    ? "Mark this listing as sold?\n\nAny open offers will be closed and their buyers notified."
+                            + "\nThere are no open offers on this listing."
+                    : "Mark this listing as sold?\n\n" + affected + " open offer"
+                            + (affected == 1 ? "" : "s") + " will be closed and the buyer"
+                            + (affected == 1 ? "" : "s") + " notified.";
+            Alert conf = new Alert(Alert.AlertType.CONFIRMATION, message);
+            conf.showAndWait().ifPresent(r -> {
+                if (r == ButtonType.OK) {
+                    try {
+                        sellerService.markSold(SessionManager.getCurrentUser(), l);
+                    } catch (SecurityException | IllegalStateException ex) {
+                        new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+                        return;
+                    } catch (RuntimeException ex) {
+                        new Alert(Alert.AlertType.ERROR,
+                                "Could not mark the listing as sold: " + ex.getMessage()).showAndWait();
+                        return;
+                    }
+                    showMyListings();
+                }
+            });
+        });
+
+        row.getChildren().addAll(info, status, editBtn, delBtn, soldBtn);
         return row;
     }
 
@@ -205,12 +313,24 @@ public class SellerDashboardController {
         return row;
     }
 
+    static String threadBackLabel(boolean fromRequests) {
+        return fromRequests ? BACK_TO_REQUESTS : BACK_TO_CHATS;
+    }
+
     private void showThread(ChatThread thread) {
+        renderThread(thread, threadBackLabel(false), this::showChats);
+    }
+
+    private void showThread(ChatThread thread, Runnable backAction) {
+        renderThread(thread, threadBackLabel(true), backAction);
+    }
+
+    private void renderThread(ChatThread thread, String backLabel, Runnable backAction) {
         contentPane.getChildren().clear();
 
-        Button back = new Button("\u2190 Back to Chats");
+        Button back = new Button(backLabel);
         back.getStyleClass().addAll("btn-outline", "btn-sm");
-        back.setOnAction(e -> showChats());
+        back.setOnAction(e -> backAction.run());
 
         VBox root = new VBox(12);
         root.getChildren().addAll(back,
@@ -269,6 +389,56 @@ public class SellerDashboardController {
 
         new Alert(Alert.AlertType.INFORMATION,
                 "Listing submitted! Status: Pending Review.\nAdmin will review shortly.\n(Demo – saved locally)").showAndWait();
+        showMyListings();
+    }
+
+    private void showEditListing(Listing target) {
+        setActive(btnListings, "My Listings");
+        contentPane.getChildren().clear();
+
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to edit a listing.").showAndWait();
+            showMyListings();
+            return;
+        }
+
+        listingForm = new ListingFormComponent(() -> seller, state -> submitEdit(target, state));
+        listingForm.setOnCancel(this::showMyListings);
+
+        ScrollPane scroll = new ScrollPane(listingForm.getView());
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private void submitEdit(Listing target, ListingFormState state) {
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Seller seller)) {
+            new Alert(Alert.AlertType.WARNING,
+                    "You must be logged in as a seller to edit a listing.").showAndWait();
+            return;
+        }
+
+        Map<String, String> errors = state.validate(seller);
+        if (!errors.isEmpty()) {
+            listingForm.showErrors(errors);
+            return;
+        }
+
+        try {
+            sellerService.updateListing(user, target, state, photoStorage);
+        } catch (SecurityException ex) {
+            new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
+            return;
+        } catch (RuntimeException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not save the edit: " + ex.getMessage()).showAndWait();
+            return;
+        }
+
+        new Alert(Alert.AlertType.INFORMATION,
+                "Listing updated and sent back for review.").showAndWait();
         showMyListings();
     }
 
@@ -447,7 +617,9 @@ public class SellerDashboardController {
                     return;
                 }
                 try {
-                    sellerReviewService.flagReview(SessionManager.getCurrentUser(), review);
+                    if (!review.isFlagged()) {
+                        reviewService.flagReview(SessionManager.getCurrentUser(), review, true);
+                    }
                     renderReviews();
                     showReviewFeedback("Review flagged.");
                 } catch (IllegalStateException | SecurityException ex) {

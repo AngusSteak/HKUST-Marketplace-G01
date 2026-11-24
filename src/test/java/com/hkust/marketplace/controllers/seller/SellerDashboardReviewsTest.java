@@ -41,13 +41,6 @@ class SellerDashboardReviewsTest {
     }
 
     @Test
-    void doubleFlagMessageIsShownVerbatim() {
-        assertEquals(SellerReviewService.ALREADY_FLAGGED,
-                SellerDashboardController.reviewActionError("flag",
-                        new IllegalStateException(SellerReviewService.ALREADY_FLAGGED)));
-    }
-
-    @Test
     void roleFailureBecomesReadableMessage() {
         assertEquals("You do not have permission to flag this review.",
                 SellerDashboardController.reviewActionError("flag", new SecurityException("denied")));

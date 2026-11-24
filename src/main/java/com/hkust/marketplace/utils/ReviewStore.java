@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * Reviews. Seller ratings are derived from the visible ones at read time. Every review is
- * saved to the {@code reviews} table when added, later changes (hidden, flagged, seller reply) by
+ * saved to the {@code reviews} table when added, later changes (hidden, seller reply) by
  * {@link #save}; {@link #load()} rebuilds them at startup.
  */
 public class ReviewStore {
@@ -56,10 +56,11 @@ public class ReviewStore {
         }
         // deal_id is UNIQUE, so the database itself refuses a second review of the same deal.
         db.update("INSERT INTO reviews (id, deal_id, seller_username, buyer_username, listing_title, rating,"
-                        + " comment, seller_reply, hidden, flagged, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + " comment, seller_reply, hidden, flagged, created_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 r.getId(), r.getDealId(), r.getSellerUsername().toLowerCase(), r.getBuyerUsername().toLowerCase(),
-                r.getListingTitle(), r.getRating(), r.getComment(), r.getSellerReply(), r.isHidden(), r.isFlagged(),
-                r.getCreatedAt());
+                r.getListingTitle(), r.getRating(), r.getComment(), r.getSellerReply(), r.isHidden(),
+                r.isFlagged(), r.getCreatedAt());
         // Only once saved: inside a transaction that later rolls back, the review never appears.
         db.afterCommit(() -> {
             synchronized (this) {
@@ -86,8 +87,8 @@ public class ReviewStore {
         if (!reviews.contains(r)) {
             throw new IllegalArgumentException("Unknown review: " + r.getId());
         }
-        db.update("UPDATE reviews SET hidden = ?, seller_reply = ?, flagged = ? WHERE id = ?",
-                r.isHidden(), r.getSellerReply(), r.isFlagged(), r.getId());
+        db.update("UPDATE reviews SET hidden = ?, flagged = ?, seller_reply = ? WHERE id = ?",
+                r.isHidden(), r.isFlagged(), r.getSellerReply(), r.getId());
     }
 
     /** Rebuilds the saved reviews in the order added and resumes the {@code R} id counter. */

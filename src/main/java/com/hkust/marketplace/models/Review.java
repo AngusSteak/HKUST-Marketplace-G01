@@ -13,7 +13,7 @@ public class Review {
     /** The completed deal this review is about (one review per deal); {@code null} for seeded demo reviews. */
     private String dealId;
     private boolean hidden; // admin can hide
-    private boolean flagged;
+    private boolean flagged; // seller asks the admin to review it
     private LocalDateTime createdAt;
 
     public Review() {

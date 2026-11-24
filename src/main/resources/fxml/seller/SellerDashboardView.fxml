@@ -25,6 +25,8 @@
 
             <Button fx:id="btnListings" text="  My Listings" styleClass="sidebar-btn, sidebar-btn-active"
                     onAction="#showMyListings" maxWidth="Infinity" alignment="CENTER_LEFT"/>
+            <Button fx:id="btnRequests" text="  Requests" styleClass="sidebar-btn"
+                    onAction="#showRequests" maxWidth="Infinity" alignment="CENTER_LEFT"/>
             <Button fx:id="btnChats" text="  Chats" styleClass="sidebar-btn"
                     onAction="#showChats" maxWidth="Infinity" alignment="CENTER_LEFT"/>
             <Button fx:id="btnCreate" text="  Create Listing" styleClass="sidebar-btn"
