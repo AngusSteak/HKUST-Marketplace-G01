@@ -48,7 +48,11 @@ public abstract class User {
     public boolean isDeleted() { return deleted; }
     public void setDeleted(boolean deleted) { this.deleted = deleted; }
 
-    /** How historical deals, reviews and chats label this account after a soft delete. */
+    /**
+     * How historical deals, reviews and chats label this account after a soft delete.
+     *
+     * @return the full name, or "deleted user" after a soft delete
+     */
     public String getDisplayName() { return deleted ? "deleted user" : fullName; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }

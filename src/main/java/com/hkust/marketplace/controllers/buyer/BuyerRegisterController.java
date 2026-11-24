@@ -13,6 +13,7 @@ import javafx.scene.control.*;
 
 import java.util.Set;
 
+/** Handles the buyer registration form, including the UC-1.1 password rules. */
 public class BuyerRegisterController {
 
     @FXML private TextField usernameField;
@@ -23,6 +24,7 @@ public class BuyerRegisterController {
     @FXML private Label errorLabel;
     @FXML private Label successLabel;
 
+    /** Fills the residence-hall choices. */
     @FXML
     public void initialize() {
         residenceCombo.setItems(FXCollections.observableArrayList(

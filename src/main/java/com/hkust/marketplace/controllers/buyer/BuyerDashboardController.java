@@ -57,6 +57,10 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+/**
+ * Buyer dashboard controller: builds the browse, deals, history, favourites, notifications and
+ * profile screens in one content pane. All writes go through the service classes.
+ */
 public class BuyerDashboardController {
 
     @FXML private StackPane contentPane;
@@ -67,6 +71,7 @@ public class BuyerDashboardController {
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
 
+    /** Builds the dashboard after the FXML is loaded. */
     @FXML
     public void initialize() {
         User user = SessionManager.getCurrentUser();

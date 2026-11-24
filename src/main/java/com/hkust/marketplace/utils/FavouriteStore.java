@@ -62,10 +62,12 @@ public class FavouriteStore {
         return toggle(follows, owner, sellerKey);
     }
 
+    /** Whether the buyer has favourited the listing. */
     public synchronized boolean isFavourite(Buyer buyer, Listing listing) {
         return favourites.getOrDefault(key(buyer), Set.of()).contains(listing.getId());
     }
 
+    /** Whether the buyer follows the seller. */
     public synchronized boolean isFollowing(Buyer buyer, Seller seller) {
         return follows.getOrDefault(key(buyer), Set.of()).contains(key(seller.getUsername()));
     }

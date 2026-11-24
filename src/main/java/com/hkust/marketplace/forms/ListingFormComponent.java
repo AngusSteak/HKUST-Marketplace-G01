@@ -77,6 +77,7 @@ public class ListingFormComponent {
     private Consumer<ListingFormState> onSubmit;
     private Runnable onCancel;
 
+    /** Creates the form; the seller is read when the form is submitted. */
     public ListingFormComponent(Supplier<Seller> sellerSupplier, Consumer<ListingFormState> onSubmit) {
         this.sellerSupplier = sellerSupplier;
         this.onSubmit = onSubmit;
@@ -100,6 +101,7 @@ public class ListingFormComponent {
         return state.validate(sellerSupplier.get());
     }
 
+    /** Sets what runs when the form is submitted. */
     public void setOnSubmit(Consumer<ListingFormState> onSubmit) {
         this.onSubmit = onSubmit;
     }
@@ -150,6 +152,7 @@ public class ListingFormComponent {
         }
     }
 
+    /** Sets what runs when the form is cancelled. */
     public void setOnCancel(Runnable onCancel) {
         this.onCancel = onCancel;
     }

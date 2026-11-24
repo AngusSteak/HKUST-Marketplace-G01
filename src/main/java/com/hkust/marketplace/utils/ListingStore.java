@@ -64,14 +64,17 @@ public class ListingStore {
         }
     }
 
+    /** Visible listings with status Live, in insertion order. */
     public List<Listing> live() {
         return snapshot().stream().filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.LIVE).collect(Collectors.toList());
     }
 
+    /** Visible listings waiting for admin review. */
     public List<Listing> pending() {
         return snapshot().stream().filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.PENDING_REVIEW).collect(Collectors.toList());
     }
 
+    /** A seller's visible listings, in insertion order. */
     public List<Listing> bySeller(String username) {
         return snapshot().stream().filter(l -> !l.isDeleted() && l.getSellerUsername().equalsIgnoreCase(username)).collect(Collectors.toList());
     }

@@ -13,6 +13,7 @@ public class Seller extends User {
     /** 0..* preferred meet-up locations (issue #9); the multi-select widget arrives in #31. */
     private Set<Location> preferredMeetup = EnumSet.noneOf(Location.class);
 
+    /** Creates a seller account. */
     public Seller(String username, String fullName, String passwordHash, UserRole role) {
         super(username, fullName, passwordHash, requireSellerRole(role));
     }

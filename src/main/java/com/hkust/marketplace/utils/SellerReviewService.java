@@ -16,11 +16,14 @@ import java.util.Objects;
  */
 public final class SellerReviewService {
 
+    /** Shown when the seller saves an empty reply. */
     public static final String REPLY_REQUIRED = "Please write a reply before saving.";
+    /** Shown when the seller tries to reply twice. */
     public static final String ALREADY_REPLIED = "A reply has already been saved for this review.";
 
     private final DummyDataService data;
 
+    /** Creates the service over the given stores. */
     public SellerReviewService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
     }

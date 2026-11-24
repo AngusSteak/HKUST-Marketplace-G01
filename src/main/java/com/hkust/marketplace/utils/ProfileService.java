@@ -21,14 +21,20 @@ import java.util.Set;
  */
 public final class ProfileService {
 
+    /** Shown when the new full name is blank. */
     public static final String NAME_REQUIRED = "Full name is required.";
+    /** Shown when the current password does not match. */
     public static final String CURRENT_PASSWORD_WRONG = "Current password is incorrect.";
+    /** Shown when the new password and confirmation differ. */
     public static final String CONFIRMATION_MISMATCH = "New password and confirmation do not match.";
+    /** Longest accepted seller bio. */
     public static final int BIO_MAX_LENGTH = 500;
+    /** Shown when the seller bio is too long. */
     public static final String BIO_TOO_LONG = "Bio must be 500 characters or fewer.";
 
     private final DummyDataService data;
 
+    /** Creates the service over the given stores. */
     public ProfileService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
     }

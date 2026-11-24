@@ -22,6 +22,13 @@ public class AuditStore {
         this.db = Objects.requireNonNull(db, "db");
     }
 
+    /**
+     * Appends one audit entry, written only if the surrounding transaction commits.
+     *
+     * @param admin the acting admin's username
+     * @param action the action label
+     * @param target the affected account or listing
+     */
     public synchronized void append(String admin, String action, String target) {
         requireText(admin, "admin");
         requireText(action, "action");
@@ -47,22 +54,27 @@ public class AuditStore {
         });
     }
 
+    /** Records an edit of an account or listing. */
     public void recordEdit(String admin, String target) {
         append(admin, "Edited", target);
     }
 
+    /** Records an admin take-down. */
     public void recordTakeDown(String admin, String target) {
         append(admin, "Took down", target);
     }
 
+    /** Records a report resolution. */
     public void recordReportResolution(String admin, String target) {
         append(admin, "Resolved report", target);
     }
 
+    /** Records a listing added on a seller's behalf. */
     public void recordAddOnBehalf(String admin, String target) {
         append(admin, "Added listing on behalf", target);
     }
 
+    /** Records an account soft delete. */
     public void recordAccountDeletion(String admin, String target) {
         append(admin, "Deleted account", target);
     }

@@ -41,6 +41,7 @@ public final class LoanTimer {
     /** Set by {@link #stop()} so a check in progress stops before touching the database again. */
     private volatile boolean stopping;
 
+    /** Creates the timer with the system clock. */
     public LoanTimer(DummyDataService data) {
         this(data, Clock.systemDefaultZone());
     }

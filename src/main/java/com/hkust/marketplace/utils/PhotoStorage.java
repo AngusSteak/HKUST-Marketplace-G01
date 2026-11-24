@@ -15,6 +15,8 @@ import java.nio.file.Path;
 public interface PhotoStorage {
 
     /**
+     * Copies one chosen photo into storage.
+     *
      * @param source        the source file chosen by the user
      * @param sellerUsername the posting seller's username (used as a path segment)
      * @param listingId     the immutable id reserved for the listing before save

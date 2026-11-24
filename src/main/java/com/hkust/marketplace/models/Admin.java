@@ -6,6 +6,14 @@ package com.hkust.marketplace.models;
  */
 public class Admin extends User {
 
+    /**
+     * Creates the seeded admin account.
+     *
+     * @param username the unique username
+     * @param fullName the display name
+     * @param passwordHash the BCrypt hash, never a plain password
+     * @param role must be {@link UserRole#ADMIN}
+     */
     public Admin(String username, String fullName, String passwordHash, UserRole role) {
         super(username, fullName, passwordHash, requireAdminRole(role));
     }

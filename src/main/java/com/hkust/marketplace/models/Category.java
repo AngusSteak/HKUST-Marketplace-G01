@@ -1,5 +1,6 @@
 package com.hkust.marketplace.models;
 
+/** The fourteen SRS categories used to group and filter listings (SRS Appendix A). */
 public enum Category {
     BOOKS_AND_NOTES("Books & Notes"),
     ELECTRONICS("Electronics"),
@@ -25,6 +26,11 @@ public enum Category {
         return label;
     }
 
+    /**
+     * Returns the category with this display label.
+     *
+     * @throws IllegalArgumentException if no category has this label
+     */
     public static Category fromLabel(String label) {
         for (Category category : values()) {
             if (category.label.equals(label)) {

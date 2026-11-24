@@ -10,9 +10,12 @@ import java.math.RoundingMode;
  * ({@code PriceOffer.offeredPrice}) stays a {@link BigDecimal} because #42 already shipped that
  * shape. Convert with {@code money.amount()} at the offer dialog. Do not add {@code Money} to the
  * deal classes without asking the deal owner.
+ *
+ * @param amount the positive price, rounded to two decimal places
  */
 public record Money(BigDecimal amount) implements Comparable<Money> {
 
+    /** Validates and normalises the amount. */
     public Money {
         if (amount == null) {
             throw new IllegalArgumentException("Asking price is required");
@@ -45,11 +48,13 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
                 : String.format("%.2f", amount));
     }
 
+    /** Compares by amount. */
     @Override
     public int compareTo(Money other) {
         return amount.compareTo(other.amount);
     }
 
+    /** Shows the amount with two decimals. */
     @Override
     public String toString() {
         return getDisplay();

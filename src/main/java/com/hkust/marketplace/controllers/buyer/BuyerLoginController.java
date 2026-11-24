@@ -11,6 +11,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 
+/** Handles the buyer login form and opens the buyer dashboard. */
 public class BuyerLoginController {
 
     @FXML private TextField usernameField;

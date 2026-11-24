@@ -46,6 +46,7 @@ public final class MyDealsService {
     private final DummyDataService data;
     private final Clock clock;
 
+    /** Creates the service with the system clock. */
     public MyDealsService(DummyDataService data) {
         this(data, Clock.systemDefaultZone());
     }

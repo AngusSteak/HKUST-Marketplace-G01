@@ -27,6 +27,7 @@ public class NotificationStore {
         this.db = Objects.requireNonNull(db, "db");
     }
 
+    /** The recipient's notifications, newest first. */
     public synchronized List<Notification> forUser(String username) {
         return notifications.stream()
                 .filter(n -> n.getUsername().equalsIgnoreCase(username))
@@ -73,6 +74,7 @@ public class NotificationStore {
         return n;
     }
 
+    /** Saves and shows an already-built notification. */
     public synchronized void add(Notification n) {
         if (n.getId() == null) {
             n.setId("N" + idCounter.getAndIncrement());

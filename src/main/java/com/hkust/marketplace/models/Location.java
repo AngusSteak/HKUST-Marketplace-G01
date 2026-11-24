@@ -1,5 +1,6 @@
 package com.hkust.marketplace.models;
 
+/** The campus meetup locations offered on listings and seller profiles (SRS Appendix A). */
 public enum Location {
     ACADEMIC_BUILDING("Academic Building"),
     LIBRARY("Library"),
@@ -35,6 +36,11 @@ public enum Location {
         return label;
     }
 
+    /**
+     * Returns the location with this display label.
+     *
+     * @throws IllegalArgumentException if no location has this label
+     */
     public static Location fromLabel(String label) {
         for (Location location : values()) {
             if (location.label.equals(label)) {

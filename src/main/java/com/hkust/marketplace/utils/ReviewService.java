@@ -38,6 +38,7 @@ public final class ReviewService {
 
     private final DummyDataService data;
 
+    /** Creates the service over the given stores. */
     public ReviewService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
     }

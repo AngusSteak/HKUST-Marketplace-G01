@@ -42,6 +42,7 @@ public final class DealRequestService {
 
     private final DummyDataService data;
 
+    /** Creates the service over the given stores. */
     public DealRequestService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
     }

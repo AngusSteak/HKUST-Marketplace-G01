@@ -2,6 +2,7 @@ package com.hkust.marketplace.models;
 
 import java.time.LocalDateTime;
 
+/** A notification sent to one account: its text, category, optional link and read state. */
 public class Notification {
     private String id;
     private String username; // recipient
@@ -12,15 +13,18 @@ public class Notification {
     private LocalDateTime timestamp;
     private boolean read;
 
+    /** Creates a notification stamped now, unread. */
     public Notification() {
         this.timestamp = LocalDateTime.now();
         this.read = false;
     }
 
+    /** Creates an announcement with no related item. */
     public Notification(String username, String title, String message, NotificationCategory category) {
         this(username, title, message, category, null);
     }
 
+    /** Creates a notification that links to the item it is about. */
     public Notification(String username, String title, String message,
                         NotificationCategory category, NotificationRef relatedRef) {
         this();

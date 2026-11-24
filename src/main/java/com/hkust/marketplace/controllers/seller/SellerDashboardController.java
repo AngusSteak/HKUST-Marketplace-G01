@@ -42,6 +42,11 @@ import java.util.OptionalDouble;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+/**
+ * Seller dashboard controller: builds the listings, requests, stats, reviews, notifications and
+ * profile screens in one content pane. All writes go through {@link SellerService} and the
+ * other services; this class only collects input and renders results.
+ */
 public class SellerDashboardController {
 
     private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
@@ -68,6 +73,7 @@ public class SellerDashboardController {
     private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
     private final SellerStatsService statsService = new SellerStatsService(DummyDataService.getInstance());
 
+    /** Builds the dashboard after the FXML is loaded. */
     @FXML
     public void initialize() {
         User user = SessionManager.getCurrentUser();

@@ -27,6 +27,7 @@ public class ReportStore {
         this.db = Objects.requireNonNull(db, "db");
     }
 
+    /** Files a report; the listing is unchanged until an admin decides. */
     public synchronized ListingReport fileReport(Buyer buyer, Listing listing, String reason) {
         ListingReport report = new ListingReport(
                 "RPT" + idCounter.get(), buyer, listing, reason);
@@ -89,6 +90,7 @@ public class ReportStore {
         toResolve.forEach(r -> r.resolve(note));
     }
 
+    /** Every report, in the order it was filed. */
     public synchronized List<ListingReport> all() {
         return List.copyOf(reports);
     }

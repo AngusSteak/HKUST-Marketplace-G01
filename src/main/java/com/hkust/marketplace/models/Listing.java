@@ -115,6 +115,7 @@ public abstract class Listing {
     public void setDeleted(boolean deleted) { this.deleted = deleted; }
 
     public List<String> getPhotoPaths() { return photoPaths; }
+    /** Sets the photo paths, rejecting more than six. */
     public void setPhotoPaths(List<String> photoPaths) {
         if (photoPaths != null && photoPaths.size() > MAX_PHOTOS) {
             throw new IllegalArgumentException("A listing can have at most 6 photos");
@@ -122,6 +123,7 @@ public abstract class Listing {
         this.photoPaths = photoPaths == null ? new ArrayList<>() : new ArrayList<>(photoPaths);
     }
 
+    /** Adds one photo path, rejecting blanks and a seventh photo. */
     public void addPhoto(String path) {
         if (path == null || path.isBlank()) {
             throw new IllegalArgumentException("Photo path must not be blank");

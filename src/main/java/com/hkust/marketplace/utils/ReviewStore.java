@@ -25,6 +25,7 @@ public class ReviewStore {
         this.db = Objects.requireNonNull(db, "db");
     }
 
+    /** The visible reviews of one seller, in the order they were written. */
     public synchronized List<Review> forSeller(String username) {
         return reviews.stream()
                 .filter(r -> r.getSellerUsername().equalsIgnoreCase(username) && !r.isHidden())
@@ -46,10 +47,12 @@ public class ReviewStore {
         return forSeller(sellerUsername).size();
     }
 
+    /** Every review, for the admin review list. */
     public synchronized List<Review> all() {
         return new ArrayList<>(reviews);
     }
 
+    /** Saves a new review. */
     public synchronized void add(Review r) {
         if (r.getId() == null) {
             r.setId("R" + idCounter.getAndIncrement());

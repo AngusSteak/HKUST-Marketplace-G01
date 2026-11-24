@@ -18,6 +18,7 @@ public class MarketplaceApp extends Application {
     /** Auto-returns overdue loans and sends due-date reminders while the app runs (#22). */
     private LoanTimer loanTimer;
 
+    /** Starts the JavaFX window and the loan timer. */
     @Override
     public void start(Stage primaryStage) {
         loanTimer = new LoanTimer(DummyDataService.getInstance());
@@ -39,6 +40,7 @@ public class MarketplaceApp extends Application {
         DummyDataService.shutdown();
     }
 
+    /** Launches the application. */
     public static void main(String[] args) {
         launch(args);
     }

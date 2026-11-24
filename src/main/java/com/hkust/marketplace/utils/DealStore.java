@@ -46,10 +46,12 @@ public class DealStore {
         return lifecycle;
     }
 
+    /** Every request, in submit order. */
     public List<DealRequest> allRequests() {
         return lifecycle.requests();
     }
 
+    /** Every deal, in the order the requests were accepted. */
     public List<Deal> allDeals() {
         return lifecycle.deals();
     }
@@ -73,12 +75,14 @@ public class DealStore {
                 .toList();
     }
 
+    /** Every deal the buyer is part of, in the order the deals were accepted. */
     public List<Deal> dealsForBuyer(String username) {
         return lifecycle.deals().stream()
                 .filter(d -> username.equalsIgnoreCase(d.getBuyerUsername()))
                 .toList();
     }
 
+    /** Every deal the seller is part of, in the order the deals were accepted. */
     public List<Deal> dealsForSeller(String username) {
         return lifecycle.deals().stream()
                 .filter(d -> username.equalsIgnoreCase(d.getSellerUsername()))

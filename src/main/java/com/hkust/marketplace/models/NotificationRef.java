@@ -8,11 +8,13 @@ import java.util.Objects;
  */
 public final class NotificationRef {
 
+    /** The kind of object an OPEN notification links to. */
     public enum Target { LISTING, REQUEST, DEAL, THREAD, REVIEW, USER }
 
     private final Target target;
     private final String id;
 
+    /** Creates a link to one notification target. */
     public NotificationRef(Target target, String id) {
         this.target = Objects.requireNonNull(target, "target");
         if (id == null || id.isBlank()) {

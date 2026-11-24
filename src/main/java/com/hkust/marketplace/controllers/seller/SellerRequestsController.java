@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+/** Handles the standalone seller requests screen (offers and borrow requests per listing). */
 public class SellerRequestsController {
 
     private static final DateTimeFormatter PERIOD_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -51,6 +52,7 @@ public class SellerRequestsController {
     private Runnable onBackToChat;
     private Listing filter;
 
+    /** Sets what runs when the seller opens a chat from a request. */
     public void setOnOpenChat(Consumer<ChatThread> onOpenChat) {
         this.onOpenChat = onOpenChat;
     }
@@ -73,17 +75,20 @@ public class SellerRequestsController {
         return "\u2190 Back to Chat";
     }
 
+    /** Shows the requests for one listing only. */
     public void renderFiltered(Listing listing) {
         this.filter = Objects.requireNonNull(listing, "listing");
         render();
     }
 
+    /** Prepares the header once the FXML is loaded. */
     @FXML
     public void initialize() {
         backButton.setText(backToChatLabel());
         backButton.getStyleClass().addAll("btn-outline", "btn-sm");
     }
 
+    /** Draws the request cards for the signed-in seller. */
     public void render() {
         User user = SessionManager.getCurrentUser();
         requestsBox.getChildren().clear();

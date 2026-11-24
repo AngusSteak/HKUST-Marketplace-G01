@@ -51,6 +51,11 @@ public final class AdminService {
 
     private final DummyDataService data;
 
+    /**
+     * Creates the service over the given stores.
+     *
+     * @param data the stores this service reads and writes
+     */
     public AdminService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
     }
@@ -61,15 +66,28 @@ public final class AdminService {
     /** SRS UC-3.3 S1: every listing taken down with this reason when its owner is deleted. */
     public static final String ACCOUNT_DELETED_REASON = "Seller account deleted";
 
+    /** Shown when an add-account form has no username. */
     public static final String USERNAME_REQUIRED = "Username is required.";
+    /** Shown when an add-account form reuses an existing username. */
     public static final String USERNAME_TAKEN = "Username already taken. Please choose another.";
+    /** Shown when an add-account form has no full name. */
     public static final String FULL_NAME_REQUIRED = "Full name is required.";
+    /** Admins cannot deactivate or delete the seeded admin account. */
     public static final String ADMIN_PROTECTED = "The admin account cannot be disabled or deleted.";
+    /** Shown when an action targets an already soft-deleted account. */
     public static final String ACCOUNT_DELETED = "This account has been deleted.";
 
-    /** What the soft-delete warning dialog shows before the admin confirms (SRS UC-3.3). */
+    /**
+     * What the soft-delete warning dialog shows before the admin confirms (SRS UC-3.3).
+     *
+     * @param listings the seller's listings
+     * @param requests the requests the account sent or received
+     * @param deals the deals the account is part of
+     * @param chats the chat threads the account is part of
+     */
     public record AccountActivity(List<Listing> listings, List<DealRequest> requests,
                                   List<Deal> deals, List<ChatThread> chats) {
+        /** Copies the lists so the snapshot cannot change. */
         public AccountActivity {
             listings = List.copyOf(listings);
             requests = List.copyOf(requests);
@@ -81,6 +99,9 @@ public final class AdminService {
     /**
      * Approves a pending listing: it goes live and the seller is notified (SRS UC-3.2). The status,
      * review date and notification are saved together.
+     *
+     * @param admin the acting admin
+     * @param listing the pending listing to approve
      */
     public void approveListing(User admin, Listing listing) {
         AccessControl.require(admin, UserRole.ADMIN);
@@ -95,7 +116,13 @@ public final class AdminService {
         });
     }
 
-    /** Rejects a pending listing with a reason the seller sees, saved together (SRS UC-3.2). */
+    /**
+     * Rejects a pending listing with a reason the seller sees, saved together (SRS UC-3.2).
+     *
+     * @param admin the acting admin
+     * @param listing the pending listing to reject
+     * @param reason the rejection reason shown to the seller
+     */
     public void rejectListing(User admin, Listing listing, String reason) {
         AccessControl.require(admin, UserRole.ADMIN);
         requirePending(listing);
@@ -119,6 +146,10 @@ public final class AdminService {
      *
      * <p>A Reserved or Lent listing first has its active deal cancelled (SRS UC-3.7 A2); the
      * decided request and deal stay in history. Other statuses cannot be taken down (A3).
+     *
+     * @param admin the acting admin
+     * @param listing the Live, Reserved or Lent listing to take down
+     * @param reason the take-down reason stored on the listing
      */
     public void takeDownListing(User admin, Listing listing, String reason) {
         AccessControl.require(admin, UserRole.ADMIN);
@@ -157,6 +188,16 @@ public final class AdminService {
     /**
      * Edits a listing's details without changing its status (SRS UC-3.7 S1), then audits the
      * change and notifies the seller. Prices and lending durations keep their existing rules.
+     *
+     * @param admin the acting admin
+     * @param listing the listing to edit
+     * @param title the new title
+     * @param description the new description
+     * @param category the new category
+     * @param condition the new condition
+     * @param location the new meetup location
+     * @param rawPrice the new asking price for a Sale listing; ignored for other types
+     * @param lendingDuration the new duration for a Lend listing; ignored for other types
      */
     public void editListing(User admin, Listing listing, String title, String description,
                             Category category, Condition condition, Location location,
@@ -220,6 +261,9 @@ public final class AdminService {
      * Dismisses every open report on the listing with one resolution note (SRS UC-3.7 steps
      * 3.3.2-3.3.3) and records it in the audit log. The listing itself is unchanged.
      *
+     * @param admin the acting admin
+     * @param listing the reported listing
+     * @param note the resolution note stored on every open report
      * @return how many reports were resolved
      * @throws IllegalArgumentException with {@link #RESOLUTION_NOTE_REQUIRED} if the note is blank (A6)
      * @throws IllegalStateException if the listing has no open reports
@@ -244,6 +288,12 @@ public final class AdminService {
     /**
      * Adds a listing for a seller from the admin screen, saved as Live (SRS UC-3.7), and audits it.
      * The seller is told, so they know the listing exists under their name.
+     *
+     * @param admin the acting admin
+     * @param seller the active seller who will own the listing
+     * @param state the filled listing form
+     * @param photos storage for the photos chosen in the form
+     * @return the saved listing
      */
     public Listing addListingOnBehalf(User admin, Seller seller, ListingFormState state, PhotoStorage photos) {
         AccessControl.require(admin, UserRole.ADMIN);
@@ -293,6 +343,16 @@ public final class AdminService {
     /**
      * Adds a buyer or seller account from the admin screen (SRS UC-3.4). The username must be
      * unused and the password must pass every rule; the role never changes later.
+     *
+     * @param admin the acting admin
+     * @param role BUYER or SELLER (never ADMIN)
+     * @param username the new unique username
+     * @param fullName the account's full name
+     * @param password the plain-text password, hashed before storage
+     * @param residenceHall the buyer's residence hall, or {@code null}
+     * @param bio the seller's bio, or {@code null}
+     * @param meetup the seller's preferred meetup location, or {@code null}
+     * @return the saved account
      */
     public User addAccount(User admin, UserRole role, String username, String fullName, String password,
                            String residenceHall, String bio, Location meetup) {
@@ -335,6 +395,13 @@ public final class AdminService {
     /**
      * Edits an account's full name and role-specific fields (SRS UC-3.4). The username, role and
      * status are not editable here, and the admin account is changed from its own profile screen.
+     *
+     * @param admin the acting admin
+     * @param account the buyer or seller to edit
+     * @param fullName the new full name
+     * @param residenceHall the new residence hall for a buyer, or {@code null}
+     * @param bio the new bio for a seller, or {@code null}
+     * @param meetup the new preferred meetup for a seller, or {@code null} to keep the current one
      */
     public void updateAccount(User admin, User account, String fullName, String residenceHall,
                               String bio, Location meetup) {
@@ -381,6 +448,10 @@ public final class AdminService {
      * Activates or deactivates a buyer or seller account (SRS UC-3.4). A deactivated account can
      * no longer log in and its listings stop being browsable through their account status; the
      * listings themselves keep their statuses. The admin account is protected.
+     *
+     * @param admin the acting admin
+     * @param account the buyer or seller to activate or deactivate
+     * @param active {@code true} to activate, {@code false} to deactivate
      */
     public void setActive(User admin, User account, boolean active) {
         AccessControl.require(admin, UserRole.ADMIN);
@@ -411,7 +482,13 @@ public final class AdminService {
         }
     }
 
-    /** What the soft-delete warning lists before the admin confirms (SRS UC-3.3 S1). */
+    /**
+     * What the soft-delete warning lists before the admin confirms (SRS UC-3.3 S1).
+     *
+     * @param admin the acting admin
+     * @param account the account that would be deleted
+     * @return the activity that soft delete would close
+     */
     public AccountActivity accountActivity(User admin, User account) {
         AccessControl.require(admin, UserRole.ADMIN);
         Objects.requireNonNull(account, "account");
@@ -430,6 +507,9 @@ public final class AdminService {
      * {@value #ACCOUNT_DELETED_REASON}, open requests are declined, active deals cancelled, the
      * affected users notified, the profile fields cleared, and an audit entry written. Historical
      * deals, reviews and chats keep pointing at the account, which now reads "deleted user".
+     *
+     * @param admin the acting admin
+     * @param account the buyer or seller to soft-delete
      */
     public void softDeleteAccount(User admin, User account) {
         AccessControl.require(admin, UserRole.ADMIN);
@@ -530,7 +610,13 @@ public final class AdminService {
         }
     }
 
-    /** Hides or unhides a review; hidden reviews leave the seller's rating (SRS UC-3.6). */
+    /**
+     * Hides or unhides a review; hidden reviews leave the seller's rating (SRS UC-3.6).
+     *
+     * @param admin the acting admin
+     * @param review the review to change
+     * @param hidden {@code true} to hide, {@code false} to show
+     */
     public void setReviewHidden(User admin, Review review, boolean hidden) {
         AccessControl.require(admin, UserRole.ADMIN);
         Objects.requireNonNull(review, "review");
@@ -542,6 +628,12 @@ public final class AdminService {
      * Saves the admin's own profile (SRS UC-3.4). The full name must not be whitespace only; a
      * password change needs the current password and both new-password fields.
      *
+     * @param admin the acting admin, also the account being changed
+     * @param fullName the new full name
+     * @param currentPassword the current password, needed only when changing the password
+     * @param newPassword the new password, or blank to keep the current one
+     * @param confirmPassword the new password again
+     * @return the names of the fields that changed, empty when nothing changed
      * @throws IllegalArgumentException with the reason if a check fails; nothing changes
      */
     public List<String> updateProfile(User admin, String fullName, String currentPassword,

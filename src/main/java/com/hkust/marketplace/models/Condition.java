@@ -1,5 +1,6 @@
 package com.hkust.marketplace.models;
 
+/** The item condition choices offered on a listing (SRS Appendix A). */
 public enum Condition {
     NEW("New"),
     LIKE_NEW("Like New"),
@@ -21,6 +22,11 @@ public enum Condition {
         return label;
     }
 
+    /**
+     * Returns the condition with this display label.
+     *
+     * @throws IllegalArgumentException if no condition has this label
+     */
     public static Condition fromLabel(String label) {
         for (Condition condition : values()) {
             if (condition.label.equals(label)) {

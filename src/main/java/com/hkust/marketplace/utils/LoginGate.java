@@ -15,6 +15,7 @@ import com.hkust.marketplace.models.UserRole;
  */
 public final class LoginGate {
 
+    /** The result of one login attempt; the caller maps it to a message. */
     public enum Outcome {
         OK,
         USER_NOT_FOUND,
@@ -28,9 +29,12 @@ public final class LoginGate {
     }
 
     /**
+     * Decides whether the account may enter the portal.
+     *
      * @param user         the account resolved from the entered username, or {@code null}
      * @param expectedRole the role accepted by the portal being used
      * @param rawPassword  the plaintext password entered by the user
+     * @return OK, or the first check that failed
      */
     public static Outcome check(User user, UserRole expectedRole, String rawPassword) {
         if (user == null) {

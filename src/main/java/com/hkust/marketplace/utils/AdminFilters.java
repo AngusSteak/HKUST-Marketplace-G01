@@ -17,8 +17,14 @@ public final class AdminFilters {
     }
 
     /**
+     * Matches the review list filters (SRS UC-3.6): keyword over seller, buyer and comment, then
+     * a star score and a visibility state.
+     *
+     * @param review the review to test
+     * @param keyword text to find in the seller, buyer or comment; blank means any
      * @param scoreIndex 0 for "All scores", otherwise 1 for 5 stars down to 5 for 1 star
      * @param visibility "All reviews", "Visible", "Hidden" or "Flagged"
+     * @return {@code true} when the review passes every filter
      */
     public static boolean matchesReview(Review review, String keyword, int scoreIndex, String visibility) {
         String text = normalise(keyword);
@@ -47,6 +53,14 @@ public final class AdminFilters {
     /**
      * Matches the deals table filters (SRS UC-3.5): keyword over title and both usernames, deal
      * type, status, and a date range that matches either the start or the end date.
+     *
+     * @param deal the deal to test
+     * @param keyword text to find in the title or usernames; blank means any
+     * @param type the exact deal type, or "All types"/{@code null}
+     * @param status the exact deal status, or "All statuses"/{@code null}
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
+     * @return {@code true} when the deal passes every filter
      */
     public static boolean matchesDeal(Deal deal, String keyword, String type, String status,
                                       LocalDate from, LocalDate to) {
@@ -72,7 +86,13 @@ public final class AdminFilters {
         return inRange(start, from, to) || (end != null && inRange(end, from, to));
     }
 
-    /** A historical record labels a soft-deleted account "deleted user" (SRS UC-3.3). */
+    /**
+     * A historical record labels a soft-deleted account "deleted user" (SRS UC-3.3).
+     *
+     * @param user the account, or {@code null} when it no longer exists
+     * @param username the username to fall back to
+     * @return the label shown in historical tables
+     */
     public static String partyLabel(User user, String username) {
         if (user == null) {
             return username;

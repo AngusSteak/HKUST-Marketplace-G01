@@ -16,6 +16,7 @@ public class ListingReport {
     private ReportStatus status = ReportStatus.OPEN;
     private String resolution;
 
+    /** Creates an open report. */
     public ListingReport(String id, Buyer buyer, Listing listing, String reason) {
         this(id, buyer, listing, reason, LocalDateTime.now(), ReportStatus.OPEN, null);
     }
@@ -45,6 +46,7 @@ public class ListingReport {
 
     public String getReporterUsername() { return buyer.getUsername(); }
 
+    /** Resolves the report with a note; the note must not be blank. */
     public void resolve(String resolution) {
         if (resolution == null || resolution.isBlank()) {
             throw new IllegalArgumentException("Resolution must not be blank");

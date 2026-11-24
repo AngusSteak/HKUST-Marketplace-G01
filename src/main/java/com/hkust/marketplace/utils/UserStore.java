@@ -37,10 +37,12 @@ public class UserStore {
         this.db = Objects.requireNonNull(db, "db");
     }
 
+    /** Whether the username is already taken, ignoring case. */
     public boolean usernameExists(String username) {
         return users.containsKey(username.toLowerCase());
     }
 
+    /** The account with this username, or {@code null}. */
     public User find(String username) {
         return users.get(username.toLowerCase());
     }
@@ -152,6 +154,7 @@ public class UserStore {
                 .collect(Collectors.toList());
     }
 
+    /** Every account with this role, in registration order. */
     public List<User> byRole(UserRole role) {
         return all().stream()
                 .filter(u -> u.getRole() == role)

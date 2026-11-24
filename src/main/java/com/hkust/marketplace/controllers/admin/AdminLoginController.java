@@ -11,6 +11,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 
+/** Handles the admin login form and opens the admin dashboard. */
 public class AdminLoginController {
 
     @FXML private TextField usernameField;

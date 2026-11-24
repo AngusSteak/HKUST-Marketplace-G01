@@ -19,6 +19,9 @@ public final class AccessControl {
     /**
      * Returns {@code actor} if it is a signed-in, active account with one of {@code allowed}.
      *
+     * @param actor the acting user, normally {@code SessionManager.getCurrentUser()}
+     * @param allowed the roles allowed to run the action
+     * @return the same {@code actor}, so callers can chain the check with the action
      * @throws SecurityException otherwise (no actor, deactivated or deleted account, wrong role)
      */
     public static User require(User actor, UserRole... allowed) {

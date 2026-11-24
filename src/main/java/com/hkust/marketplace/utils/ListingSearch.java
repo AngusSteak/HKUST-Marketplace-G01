@@ -52,10 +52,19 @@ public final class ListingSearch {
     /**
      * What the buyer asked for. Every field except {@code sort} is optional: {@code null} (or a
      * blank keyword) means "any".
+     *
+     * @param keyword text to find in the title or description
+     * @param category the category to keep, or {@code null}
+     * @param type the listing type to keep, or {@code null}
+     * @param condition the condition to keep, or {@code null}
+     * @param minPrice the lowest price, or {@code null}
+     * @param maxPrice the highest price, or {@code null}
+     * @param sort the requested order
      */
     public record Criteria(String keyword, Category category, ListingType type, Condition condition,
                            BigDecimal minPrice, BigDecimal maxPrice, SortOrder sort) {
 
+        /** Verifies the sort order is present; the filters themselves allow any value. */
         public Criteria {
             Objects.requireNonNull(sort, "sort");
         }
@@ -138,7 +147,7 @@ public final class ListingSearch {
         return new BigDecimal(value.replace(",", ""));
     }
 
-    /** @throws IllegalArgumentException with {@link #INVALID_PRICE_RANGE} if the range is invalid */
+    /** Rejects a negative price or a minimum above the maximum (SRS UC-1.3 A2). */
     public static void requireValidPriceRange(BigDecimal min, BigDecimal max) {
         boolean negative = (min != null && min.signum() < 0) || (max != null && max.signum() < 0);
         boolean reversed = min != null && max != null && min.compareTo(max) > 0;

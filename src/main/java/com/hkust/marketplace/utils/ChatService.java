@@ -41,6 +41,7 @@ public final class ChatService {
     /** Formal Offers are deal requests like any other: validated, saved and notified the same way. */
     private final DealRequestService requests;
 
+    /** Creates the service over the given stores. */
     public ChatService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
         this.requests = new DealRequestService(data);

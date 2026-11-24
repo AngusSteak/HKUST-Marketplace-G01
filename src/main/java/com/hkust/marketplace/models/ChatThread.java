@@ -13,6 +13,7 @@ public final class ChatThread {
     private final Buyer buyer;
     private final Listing listing;
 
+    /** Creates the one chat thread for a buyer and listing pair. */
     public ChatThread(Buyer buyer, Listing listing) {
         this.buyer = Objects.requireNonNull(buyer, "buyer");
         this.listing = Objects.requireNonNull(listing, "listing");

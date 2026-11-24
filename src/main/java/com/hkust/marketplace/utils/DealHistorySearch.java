@@ -24,9 +24,16 @@ public final class DealHistorySearch {
     /**
      * What the buyer filtered by; every field is optional ({@code null} or blank means "any").
      * The dates are inclusive and match the day the deal finished.
+     *
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
+     * @param category the category to keep, or {@code null}
+     * @param seller text to find in the seller's name or username
+     * @param keyword text to find in the listing's title or description
      */
     public record Criteria(LocalDate from, LocalDate to, Category category, String seller, String keyword) {
 
+        /** No filters: every finished deal, in the order given. */
         public static Criteria all() {
             return new Criteria(null, null, null, null, null);
         }

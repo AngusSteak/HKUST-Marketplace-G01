@@ -47,9 +47,11 @@ public final class DealLifecycle {
      */
     @FunctionalInterface
     public interface Listener {
+        /** Called after a transition saved against this listing. */
         void changed(Listing listing);
     }
 
+    /** Creates an empty lifecycle; the stores load the saved requests and deals into it. */
     public DealLifecycle() {
         this(Clock.systemDefaultZone());
     }
@@ -190,6 +192,10 @@ public final class DealLifecycle {
         return changed(deal);
     }
 
+    /**
+     * Cancels an active deal: marks it cancelled and returns the listing to Live. Only an ACTIVE
+     * deal can be cancelled.
+     */
     public synchronized Deal cancel(Deal deal) {
         requireStatus(deal, DealStatus.ACTIVE);
         close(deal, DealStatus.CANCELLED);

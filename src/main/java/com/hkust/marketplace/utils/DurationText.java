@@ -23,6 +23,8 @@ public final class DurationText {
     }
 
     /**
+     * Formats a duration as a short phrase.
+     *
      * @param duration the duration to describe; must not be null
      * @return a phrase such as "5 seconds", "2 hours 30 minutes" or "90 days"; a zero or
      *         sub-second duration reads as "0 seconds"

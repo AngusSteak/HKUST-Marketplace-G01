@@ -18,14 +18,17 @@ public class SceneManager {
     private static Stage primaryStage;
     private static final String FXML_BASE = "/fxml/";
 
+    /** Remembers the window every screen is shown in. */
     public static void init(Stage stage) {
         primaryStage = stage;
     }
 
+    /** The window every screen is shown in. */
     public static Stage getPrimaryStage() {
         return primaryStage;
     }
 
+    /** Loads an FXML file from {@code /fxml/} and swaps it into the window. */
     public static void switchScene(String fxmlName) {
         try {
             if (primaryStage == null) {
@@ -75,38 +78,47 @@ public class SceneManager {
         }
     }
 
+    /** Shows the welcome screen. */
     public static void showWelcome() {
         switchScene("WelcomeView.fxml");
     }
 
+    /** Shows the buyer login screen. */
     public static void showBuyerLogin() {
         switchScene("buyer/BuyerLoginView.fxml");
     }
 
+    /** Shows the buyer registration screen. */
     public static void showBuyerRegister() {
         switchScene("buyer/BuyerRegisterView.fxml");
     }
 
+    /** Shows the buyer dashboard. */
     public static void showBuyerDashboard() {
         switchScene("buyer/BuyerDashboardView.fxml");
     }
 
+    /** Shows the seller login screen. */
     public static void showSellerLogin() {
         switchScene("seller/SellerLoginView.fxml");
     }
 
+    /** Shows the seller registration screen. */
     public static void showSellerRegister() {
         switchScene("seller/SellerRegisterView.fxml");
     }
 
+    /** Shows the seller dashboard. */
     public static void showSellerDashboard() {
         switchScene("seller/SellerDashboardView.fxml");
     }
 
+    /** Shows the admin login screen. */
     public static void showAdminLogin() {
         switchScene("admin/AdminLoginView.fxml");
     }
 
+    /** Shows the admin dashboard. */
     public static void showAdminDashboard() {
         switchScene("admin/AdminDashboardView.fxml");
     }

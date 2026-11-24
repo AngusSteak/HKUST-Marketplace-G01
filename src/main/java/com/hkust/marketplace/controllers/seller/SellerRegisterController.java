@@ -15,6 +15,7 @@ import javafx.scene.control.*;
 import java.util.EnumSet;
 import java.util.Set;
 
+/** Handles the seller registration form, including the UC-1.1 password rules. */
 public class SellerRegisterController {
 
     @FXML private TextField usernameField;
@@ -26,6 +27,7 @@ public class SellerRegisterController {
     @FXML private Label errorLabel;
     @FXML private Label successLabel;
 
+    /** Fills the meetup-location choices. */
     @FXML
     public void initialize() {
         meetupCombo.setItems(FXCollections.observableArrayList(Location.values()));

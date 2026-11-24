@@ -31,6 +31,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
+/**
+ * Admin dashboard controller: builds the listing review, users, listings, deals, ratings,
+ * notifications and profile screens in one content pane. All writes go through
+ * {@link AdminService}; this class only collects input and renders results.
+ */
 public class AdminDashboardController {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
@@ -50,6 +55,7 @@ public class AdminDashboardController {
     private ListingFormComponent listingForm;
     private NotificationCategory notificationFilter;
 
+    /** Builds the dashboard and shows the listing review screen first. */
     @FXML
     public void initialize() {
         User user = SessionManager.getCurrentUser();

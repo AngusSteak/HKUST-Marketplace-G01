@@ -10,6 +10,7 @@ public class AuditEntry {
     private final String action;
     private final String target;
 
+    /** Creates an audit entry. */
     public AuditEntry(String admin, LocalDateTime time, String action, String target) {
         this.admin = Objects.requireNonNull(admin, "admin");
         this.time = Objects.requireNonNull(time, "time");

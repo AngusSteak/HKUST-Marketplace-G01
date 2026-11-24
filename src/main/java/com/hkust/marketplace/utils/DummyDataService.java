@@ -106,14 +106,23 @@ public class DummyDataService {
     /** The database behind the stores, for stores that persist themselves (#56, #57, #58). */
     public Database database() { return db; }
 
+    /** The user store. */
     public UserStore users() { return users; }
+    /** The listing store. */
     public ListingStore listings() { return listings; }
+    /** The request and deal store. */
     public DealStore deals() { return deals; }
+    /** The notification store. */
     public NotificationStore notifications() { return notifications; }
+    /** The review store. */
     public ReviewStore reviews() { return reviews; }
+    /** The favourites/follows store. */
     public FavouriteStore favourites() { return favourites; }
+    /** The admin audit log. */
     public AuditStore audit() { return audit; }
+    /** The listing report store. */
     public ReportStore reports() { return reports; }
+    /** The chat store. */
     public ChatStore chats() { return chats; }
 
     /**

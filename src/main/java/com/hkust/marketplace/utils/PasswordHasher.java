@@ -14,10 +14,12 @@ public final class PasswordHasher {
     private PasswordHasher() {
     }
 
+    /** Hashes a plain password with BCrypt; only the hash is ever stored. */
     public static String hash(String plainPassword) {
         return BCrypt.hashpw(plainPassword, BCrypt.gensalt(LOG_ROUNDS));
     }
 
+    /** Verifies a plain password against a stored BCrypt hash. */
     public static boolean verify(String plainPassword, String storedHash) {
         if (plainPassword == null || storedHash == null || storedHash.isEmpty()) {
             return false;

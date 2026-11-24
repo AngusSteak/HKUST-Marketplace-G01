@@ -11,6 +11,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 
+/** Handles the seller login form and opens the seller dashboard. */
 public class SellerLoginController {
 
     @FXML private TextField usernameField;

@@ -7,6 +7,7 @@ package com.hkust.marketplace.models;
 public class Buyer extends User {
     private String residenceHall;
 
+    /** Creates a buyer account. */
     public Buyer(String username, String fullName, String passwordHash, UserRole role) {
         super(username, fullName, passwordHash, requireBuyerRole(role));
     }

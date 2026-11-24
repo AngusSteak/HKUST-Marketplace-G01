@@ -2,6 +2,10 @@ package com.hkust.marketplace.models;
 
 import java.time.LocalDateTime;
 
+/**
+ * A buyer's review of one completed deal: a 1-5 star rating, a comment, an optional seller
+ * reply and the moderation flags (SRS UC-1.7, UC-2.6, UC-3.6).
+ */
 public class Review {
     private String id;
     private String sellerUsername;
@@ -16,6 +20,7 @@ public class Review {
     private boolean flagged; // seller asks the admin to review it
     private LocalDateTime createdAt;
 
+    /** Creates an empty, visible review stamped now, used when loading rows. */
     public Review() {
         this.createdAt = LocalDateTime.now();
         this.hidden = false;

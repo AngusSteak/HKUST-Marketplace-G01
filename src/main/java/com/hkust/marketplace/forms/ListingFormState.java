@@ -138,10 +138,12 @@ public class ListingFormState {
         return Collections.unmodifiableList(chosenPhotos);
     }
 
+    /** Whether another photo can be added (at most six). */
     public boolean canAddMorePhotos() {
         return chosenPhotos.size() < MAX_PHOTOS;
     }
 
+    /** Adds a photo chosen in the form, rejecting a seventh. */
     public void addChosenPhoto(PhotoDraft draft) {
         if (draft == null) {
             throw new IllegalArgumentException("Photo draft must not be null");
@@ -152,6 +154,7 @@ public class ListingFormState {
         chosenPhotos.add(draft);
     }
 
+    /** Removes a photo chosen in the form. */
     public void removeChosenPhoto(PhotoDraft draft) {
         chosenPhotos.remove(draft);
     }
@@ -161,6 +164,7 @@ public class ListingFormState {
         return Collections.unmodifiableList(photoPaths);
     }
 
+    /** Sets the stored photo paths when editing an existing listing. */
     public void setPhotoPaths(List<String> photoPaths) {
         if (photoPaths != null && photoPaths.size() > MAX_PHOTOS) {
             throw new IllegalArgumentException("A listing can have at most " + MAX_PHOTOS + " photos");

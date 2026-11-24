@@ -154,6 +154,7 @@ public final class Database implements AutoCloseable {
         }
     }
 
+    /** Closes the database connection. */
     @Override
     public synchronized void close() {
         try {
@@ -165,21 +166,41 @@ public final class Database implements AutoCloseable {
 
     // ---------- Reading helpers for RowMappers ----------
 
+    /**
+     * Reads an ISO date-time column, or {@code null}.
+     *
+     * @throws SQLException if the column cannot be read
+     */
     public static LocalDateTime dateTime(ResultSet rows, String column) throws SQLException {
         String value = rows.getString(column);
         return value == null ? null : LocalDateTime.parse(value);
     }
 
+    /**
+     * Reads a decimal column, or {@code null}.
+     *
+     * @throws SQLException if the column cannot be read
+     */
     public static BigDecimal decimal(ResultSet rows, String column) throws SQLException {
         String value = rows.getString(column);
         return value == null ? null : new BigDecimal(value);
     }
 
+    /**
+     * Reads a duration stored as whole seconds, or {@code null}.
+     *
+     * @throws SQLException if the column cannot be read
+     */
     public static Duration seconds(ResultSet rows, String column) throws SQLException {
         long value = rows.getLong(column);
         return rows.wasNull() ? null : Duration.ofSeconds(value);
     }
 
+    /**
+     * Reads a 0/1 column as a boolean.
+     *
+     * @throws SQLException if the column cannot be read
+     */
     public static boolean bool(ResultSet rows, String column) throws SQLException {
         return rows.getInt(column) != 0;
     }
@@ -224,9 +245,18 @@ public final class Database implements AutoCloseable {
         }
     }
 
-    /** Maps the current row of a result set to an object. */
+    /**
+     * Maps the current row of a result set to an object.
+     *
+     * @param <T> the mapped type
+     */
     @FunctionalInterface
     public interface RowMapper<T> {
+        /**
+         * Maps the current row to one object.
+         *
+         * @throws SQLException if the row cannot be read
+         */
         T map(ResultSet row) throws SQLException;
     }
 }

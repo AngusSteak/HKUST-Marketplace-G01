@@ -4,6 +4,7 @@ import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealLifecycle;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
@@ -45,6 +46,7 @@ public final class SellerService {
     /** SRS UC-2.4 A2: a listing that is no longer live or pending can't be changed. */
     public static final String NOT_CHANGEABLE = "This listing can no longer be changed.";
 
+    /** Shown when a listing with open offers is edited. */
     public static final String HAS_ACTIVE_OFFERS = "This listing has open offers and cannot be edited.";
 
     /** SRS UC-2.5 A2: only a live listing can be marked as sold. */
@@ -55,6 +57,7 @@ public final class SellerService {
 
     private final DummyDataService data;
 
+    /** Creates the service over the given stores. */
     public SellerService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
     }
@@ -107,6 +110,18 @@ public final class SellerService {
         return listing;
     }
 
+    /**
+     * Applies an edited listing form to one of the seller's own listings. The saved photo paths
+     * and the listing row share one transaction; the photo files themselves are written first.
+     *
+     * @param actor the acting seller
+     * @param listing the listing to edit
+     * @param state the edited form
+     * @param photos storage for newly chosen photos
+     * @return the saved listing
+     * @throws SecurityException if the actor is not an active seller who owns the listing
+     * @throws IllegalStateException if the listing is deleted, not Live, Pending Review or Rejected, or has open offers
+     */
     public Listing updateListing(User actor, Listing listing, ListingFormState state, PhotoStorage photos) {
         Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
         Objects.requireNonNull(listing, "listing");
@@ -252,7 +267,7 @@ public final class SellerService {
 
     /**
      * Accepts one of the seller's own PENDING requests; the deal and Reserved/Lent status come
-     * from {@link DealLifecycle#accept}. Other open requests are captured before the transition
+     * from {@link DealLifecycle#accept(DealRequest)}. Other open requests are captured before the transition
      * because accepting declines them. Each affected buyer gets one OFFER_UPDATE notice: a DEAL
      * ref for the accepted buyer, a REQUEST ref for a buyer whose request was declined. The
      * seller is never notified, and all writes share one transaction.
@@ -298,7 +313,7 @@ public final class SellerService {
 
     /**
      * Declines one of the seller's own PENDING or COUNTERED requests through
-     * {@link DealLifecycle#decline}, relisting a pending giveaway claim to Live. The buyer gets
+     * {@link DealLifecycle#decline(DealRequest)}, relisting a pending giveaway claim to Live. The buyer gets
      * one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and the status
      * change and notice share one transaction so a failure part-way through changes nothing.
      *
@@ -327,7 +342,7 @@ public final class SellerService {
 
     /**
      * Declines every PENDING or COUNTERED request on one of the seller's listings, looping the
-     * same {@link DealLifecycle#decline} call used by {@link #declineRequest}. Each affected buyer
+     * same {@link DealLifecycle#decline(DealRequest)} call used by {@link #declineRequest}. Each affected buyer
      * gets one OFFER_UPDATE notice even when they made several requests on the listing; no seller
      * notice is sent and no bulk lifecycle method is added. All writes share one transaction.
      *
@@ -358,7 +373,7 @@ public final class SellerService {
 
     /**
      * Proposes one alternative Counter Price on a PENDING Price Offer. The raw amount is turned
-     * into a {@link BigDecimal} and handed to {@link DealLifecycle#counterOffer}, which owns the
+     * into a {@link BigDecimal} and handed to {@link DealLifecycle#counterOffer(PriceOffer, BigDecimal)}, which owns the
      * positive-and-two-decimals rule and sets COUNTERED; this service never re-checks those rules.
      * The buyer gets one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and
      * the transition and notice share one transaction so a failure changes nothing.
@@ -384,7 +399,7 @@ public final class SellerService {
 
     /**
      * Proposes one alternative Counter Period on a PENDING Borrow Request. The start and end are
-     * handed to {@link DealLifecycle#counterBorrow}, which owns the not-in-the-past, end-after-start
+     * handed to {@link DealLifecycle#counterBorrow(BorrowRequest, LocalDateTime, LocalDateTime)}, which owns the not-in-the-past, end-after-start
      * and within-the-listing's-lending-duration rules and sets COUNTERED; this service never
      * re-checks those rules. The buyer gets one OFFER_UPDATE notice with a REQUEST ref; the seller
      * is never notified, and the transition and notice share one transaction.
@@ -420,6 +435,7 @@ public final class SellerService {
         }
     }
 
+    /** Open requests grouped by listing, newest request group first (the Requests screen). */
     public LinkedHashMap<Listing, List<DealRequest>> pendingRequestsByListing(User actor) {
         Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
         List<DealRequest> all = data.deals().allRequests();
@@ -450,6 +466,7 @@ public final class SellerService {
         return result;
     }
 
+    /** Open requests on one of the seller's listings, newest first. */
     public List<DealRequest> pendingRequestsForListing(User actor, Listing listing) {
         Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
         Objects.requireNonNull(listing, "listing");
