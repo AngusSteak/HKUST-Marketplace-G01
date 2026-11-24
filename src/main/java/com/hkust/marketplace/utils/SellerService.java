@@ -19,6 +19,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -236,5 +239,78 @@ public final class SellerService {
             listing.setStatus(ListingStatus.SOLD);
             data.listings().update(listing);
         });
+    }
+
+    public LinkedHashMap<Listing, List<DealRequest>> pendingRequestsByListing(User actor) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        List<DealRequest> all = data.deals().allRequests();
+        Comparator<DealRequest> newestFirst = newestFirst(all);
+
+        Map<String, Listing> listingsById = new HashMap<>();
+        Map<String, List<DealRequest>> byListingId = new HashMap<>();
+        for (DealRequest request : all) {
+            Listing listing = request.getListing();
+            if (!isOpen(request) || !isAvailable(listing)
+                    || !seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+                continue;
+            }
+            String id = listing.getId();
+            listingsById.putIfAbsent(id, listing);
+            byListingId.computeIfAbsent(id, key -> new ArrayList<>()).add(request);
+        }
+        byListingId.values().forEach(group -> group.sort(newestFirst));
+
+        List<String> orderedIds = new ArrayList<>(byListingId.keySet());
+        orderedIds.sort((left, right) -> newestFirst.compare(
+                byListingId.get(left).get(0), byListingId.get(right).get(0)));
+
+        LinkedHashMap<Listing, List<DealRequest>> result = new LinkedHashMap<>();
+        for (String id : orderedIds) {
+            result.put(listingsById.get(id), List.copyOf(byListingId.get(id)));
+        }
+        return result;
+    }
+
+    public List<DealRequest> pendingRequestsForListing(User actor, Listing listing) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(listing, "listing");
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (!isAvailable(listing)) {
+            return List.of();
+        }
+        List<DealRequest> group = new ArrayList<>();
+        for (DealRequest request : data.deals().lifecycle().requestsFor(listing)) {
+            if (isOpen(request)) {
+                group.add(request);
+            }
+        }
+        group.sort(newestFirst(data.deals().allRequests()));
+        return List.copyOf(group);
+    }
+
+    private static Comparator<DealRequest> newestFirst(List<DealRequest> all) {
+        Map<String, Integer> submitOrder = new HashMap<>();
+        for (int i = 0; i < all.size(); i++) {
+            submitOrder.put(all.get(i).getId(), i);
+        }
+        return Comparator.comparing(DealRequest::getSubmittedTime)
+                .thenComparingInt(request -> submitOrder.getOrDefault(request.getId(), -1))
+                .reversed();
+    }
+
+    private static boolean isOpen(DealRequest request) {
+        RequestStatus status = request.getStatus();
+        return status == RequestStatus.PENDING || status == RequestStatus.COUNTERED;
+    }
+
+    private static boolean isAvailable(Listing listing) {
+        if (listing.isDeleted()) {
+            return false;
+        }
+        ListingStatus status = listing.getStatus();
+        return status == ListingStatus.LIVE || status == ListingStatus.PENDING_REVIEW
+                || status == ListingStatus.REJECTED;
     }
 }
