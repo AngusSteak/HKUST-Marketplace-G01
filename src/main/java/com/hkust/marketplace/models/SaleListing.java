@@ -13,6 +13,7 @@ public final class SaleListing extends Listing {
         return price;
     }
 
+    /** Admin edit (SRS UC-3.7); the listing keeps its type and seller. */
     public void setPrice(Money price) {
         if (price == null) {
             throw new IllegalArgumentException("Asking price must not be null");

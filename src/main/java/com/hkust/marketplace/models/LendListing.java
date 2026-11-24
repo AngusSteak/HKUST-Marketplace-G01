@@ -15,6 +15,7 @@ public final class LendListing extends Listing {
         return lendingDuration;
     }
 
+    /** Admin edit (SRS UC-3.7); the listing keeps its type and seller. */
     public void setLendingDuration(Duration lendingDuration) {
         this.lendingDuration = LendingRules.requireLendingDuration(lendingDuration);
     }
