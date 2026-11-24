@@ -483,6 +483,20 @@ public class SellerDashboardController {
         );
         root.getChildren().add(metrics);
 
+        TableView<SellerStats.ListingStat> table =
+                stats.listings().isEmpty() ? null : listingTable(stats.listings());
+        Button showAll = new Button("Show all listings");
+        showAll.getStyleClass().addAll("btn-outline", "btn-sm");
+        showAll.setVisible(false);
+        showAll.setManaged(false);
+        if (table != null) {
+            showAll.setOnAction(e -> {
+                table.getItems().setAll(stats.listings());
+                showAll.setVisible(false);
+                showAll.setManaged(false);
+            });
+        }
+
         List<SellerStats.ListingStat> rowsByViews = stats.listings().stream()
                 .sorted(Comparator.comparingInt(SellerStats.ListingStat::views).reversed())
                 .toList();
@@ -507,6 +521,29 @@ public class SellerDashboardController {
                 offersSeries.getData().add(bar(label, row.offers(), row.title(), row.listingId()));
             }
             barChart.getData().addAll(List.of(viewsSeries, offersSeries));
+            for (XYChart.Series<Number, String> series : barChart.getData()) {
+                for (XYChart.Data<Number, String> data : series.getData()) {
+                    data.nodeProperty().addListener((obs, oldNode, newNode) -> {
+                        if (newNode == null) {
+                            return;
+                        }
+                        newNode.setOnMouseClicked(event -> {
+                            if (table == null) {
+                                return;
+                            }
+                            String listingId = String.valueOf(data.getExtraValue());
+                            stats.listings().stream()
+                                    .filter(row -> row.listingId().equals(listingId))
+                                    .findFirst()
+                                    .ifPresent(row -> {
+                                        table.getItems().setAll(List.of(row));
+                                        showAll.setVisible(true);
+                                        showAll.setManaged(true);
+                                    });
+                        });
+                    });
+                }
+            }
         }
 
         // Pie chart
@@ -543,12 +580,12 @@ public class SellerDashboardController {
             root.getChildren().add(charts);
         }
 
-        if (stats.listings().isEmpty()) {
+        if (table != null) {
+            root.getChildren().addAll(showAll, table);
+        } else {
             Label noData = new Label("No data yet");
             noData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
             root.getChildren().add(noData);
-        } else {
-            root.getChildren().add(listingTable(stats.listings()));
         }
 
         ScrollPane scroll = new ScrollPane(root);
