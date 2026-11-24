@@ -98,8 +98,14 @@ class SellerReviewReplyTest {
 
         assertThrows(DatabaseException.class, () -> service.replyToReview(charlie, review, "Will not be saved"));
 
+        assertNull(review.getSellerReply(), "the in-memory review must be restored after the rollback");
         assertNull(reloaded().getSellerReply());
         assertTrue(data.notifications().forUser("bob", NotificationCategory.REVIEW_REPLY).isEmpty());
+
+        db.update("DROP TRIGGER fail_notice");
+        service.replyToReview(charlie, review, "Retry after failure");
+        assertEquals("Retry after failure", review.getSellerReply());
+        assertEquals("Retry after failure", reloaded().getSellerReply());
     }
 
     private Review reloaded() {

@@ -47,14 +47,21 @@ public final class SellerReviewService {
             throw new IllegalStateException(ALREADY_REPLIED);
         }
         String text = reply.trim();
-        data.database().inTransaction(() -> {
-            review.setSellerReply(text);
-            data.reviews().save(review);
-            data.notifications().notify(review.getBuyerUsername(), NotificationCategory.REVIEW_REPLY,
-                    seller.getDisplayName() + " replied to your review of '" + review.getListingTitle()
-                            + "': " + text,
-                    new NotificationRef(NotificationRef.Target.REVIEW, review.getId()));
-        });
+        String oldReply = review.getSellerReply();
+        try {
+            data.database().inTransaction(() -> {
+                review.setSellerReply(text);
+                data.reviews().save(review);
+                data.notifications().notify(review.getBuyerUsername(), NotificationCategory.REVIEW_REPLY,
+                        seller.getDisplayName() + " replied to your review of '" + review.getListingTitle()
+                                + "': " + text,
+                        new NotificationRef(NotificationRef.Target.REVIEW, review.getId()));
+            });
+        } catch (RuntimeException e) {
+            // The database rolled back; put the review object back the way it was too.
+            review.setSellerReply(oldReply);
+            throw e;
+        }
         return review;
     }
 
@@ -75,10 +82,17 @@ public final class SellerReviewService {
         if (review.isFlagged()) {
             throw new IllegalStateException(ALREADY_FLAGGED);
         }
-        data.database().inTransaction(() -> {
-            review.setFlagged(true);
-            data.reviews().save(review);
-        });
+        boolean oldFlagged = review.isFlagged();
+        try {
+            data.database().inTransaction(() -> {
+                review.setFlagged(true);
+                data.reviews().save(review);
+            });
+        } catch (RuntimeException e) {
+            // The database rolled back; put the review object back the way it was too.
+            review.setFlagged(oldFlagged);
+            throw e;
+        }
         return review;
     }
 }
