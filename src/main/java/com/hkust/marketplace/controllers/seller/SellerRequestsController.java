@@ -115,10 +115,12 @@ public class SellerRequestsController {
         confirm("Decline all offers", message, () -> {
             try {
                 sellerService.declineAllForListing(user, listing);
-                showFeedback("Declined " + count + noun + " on '" + listing.getTitle() + "'.");
                 render();
+                showFeedback("Declined " + count + noun + " on '" + listing.getTitle() + "'.");
             } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {
                 showFeedback(readable(ex));
+            } catch (RuntimeException ex) {
+                showFeedback("Could not complete the action: " + readable(ex));
             }
         });
     }
@@ -270,8 +272,8 @@ public class SellerRequestsController {
                 LocalDateTime end = LocalDateTime.parse(second.getText().trim(), PERIOD_FORMAT);
                 sellerService.counterBorrowRequest(user, borrow, start, end);
             }
-            showFeedback("Counter sent to " + request.getBuyerDisplayName() + " — awaiting buyer.");
             render();
+            showFeedback("Counter sent to " + request.getBuyerDisplayName() + " — awaiting buyer.");
         } catch (DateTimeParseException ex) {
             showInlineError(validation, first,
                     "Enter dates as yyyy-MM-dd HH:mm (e.g. 2026-12-01 09:00).");
@@ -281,6 +283,8 @@ public class SellerRequestsController {
             showInlineError(validation, first, readable(ex));
         } catch (IllegalStateException | SecurityException ex) {
             showInlineError(validation, first, readable(ex));
+        } catch (RuntimeException ex) {
+            showFeedback("Could not complete the action: " + readable(ex));
         }
     }
 
@@ -291,10 +295,12 @@ public class SellerRequestsController {
         confirm("Accept request", message, () -> {
             try {
                 sellerService.acceptRequest(user, request);
-                showFeedback("Request accepted. Deal created and other offers declined.");
                 render();
+                showFeedback("Request accepted. Deal created and other offers declined.");
             } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {
                 showFeedback(readable(ex));
+            } catch (RuntimeException ex) {
+                showFeedback("Could not complete the action: " + readable(ex));
             }
         });
     }
@@ -305,10 +311,12 @@ public class SellerRequestsController {
         confirm("Decline request", message, () -> {
             try {
                 sellerService.declineRequest(user, request);
-                showFeedback("Request declined.");
                 render();
+                showFeedback("Request declined.");
             } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {
                 showFeedback(readable(ex));
+            } catch (RuntimeException ex) {
+                showFeedback("Could not complete the action: " + readable(ex));
             }
         });
     }
