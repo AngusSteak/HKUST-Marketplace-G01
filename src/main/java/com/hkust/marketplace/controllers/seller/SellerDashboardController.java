@@ -15,8 +15,10 @@ import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
@@ -25,18 +27,23 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
+import java.util.function.Consumer;
 
 public class SellerDashboardController {
+
+    private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
+    private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnListings, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
+    @FXML private Button btnListings, btnRequests, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
@@ -84,6 +91,32 @@ public class SellerDashboardController {
         contentPane.getChildren().add(scroll);
     }
 
+    @FXML
+    private void showRequests() {
+        openRequestsView(SellerRequestsController::render);
+    }
+
+    private void showRequestsFiltered(Listing listing) {
+        openRequestsView(requests -> requests.renderFiltered(listing));
+    }
+
+    private void openRequestsView(Consumer<SellerRequestsController> render) {
+        setActive(btnRequests, "Requests");
+        contentPane.getChildren().clear();
+        try {
+            FXMLLoader loader = new FXMLLoader(
+                    getClass().getResource("/fxml/seller/SellerRequestsView.fxml"));
+            Parent view = loader.load();
+            SellerRequestsController requests = loader.getController();
+            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render)));
+            render.accept(requests);
+            contentPane.getChildren().add(view);
+        } catch (IOException ex) {
+            new Alert(Alert.AlertType.ERROR,
+                    "Could not open Requests: " + ex.getMessage()).showAndWait();
+        }
+    }
+
     private HBox createListingRow(Listing l) {
         HBox row = new HBox(16);
         row.getStyleClass().add("card");
@@ -119,25 +152,9 @@ public class SellerDashboardController {
                 .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
                 .toList();
         if (!openRequests.isEmpty()) {
-            VBox offers = new VBox(4);
-            offers.setPadding(new Insets(4, 0, 0, 12));
-            for (DealRequest r : openRequests) {
-                Label line = new Label(r.getBuyerDisplayName() + " · " + offerTerms(r)
-                        + " · " + r.getStatus());
-                line.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
-                offers.getChildren().add(line);
-            }
-            offers.setVisible(false);
-            offers.setManaged(false);
-
-            Hyperlink toggle = new Hyperlink("View " + openRequests.size() + " open offers");
-            toggle.setOnAction(e -> {
-                boolean willShow = !offers.isVisible();
-                offers.setVisible(willShow);
-                offers.setManaged(willShow);
-                toggle.setText((willShow ? "Hide " : "View ") + openRequests.size() + " open offers");
-            });
-            info.getChildren().addAll(toggle, offers);
+            Hyperlink link = new Hyperlink("View " + openRequests.size() + " open offers");
+            link.setOnAction(e -> showRequestsFiltered(l));
+            info.getChildren().add(link);
         }
 
         Label status = new Label(l.getStatus().name().replace('_', ' '));
@@ -227,17 +244,6 @@ public class SellerDashboardController {
         return row;
     }
 
-    private static String offerTerms(DealRequest request) {
-        if (request instanceof PriceOffer offer) {
-            return new Money(offer.agreedPrice()).getDisplay();
-        }
-        if (request instanceof BorrowRequest borrow) {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMM");
-            return borrow.agreedStart().format(fmt) + " – " + borrow.agreedEnd().format(fmt);
-        }
-        return "Giveaway claim";
-    }
-
     @FXML
     private void showChats() {
         setActive(btnChats, "Chats");
@@ -304,12 +310,24 @@ public class SellerDashboardController {
         return row;
     }
 
+    static String threadBackLabel(boolean fromRequests) {
+        return fromRequests ? BACK_TO_REQUESTS : BACK_TO_CHATS;
+    }
+
     private void showThread(ChatThread thread) {
+        renderThread(thread, threadBackLabel(false), this::showChats);
+    }
+
+    private void showThread(ChatThread thread, Runnable backAction) {
+        renderThread(thread, threadBackLabel(true), backAction);
+    }
+
+    private void renderThread(ChatThread thread, String backLabel, Runnable backAction) {
         contentPane.getChildren().clear();
 
-        Button back = new Button("\u2190 Back to Chats");
+        Button back = new Button(backLabel);
         back.getStyleClass().addAll("btn-outline", "btn-sm");
-        back.setOnAction(e -> showChats());
+        back.setOnAction(e -> backAction.run());
 
         VBox root = new VBox(12);
         root.getChildren().addAll(back,

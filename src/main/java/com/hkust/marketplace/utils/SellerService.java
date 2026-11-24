@@ -2,6 +2,8 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.forms.PhotoDraft;
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
@@ -9,6 +11,7 @@ import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.RequestStatus;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.Seller;
@@ -16,12 +19,21 @@ import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Seller-only actions on the seller's own listings. Every method checks that {@code seller}
@@ -236,5 +248,257 @@ public final class SellerService {
             listing.setStatus(ListingStatus.SOLD);
             data.listings().update(listing);
         });
+    }
+
+    /**
+     * Accepts one of the seller's own PENDING requests; the deal and Reserved/Lent status come
+     * from {@link DealLifecycle#accept}. Other open requests are captured before the transition
+     * because accepting declines them. Each affected buyer gets one OFFER_UPDATE notice: a DEAL
+     * ref for the accepted buyer, a REQUEST ref for a buyer whose request was declined. The
+     * seller is never notified, and all writes share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is an active Seller who does not own the listing
+     * @throws IllegalStateException if the request is not PENDING
+     */
+    public Deal acceptRequest(User actor, DealRequest request) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(request, "request");
+        Listing listing = request.getListing();
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (request.getStatus() != RequestStatus.PENDING) {
+            throw new IllegalStateException("Only a PENDING request can be accepted; was " + request.getStatus());
+        }
+
+        List<DealRequest> others = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(r -> r != request && isOpen(r))
+                .toList();
+
+        AtomicReference<Deal> accepted = new AtomicReference<>();
+        data.database().inTransaction(() -> {
+            Deal deal = data.deals().lifecycle().accept(request);
+            accepted.set(deal);
+            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                    "Your request for '" + listing.getTitle() + "' was accepted.",
+                    new NotificationRef(NotificationRef.Target.DEAL, deal.getId()));
+            Set<String> notified = new HashSet<>();
+            notified.add(normalize(request.getBuyerUsername()));
+            for (DealRequest other : others) {
+                if (notified.add(normalize(other.getBuyerUsername()))) {
+                    data.notifications().notify(other.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                            "Your request for '" + listing.getTitle()
+                                    + "' was declined because another request was accepted.",
+                            new NotificationRef(NotificationRef.Target.REQUEST, other.getId()));
+                }
+            }
+        });
+        return accepted.get();
+    }
+
+    /**
+     * Declines one of the seller's own PENDING or COUNTERED requests through
+     * {@link DealLifecycle#decline}, relisting a pending giveaway claim to Live. The buyer gets
+     * one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and the status
+     * change and notice share one transaction so a failure part-way through changes nothing.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING or COUNTERED
+     */
+    public void declineRequest(User actor, DealRequest request) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(request, "request");
+        Listing listing = request.getListing();
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (!isOpen(request)) {
+            throw new IllegalStateException("Only a PENDING or COUNTERED request can be declined; was "
+                    + request.getStatus());
+        }
+
+        data.database().inTransaction(() -> {
+            data.deals().lifecycle().decline(request);
+            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                    "Your request for '" + listing.getTitle() + "' was declined.",
+                    new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));
+        });
+    }
+
+    /**
+     * Declines every PENDING or COUNTERED request on one of the seller's listings, looping the
+     * same {@link DealLifecycle#decline} call used by {@link #declineRequest}. Each affected buyer
+     * gets one OFFER_UPDATE notice even when they made several requests on the listing; no seller
+     * notice is sent and no bulk lifecycle method is added. All writes share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     */
+    public void declineAllForListing(User actor, Listing listing) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(listing, "listing");
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        List<DealRequest> open = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(SellerService::isOpen)
+                .toList();
+
+        data.database().inTransaction(() -> {
+            open.forEach(request -> data.deals().lifecycle().decline(request));
+            Set<String> notified = new HashSet<>();
+            for (DealRequest request : open) {
+                if (notified.add(normalize(request.getBuyerUsername()))) {
+                    data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                            "Your request for '" + listing.getTitle() + "' was declined.",
+                            new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));
+                }
+            }
+        });
+    }
+
+    /**
+     * Proposes one alternative Counter Price on a PENDING Price Offer. The raw amount is turned
+     * into a {@link BigDecimal} and handed to {@link DealLifecycle#counterOffer}, which owns the
+     * positive-and-two-decimals rule and sets COUNTERED; this service never re-checks those rules.
+     * The buyer gets one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and
+     * the transition and notice share one transaction so a failure changes nothing.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING, so it cannot be countered twice
+     * @throws IllegalArgumentException if the raw price is malformed or fails the lifecycle rules
+     */
+    public PriceOffer counterPriceOffer(User actor, PriceOffer offer, String rawCounterPrice) {
+        requireCounterable(actor, offer);
+        BigDecimal counterPrice = new BigDecimal(rawCounterPrice);
+
+        AtomicReference<PriceOffer> countered = new AtomicReference<>();
+        data.database().inTransaction(() -> {
+            countered.set(data.deals().lifecycle().counterOffer(offer, counterPrice));
+            data.notifications().notify(offer.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                    "Your price offer for '" + offer.getListing().getTitle() + "' was countered at HK$"
+                            + countered.get().getCounterPrice().toPlainString() + ".",
+                    new NotificationRef(NotificationRef.Target.REQUEST, offer.getId()));
+        });
+        return countered.get();
+    }
+
+    /**
+     * Proposes one alternative Counter Period on a PENDING Borrow Request. The start and end are
+     * handed to {@link DealLifecycle#counterBorrow}, which owns the not-in-the-past, end-after-start
+     * and within-the-listing's-lending-duration rules and sets COUNTERED; this service never
+     * re-checks those rules. The buyer gets one OFFER_UPDATE notice with a REQUEST ref; the seller
+     * is never notified, and the transition and notice share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING, so it cannot be countered twice
+     * @throws IllegalArgumentException if the period is missing or fails the lifecycle rules
+     */
+    public BorrowRequest counterBorrowRequest(User actor, BorrowRequest request,
+                                              LocalDateTime start, LocalDateTime end) {
+        requireCounterable(actor, request);
+
+        AtomicReference<BorrowRequest> countered = new AtomicReference<>();
+        data.database().inTransaction(() -> {
+            countered.set(data.deals().lifecycle().counterBorrow(request, start, end));
+            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                    "Your borrow request for '" + request.getListing().getTitle()
+                            + "' was countered with a new Counter Period.",
+                    new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));
+        });
+        return countered.get();
+    }
+
+    private void requireCounterable(User actor, DealRequest request) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(request, "request");
+        Listing listing = request.getListing();
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (request.getStatus() != RequestStatus.PENDING) {
+            throw new IllegalStateException("Only a PENDING request can be countered; was " + request.getStatus());
+        }
+    }
+
+    public LinkedHashMap<Listing, List<DealRequest>> pendingRequestsByListing(User actor) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        List<DealRequest> all = data.deals().allRequests();
+        Comparator<DealRequest> newestFirst = newestFirst(all);
+
+        Map<String, Listing> listingsById = new HashMap<>();
+        Map<String, List<DealRequest>> byListingId = new HashMap<>();
+        for (DealRequest request : all) {
+            Listing listing = request.getListing();
+            if (!isOpen(request) || !isAvailable(listing)
+                    || !seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+                continue;
+            }
+            String id = listing.getId();
+            listingsById.putIfAbsent(id, listing);
+            byListingId.computeIfAbsent(id, key -> new ArrayList<>()).add(request);
+        }
+        byListingId.values().forEach(group -> group.sort(newestFirst));
+
+        List<String> orderedIds = new ArrayList<>(byListingId.keySet());
+        orderedIds.sort((left, right) -> newestFirst.compare(
+                byListingId.get(left).get(0), byListingId.get(right).get(0)));
+
+        LinkedHashMap<Listing, List<DealRequest>> result = new LinkedHashMap<>();
+        for (String id : orderedIds) {
+            result.put(listingsById.get(id), List.copyOf(byListingId.get(id)));
+        }
+        return result;
+    }
+
+    public List<DealRequest> pendingRequestsForListing(User actor, Listing listing) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(listing, "listing");
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (!isRespondableListing(listing)) {
+            return List.of();
+        }
+        List<DealRequest> group = new ArrayList<>();
+        for (DealRequest request : data.deals().lifecycle().requestsFor(listing)) {
+            if (isOpen(request)) {
+                group.add(request);
+            }
+        }
+        group.sort(newestFirst(data.deals().allRequests()));
+        return List.copyOf(group);
+    }
+
+    private static Comparator<DealRequest> newestFirst(List<DealRequest> all) {
+        Map<String, Integer> submitOrder = new HashMap<>();
+        for (int i = 0; i < all.size(); i++) {
+            submitOrder.put(all.get(i).getId(), i);
+        }
+        return Comparator.comparing(DealRequest::getSubmittedTime)
+                .thenComparingInt(request -> submitOrder.getOrDefault(request.getId(), -1))
+                .reversed();
+    }
+
+    private static boolean isOpen(DealRequest request) {
+        RequestStatus status = request.getStatus();
+        return status == RequestStatus.PENDING || status == RequestStatus.COUNTERED;
+    }
+
+    private static String normalize(String username) {
+        return username.toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isAvailable(Listing listing) {
+        if (listing.isDeleted()) {
+            return false;
+        }
+        ListingStatus status = listing.getStatus();
+        return status == ListingStatus.LIVE || status == ListingStatus.PENDING_REVIEW
+                || status == ListingStatus.REJECTED;
+    }
+
+    private static boolean isRespondableListing(Listing listing) {
+        return !listing.isDeleted()
+                && (isAvailable(listing) || listing.getStatus() == ListingStatus.RESERVED);
     }
 }
