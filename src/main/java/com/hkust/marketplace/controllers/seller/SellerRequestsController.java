@@ -45,12 +45,32 @@ public class SellerRequestsController {
 
     @FXML private VBox requestsBox;
     @FXML private Label feedbackLabel;
+    @FXML private Button backButton;
 
     private Consumer<ChatThread> onOpenChat;
+    private Runnable onBackToChat;
     private Listing filter;
 
     public void setOnOpenChat(Consumer<ChatThread> onOpenChat) {
         this.onOpenChat = onOpenChat;
+    }
+
+    void setOnBackToChat(Runnable onBackToChat) {
+        this.onBackToChat = onBackToChat;
+        boolean show = onBackToChat != null;
+        backButton.setVisible(show);
+        backButton.setManaged(show);
+    }
+
+    @FXML
+    private void handleBackToChat() {
+        if (onBackToChat != null) {
+            onBackToChat.run();
+        }
+    }
+
+    static String backToChatLabel() {
+        return "\u2190 Back to Chat";
     }
 
     public void renderFiltered(Listing listing) {
@@ -60,6 +80,8 @@ public class SellerRequestsController {
 
     @FXML
     public void initialize() {
+        backButton.setText(backToChatLabel());
+        backButton.getStyleClass().addAll("btn-outline", "btn-sm");
     }
 
     public void render() {

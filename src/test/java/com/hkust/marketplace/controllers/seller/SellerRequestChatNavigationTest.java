@@ -15,4 +15,9 @@ class SellerRequestChatNavigationTest {
     void chatOpenedFromRequestsUsesBackToRequestsLabel() {
         assertEquals("\u2190 Back to Requests", SellerDashboardController.threadBackLabel(true));
     }
+
+    @Test
+    void requestsBackLabelIsBackToChat() {
+        assertEquals("\u2190 Back to Chat", SellerRequestsController.backToChatLabel());
+    }
 }

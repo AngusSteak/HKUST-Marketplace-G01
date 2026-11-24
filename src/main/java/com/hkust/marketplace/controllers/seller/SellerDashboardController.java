@@ -111,14 +111,14 @@ public class SellerDashboardController {
 
     @FXML
     private void showRequests() {
-        openRequestsView(SellerRequestsController::render);
+        openRequestsView(SellerRequestsController::render, null);
     }
 
     private void showRequestsFiltered(Listing listing) {
-        openRequestsView(requests -> requests.renderFiltered(listing));
+        openRequestsView(requests -> requests.renderFiltered(listing), null);
     }
 
-    private void openRequestsView(Consumer<SellerRequestsController> render) {
+    private void openRequestsView(Consumer<SellerRequestsController> render, Runnable backToChat) {
         setActive(btnRequests, "Requests");
         contentPane.getChildren().clear();
         try {
@@ -126,7 +126,8 @@ public class SellerDashboardController {
                     getClass().getResource("/fxml/seller/SellerRequestsView.fxml"));
             Parent view = loader.load();
             SellerRequestsController requests = loader.getController();
-            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render)));
+            requests.setOnOpenChat(thread -> showThread(thread, () -> openRequestsView(render, backToChat)));
+            requests.setOnBackToChat(backToChat);
             render.accept(requests);
             contentPane.getChildren().add(view);
         } catch (IOException ex) {
@@ -334,7 +335,8 @@ public class SellerDashboardController {
 
     private void showThread(ChatThread thread) {
         renderThread(thread, threadBackLabel(false), this::showChats,
-                request -> openRequestsView(r -> r.renderFiltered(request.getListing())));
+                request -> openRequestsView(r -> r.renderFiltered(request.getListing()),
+                        () -> renderThread(thread, threadBackLabel(false), this::showChats)));
     }
 
     private void showThread(ChatThread thread, Runnable backAction) {
