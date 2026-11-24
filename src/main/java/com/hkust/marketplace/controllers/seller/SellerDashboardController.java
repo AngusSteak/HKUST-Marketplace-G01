@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.models.*;
@@ -29,7 +30,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.io.IOException;
-import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -41,6 +41,13 @@ public class SellerDashboardController {
 
     private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
     private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
+    private static final String BACK_TO_NOTIFICATIONS = "\u2190 Back to Notifications";
+
+    static final List<NotificationCategory> SELLER_CATEGORIES = List.of(
+            NotificationCategory.LISTING_APPROVED, NotificationCategory.LISTING_REJECTED,
+            NotificationCategory.NEW_REQUEST, NotificationCategory.REVIEW_RECEIVED,
+            NotificationCategory.DEAL_COMPLETED, NotificationCategory.CHAT_MESSAGE,
+            NotificationCategory.ANNOUNCEMENT);
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
@@ -49,6 +56,7 @@ public class SellerDashboardController {
 
     private Button currentActiveBtn;
     private VBox reviewsRoot;
+    private NotificationCategory notificationFilter;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
     private final SellerReviewService sellerReviewService = new SellerReviewService(DummyDataService.getInstance());
@@ -666,34 +674,110 @@ public class SellerDashboardController {
         return "Could not " + action + " this review" + (detail == null ? "." : ": " + detail);
     }
 
+    static List<NotificationCategory> sellerCategories() {
+        return SELLER_CATEGORIES;
+    }
+
+    /** Parses a THREAD ref id of the form {@code buyerUsername|listingId}, splitting at the first '|'. */
+    static String[] parseThreadRef(String id) {
+        if (id == null) {
+            return null;
+        }
+        int bar = id.indexOf('|');
+        if (bar < 0) {
+            return null;
+        }
+        String buyer = id.substring(0, bar).trim();
+        String listingId = id.substring(bar + 1).trim();
+        if (buyer.isEmpty() || listingId.isEmpty()) {
+            return null;
+        }
+        return new String[]{buyer, listingId};
+    }
+
+    /** Notification board (SRS UC-2.7): newest first, filter by category, open marks read. */
     @FXML
     private void showNotifications() {
-        setActive(btnNotifications, "Notifications");
+        setActive(btnNotifications, "Notification Board");
         contentPane.getChildren().clear();
-        VBox root = new VBox(12);
-        root.setPadding(new Insets(4));
         User user = SessionManager.getCurrentUser();
-        List<Notification> notifs = DummyDataService.getInstance()
-                .notifications().forUser(user != null ? user.getUsername() : "");
-        if (notifs.isEmpty()) {
-            root.getChildren().add(new Label("No notifications."));
-        } else {
-            for (Notification n : notifs) {
-                VBox item = new VBox(4);
-                item.getStyleClass().add("notif-item");
-                Label t = new Label(n.getTitle());
-                t.setStyle("-fx-font-weight: bold;");
-                Label m = new Label(n.getMessage());
-                m.setWrapText(true);
-                m.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
-                Label meta = new Label(n.getCategory() + " · " +
-                        n.getTimestamp().format(DateTimeFormatter.ofPattern("dd MMM HH:mm")));
-                meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
-                item.getChildren().addAll(t, m, meta);
-                root.getChildren().add(item);
+        String username = user != null ? user.getUsername() : "";
+        contentPane.getChildren().add(NotificationBoardView.build(username, SELLER_CATEGORIES,
+                notificationFilter,
+                f -> { notificationFilter = f; showNotifications(); },
+                this::openNotification));
+    }
+
+    /**
+     * Opens a notification (SRS UC-2.7 step 3.2): marks it read, then navigates to the related
+     * listing, request, deal, chat thread, review or own profile. A missing target is explained
+     * instead of throwing.
+     */
+    private void openNotification(Notification n) {
+        DummyDataService data = DummyDataService.getInstance();
+        if (!n.isRead()) {
+            try {
+                data.notifications().markRead(n, true);
+            } catch (RuntimeException ex) {
+                new Alert(Alert.AlertType.INFORMATION, "Could not update the notification.").showAndWait();
             }
         }
-        contentPane.getChildren().add(new ScrollPane(root));
+        showNotifications();
+        NotificationRef ref = n.getRelatedRef();
+        if (ref == null) {
+            return;
+        }
+        switch (ref.getTarget()) {
+            case LISTING -> {
+                Listing listing = data.listings().find(ref.getId());
+                if (listing == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This listing no longer exists.").showAndWait();
+                } else if (listing.isDeleted() || listing.getStatus() == ListingStatus.TAKEN_DOWN) {
+                    new Alert(Alert.AlertType.INFORMATION, "This listing was taken down by an admin.").showAndWait();
+                } else {
+                    showMyListings();
+                }
+            }
+            case REQUEST -> {
+                DealRequest request = data.deals().findRequest(ref.getId());
+                if (request == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This request no longer exists.").showAndWait();
+                    showRequests();
+                } else {
+                    showRequestsFiltered(request.getListing());
+                }
+            }
+            case DEAL -> showRequests();
+            case THREAD -> {
+                User user = SessionManager.getCurrentUser();
+                if (!(user instanceof Seller seller)) {
+                    return;
+                }
+                String[] parts = parseThreadRef(ref.getId());
+                ChatThread target = null;
+                if (parts != null) {
+                    for (ChatThread thread : chatService.threadsForSeller(seller)) {
+                        if (thread.getListing().getId().equals(parts[1])
+                                && thread.getBuyer().getUsername().equalsIgnoreCase(parts[0])) {
+                            target = thread;
+                            break;
+                        }
+                    }
+                }
+                if (target == null) {
+                    new Alert(Alert.AlertType.INFORMATION, "This conversation no longer exists.").showAndWait();
+                } else {
+                    renderThread(target, BACK_TO_NOTIFICATIONS, this::showNotifications);
+                }
+            }
+            case REVIEW -> showReviews();
+            case USER -> {
+                User user = SessionManager.getCurrentUser();
+                if (user != null && user.getUsername().equalsIgnoreCase(ref.getId())) {
+                    showProfile();
+                }
+            }
+        }
     }
 
     /** Manage Profile (SRS UC-2.6): name, bio, preferred meet-ups and an optional password change. */

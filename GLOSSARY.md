@@ -120,3 +120,13 @@ the Seller's single response to a Review, notified to the Buyer.
 
 **Flag**:
 the Seller's request for Admin attention on an inappropriate Review, distinct from Admin Hide (which removes a Review from public view) and Buyer Report Listing (which targets a Listing).
+
+## Notifications
+
+**Notification**:
+A message to one user about something that happened in the marketplace; it carries a category, a timestamp, a read flag and a link to the related Listing, DealRequest, Deal, ChatThread, Review or User.
+_Avoid_: Alert, message, mail, ping
+
+**Notification category**:
+One of the fourteen categories from SRS Appendix A; it groups and filters Notification on the notification board.
+_Avoid_: Notification type, tag, kind
