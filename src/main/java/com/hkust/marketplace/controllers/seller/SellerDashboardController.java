@@ -510,19 +510,38 @@ public class SellerDashboardController {
         }
 
         // Pie chart
-        PieChart pie = new PieChart();
-        pie.setTitle("Listing Status Distribution");
-        pie.setPrefHeight(280);
-        pie.getData().add(new PieChart.Data("Live", 4));
-        pie.getData().add(new PieChart.Data("Pending", 1));
-        pie.getData().add(new PieChart.Data("Sold", 2));
+        Map<DealType, Integer> completedByType = stats.completedByType();
+        int completedTotal = 0;
+        for (DealType type : DealType.values()) {
+            Integer count = completedByType.get(type);
+            if (count != null) {
+                completedTotal += count;
+            }
+        }
+        PieChart pie = null;
+        if (completedTotal == 0) {
+            Label noPieData = new Label("No completed deals yet.");
+            noPieData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            root.getChildren().add(noPieData);
+        } else {
+            pie = new PieChart();
+            pie.setTitle("Completed Deals by Type");
+            pie.setPrefHeight(280);
+            addPieSlice(pie, "Sold", completedByType.get(DealType.SOLD));
+            addPieSlice(pie, "Lent", completedByType.get(DealType.LENT));
+            addPieSlice(pie, "Given", completedByType.get(DealType.GIVEN));
+        }
 
         HBox charts = new HBox(20);
         if (barChart != null) {
             charts.getChildren().add(barChart);
         }
-        charts.getChildren().add(pie);
-        root.getChildren().add(charts);
+        if (pie != null) {
+            charts.getChildren().add(pie);
+        }
+        if (!charts.getChildren().isEmpty()) {
+            root.getChildren().add(charts);
+        }
 
         if (stats.listings().isEmpty()) {
             Label noData = new Label("No data yet");
@@ -535,6 +554,12 @@ public class SellerDashboardController {
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
+    }
+
+    private static void addPieSlice(PieChart pie, String label, Integer count) {
+        if (count != null && count > 0) {
+            pie.getData().add(new PieChart.Data(label, count));
+        }
     }
 
     private static XYChart.Data<Number, String> bar(String label, int value, String title, String listingId) {
