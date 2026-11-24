@@ -33,6 +33,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -482,19 +483,31 @@ public class SellerDashboardController {
         );
         root.getChildren().add(metrics);
 
-        // Bar chart
-        CategoryAxis xAxis = new CategoryAxis();
-        NumberAxis yAxis = new NumberAxis();
-        BarChart<String, Number> barChart = new BarChart<>(xAxis, yAxis);
-        barChart.setTitle("Listings by Category (demo data)");
-        barChart.setLegendVisible(false);
-        barChart.setPrefHeight(280);
-        XYChart.Series<String, Number> series = new XYChart.Series<>();
-        series.getData().add(new XYChart.Data<>("Textbooks", 3));
-        series.getData().add(new XYChart.Data<>("Electronics", 5));
-        series.getData().add(new XYChart.Data<>("Furniture", 2));
-        series.getData().add(new XYChart.Data<>("Others", 1));
-        barChart.getData().add(series);
+        List<SellerStats.ListingStat> rowsByViews = stats.listings().stream()
+                .sorted(Comparator.comparingInt(SellerStats.ListingStat::views).reversed())
+                .toList();
+        BarChart<Number, String> barChart = null;
+        if (rowsByViews.isEmpty()) {
+            Label noChartData = new Label("No listings to chart yet.");
+            noChartData.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            root.getChildren().add(noChartData);
+        } else {
+            NumberAxis viewsOffersAxis = new NumberAxis();
+            CategoryAxis listingAxis = new CategoryAxis();
+            barChart = new BarChart<>(viewsOffersAxis, listingAxis);
+            barChart.setTitle("Views and Offers per Listing");
+            barChart.setPrefHeight(280);
+            XYChart.Series<Number, String> viewsSeries = new XYChart.Series<>();
+            viewsSeries.setName("Views");
+            XYChart.Series<Number, String> offersSeries = new XYChart.Series<>();
+            offersSeries.setName("Offers");
+            for (SellerStats.ListingStat row : rowsByViews) {
+                String label = row.title().length() > 20 ? row.title().substring(0, 20) : row.title();
+                viewsSeries.getData().add(bar(label, row.views(), row.title(), row.listingId()));
+                offersSeries.getData().add(bar(label, row.offers(), row.title(), row.listingId()));
+            }
+            barChart.getData().addAll(List.of(viewsSeries, offersSeries));
+        }
 
         // Pie chart
         PieChart pie = new PieChart();
@@ -504,7 +517,11 @@ public class SellerDashboardController {
         pie.getData().add(new PieChart.Data("Pending", 1));
         pie.getData().add(new PieChart.Data("Sold", 2));
 
-        HBox charts = new HBox(20, barChart, pie);
+        HBox charts = new HBox(20);
+        if (barChart != null) {
+            charts.getChildren().add(barChart);
+        }
+        charts.getChildren().add(pie);
         root.getChildren().add(charts);
 
         if (stats.listings().isEmpty()) {
@@ -518,6 +535,18 @@ public class SellerDashboardController {
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
+    }
+
+    private static XYChart.Data<Number, String> bar(String label, int value, String title, String listingId) {
+        XYChart.Data<Number, String> data = new XYChart.Data<>(value, label);
+        data.setExtraValue(listingId);
+        data.nodeProperty().addListener((obs, oldNode, newNode) -> {
+            if (newNode != null) {
+                newNode.setUserData(listingId);
+                Tooltip.install(newNode, new Tooltip(title));
+            }
+        });
+        return data;
     }
 
     private TableView<SellerStats.ListingStat> listingTable(List<SellerStats.ListingStat> rows) {
