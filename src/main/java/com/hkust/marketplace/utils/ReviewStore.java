@@ -54,13 +54,31 @@ public class ReviewStore {
         if (r.getId() == null) {
             r.setId("R" + idCounter.getAndIncrement());
         }
-        // deal_id stays empty until the review flow (#23) links each review to its deal.
-        db.update("INSERT INTO reviews (id, seller_username, buyer_username, listing_title, rating,"
-                        + " comment, seller_reply, hidden, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                r.getId(), r.getSellerUsername().toLowerCase(), r.getBuyerUsername().toLowerCase(),
+        // deal_id is UNIQUE, so the database itself refuses a second review of the same deal.
+        db.update("INSERT INTO reviews (id, deal_id, seller_username, buyer_username, listing_title, rating,"
+                        + " comment, seller_reply, hidden, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                r.getId(), r.getDealId(), r.getSellerUsername().toLowerCase(), r.getBuyerUsername().toLowerCase(),
                 r.getListingTitle(), r.getRating(), r.getComment(), r.getSellerReply(), r.isHidden(),
                 r.getCreatedAt());
-        reviews.add(r);
+        // Only once saved: inside a transaction that later rolls back, the review never appears.
+        db.afterCommit(() -> {
+            synchronized (this) {
+                reviews.add(r);
+            }
+        });
+    }
+
+    /** The review of this deal, or {@code null} if it has not been reviewed. */
+    public synchronized Review forDeal(String dealId) {
+        return reviews.stream().filter(r -> dealId != null && dealId.equals(r.getDealId())).findFirst().orElse(null);
+    }
+
+    /** Every review the buyer has written, newest first, including ones the admin hid. */
+    public synchronized List<Review> byBuyer(String username) {
+        return reviews.stream()
+                .filter(r -> r.getBuyerUsername().equalsIgnoreCase(username))
+                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())
+                .collect(Collectors.toList());
     }
 
     /** Saves a review's changeable fields: hidden (admin) and the seller's reply. */
@@ -83,6 +101,7 @@ public class ReviewStore {
             r.setRating(row.getInt("rating"));
             r.setComment(row.getString("comment"));
             r.setSellerReply(row.getString("seller_reply"));
+            r.setDealId(row.getString("deal_id"));
             r.setHidden(Database.bool(row, "hidden"));
             r.setCreatedAt(Database.dateTime(row, "created_at"));
             reviews.add(r);

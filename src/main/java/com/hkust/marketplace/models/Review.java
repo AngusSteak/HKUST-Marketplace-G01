@@ -10,6 +10,8 @@ public class Review {
     private int rating; // 1-5
     private String comment;
     private String sellerReply;
+    /** The completed deal this review is about (one review per deal); {@code null} for seeded demo reviews. */
+    private String dealId;
     private boolean hidden; // admin can hide
     private LocalDateTime createdAt;
 
@@ -36,6 +38,9 @@ public class Review {
 
     public String getComment() { return comment; }
     public void setComment(String comment) { this.comment = comment; }
+
+    public String getDealId() { return dealId; }
+    public void setDealId(String dealId) { this.dealId = dealId; }
 
     public String getSellerReply() { return sellerReply; }
     public void setSellerReply(String sellerReply) { this.sellerReply = sellerReply; }

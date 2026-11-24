@@ -8,8 +8,11 @@ import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Message;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.persistence.DatabaseException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -35,9 +38,12 @@ public final class ChatService {
             "This listing is no longer live \u2014 new offers are disabled.";
 
     private final DummyDataService data;
+    /** Formal Offers are deal requests like any other: validated, saved and notified the same way. */
+    private final DealRequestService requests;
 
     public ChatService(DummyDataService data) {
         this.data = Objects.requireNonNull(data, "data");
+        this.requests = new DealRequestService(data);
     }
 
     /** Returns the one thread for this (Buyer, Listing) pair, creating it on first use. */
@@ -57,7 +63,29 @@ public final class ChatService {
         Objects.requireNonNull(sender, "sender");
         Objects.requireNonNull(thread, "thread");
         requireParticipant(sender, thread);
-        return data.chats().send(thread, sender, content);
+        Message message = data.chats().send(thread, sender, content);
+        try {
+            notifyOtherParticipant(sender, thread, content);
+        } catch (DatabaseException e) {
+            // The message is already saved and shown. Reporting the send as failed would make the
+            // sender post it again, so a lost notification is the lesser problem.
+        }
+        return message;
+    }
+
+    /** Longest message preview put in a Chat Message notification. */
+    static final int PREVIEW_LENGTH = 80;
+
+    /** SRS UC-1.5 step 3.1.2: the other participant is told about the new message. */
+    private void notifyOtherParticipant(User sender, ChatThread thread, String content) {
+        boolean fromBuyer = sender.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername());
+        String recipient = fromBuyer ? thread.getSeller().getUsername() : thread.getBuyer().getUsername();
+        String text = content.strip();
+        String preview = text.length() > PREVIEW_LENGTH ? text.substring(0, PREVIEW_LENGTH - 1) + "\u2026" : text;
+        data.notifications().notify(recipient, NotificationCategory.CHAT_MESSAGE,
+                sender.getDisplayName() + " about '" + thread.getListing().getTitle() + "': " + preview,
+                new NotificationRef(NotificationRef.Target.THREAD,
+                        thread.getBuyer().getUsername().toLowerCase() + "|" + thread.getListing().getId()));
     }
 
     /**
@@ -72,7 +100,7 @@ public final class ChatService {
         Buyer buyer = requireThreadBuyer(sender, thread);
         requireLive(thread);
         requireType(thread, ListingType.SELL);
-        DealRequest request = data.deals().lifecycle().submitOffer(buyer, thread.getListing(), price);
+        DealRequest request = requests.submitOffer(buyer, thread.getListing(), price);
         return data.chats().sendFormalOffer(thread, buyer, request);
     }
 
@@ -89,8 +117,7 @@ public final class ChatService {
         Buyer buyer = requireThreadBuyer(sender, thread);
         requireLive(thread);
         requireType(thread, ListingType.LEND);
-        DealRequest request = data.deals().lifecycle()
-                .submitBorrow(buyer, thread.getListing(), start, end);
+        DealRequest request = requests.submitBorrow(buyer, thread.getListing(), start, end);
         return data.chats().sendFormalOffer(thread, buyer, request);
     }
 
@@ -106,7 +133,7 @@ public final class ChatService {
         Buyer buyer = requireThreadBuyer(sender, thread);
         requireLive(thread);
         requireType(thread, ListingType.GIVEAWAY);
-        DealRequest request = data.deals().lifecycle().submitClaim(buyer, thread.getListing());
+        DealRequest request = requests.claim(buyer, thread.getListing());
         return data.chats().sendFormalOffer(thread, buyer, request);
     }
 

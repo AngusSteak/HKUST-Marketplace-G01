@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,12 @@ public class ListingStore {
 
     private static final int FIRST_ID = 100;
 
-    private final Map<String, Listing> listings = new LinkedHashMap<>();
+    /**
+     * Synchronized because the loan timer (#22) updates listings from its own thread while the
+     * screens read them. Only the map is locked, never around a database call, so this lock can't
+     * deadlock with the database's; readers get a copy, so they never iterate a changing map.
+     */
+    private final Map<String, Listing> listings = Collections.synchronizedMap(new LinkedHashMap<>());
     private final AtomicInteger idCounter = new AtomicInteger(FIRST_ID);
     private final Database db;
 
@@ -47,28 +53,27 @@ public class ListingStore {
         this.db = Objects.requireNonNull(db, "db");
     }
 
+    /** Every listing, in the order added; a copy, safe to iterate while others change the store. */
     public Collection<Listing> all() {
-        return listings.values().stream()
-                .filter(l -> !l.isDeleted())
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted()).collect(Collectors.toList());
+    }
+
+    private List<Listing> snapshot() {
+        synchronized (listings) {
+            return new ArrayList<>(listings.values());
+        }
     }
 
     public List<Listing> live() {
-        return listings.values().stream()
-                .filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.LIVE)
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.LIVE).collect(Collectors.toList());
     }
 
     public List<Listing> pending() {
-        return listings.values().stream()
-                .filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.PENDING_REVIEW)
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted() && l.getStatus() == ListingStatus.PENDING_REVIEW).collect(Collectors.toList());
     }
 
     public List<Listing> bySeller(String username) {
-        return listings.values().stream()
-                .filter(l -> !l.isDeleted() && l.getSellerUsername().equalsIgnoreCase(username))
-                .collect(Collectors.toList());
+        return snapshot().stream().filter(l -> !l.isDeleted() && l.getSellerUsername().equalsIgnoreCase(username)).collect(Collectors.toList());
     }
 
     /**

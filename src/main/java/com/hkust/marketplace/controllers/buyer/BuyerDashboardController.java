@@ -13,19 +13,25 @@ import com.hkust.marketplace.models.DealType;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
+import com.hkust.marketplace.models.Message;
 import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.PriceOffer;
 import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.utils.ChatService;
+import com.hkust.marketplace.utils.DealHistorySearch;
 import com.hkust.marketplace.utils.DealStore;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DealRequestService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingSearch;
+import com.hkust.marketplace.utils.MyDealsService;
 import com.hkust.marketplace.utils.ProfileService;
+import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
@@ -39,20 +45,23 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class BuyerDashboardController {
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
     @FXML private Label welcomeLabel;
-    @FXML private Button btnBrowse, btnDeals, btnHistory, btnFavourites, btnNotifications, btnProfile;
+    @FXML private Button btnBrowse, btnDeals, btnChats, btnHistory, btnReviews, btnFavourites, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
@@ -259,7 +268,8 @@ public class BuyerDashboardController {
         title.setOnMouseClicked(e -> showListingDetails(listing));
         title.setStyle(title.getStyle() + " -fx-cursor: hand;");
 
-        HBox actionRow = new HBox(8, actionButton(listing), viewBtn);
+        // Deal requests start from the listing detail screen (SRS UC-1.3 special requirements).
+        HBox actionRow = new HBox(8, viewBtn);
 
         card.getChildren().addAll(photo(firstPhoto(listing), 228, 120), top, title, price, meta, seller,
                 location, date, actionRow);
@@ -342,24 +352,42 @@ public class BuyerDashboardController {
      * seller is disabled) is refused with a message instead (A3).
      */
     private void showListingDetails(Listing listing) {
-        if (!ListingSearch.isBrowsable(listing)) {
-            new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
-            return;
-        }
+        showListingDetails(listing, false);
+    }
+
+    /**
+     * Shows a listing in full. From browsing ({@code fromDeal} false) it must still be available
+     * and the view is counted. From My Deals (SRS UC-1.6 step 3.1) it is shown whatever its status,
+     * without the deal button once it is no longer available, and with the linked chat below.
+     */
+    private void showListingDetails(Listing listing, boolean fromDeal) {
+        boolean available = ListingSearch.isBrowsable(listing);
         DummyDataService data = DummyDataService.getInstance();
-        try {
-            data.listings().recordView(listing);
-        } catch (IllegalArgumentException e) {
-            // Deleted between the check above and now: same message as A3.
-            new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
-            return;
+        if (!fromDeal) {
+            if (!available) {
+                new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
+                return;
+            }
+            try {
+                data.listings().recordView(listing);
+            } catch (IllegalArgumentException e) {
+                // Deleted between the check above and now: same message as A3.
+                new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
+                return;
+            }
         }
-        setActive(btnBrowse, "Listing Details");
+        setActive(fromDeal ? btnDeals : btnBrowse, fromDeal ? "Deal: " + listing.getTitle() : "Listing Details");
         contentPane.getChildren().clear();
 
-        Button back = new Button("\u2190 Back to Browse Marketplace");
+        Button back = new Button(fromDeal ? "\u2190 Back to My Deals" : "\u2190 Back to Browse Marketplace");
         back.getStyleClass().addAll("btn-outline", "btn-sm");
-        back.setOnAction(e -> showBrowse());
+        back.setOnAction(e -> {
+            if (fromDeal) {
+                showMyDeals();
+            } else {
+                showBrowse();
+            }
+        });
 
         FlowPane photos = new FlowPane(10, 10);
         List<String> paths = listing.getPhotoPaths();
@@ -372,8 +400,8 @@ public class BuyerDashboardController {
         Label typeBadge = new Label(listing.getTypeDisplay());
         typeBadge.getStyleClass().addAll("badge", listing.getType() == ListingType.SELL ? "badge-sold"
                 : listing.getType() == ListingType.LEND ? "badge-pending" : "badge-live");
-        Label status = new Label("Available");
-        status.getStyleClass().addAll("badge", "badge-live");
+        Label status = new Label(available ? "Available" : listingStatusLabel(listing.getStatus()));
+        status.getStyleClass().addAll("badge", available ? "badge-live" : "badge-sold");
         HBox badges = new HBox(6, typeBadge, status);
 
         Label title = new Label(listing.getTitle());
@@ -407,18 +435,25 @@ public class BuyerDashboardController {
             fields.addRow(i, name, value);
         }
 
-        HBox actions = new HBox(8, actionButton(listing));
+        HBox actions = new HBox(8);
+        if (available) {
+            actions.getChildren().add(actionButton(listing));
+        }
         Button chatBtn = new Button("Chat");
         chatBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        chatBtn.setOnAction(e -> openChat(listing));
+        chatBtn.setOnAction(e -> openChat(listing, "Browse Marketplace", this::showBrowse));
         Button reportBtn = new Button("Report Listing");
         reportBtn.getStyleClass().addAll("btn-outline", "btn-sm");
-        // TODO(#23): open the Report Listing form (SRS UC-1.10).
-        reportBtn.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION,
-                "Reporting listings is coming soon.").showAndWait());
-        actions.getChildren().addAll(chatBtn, reportBtn);
-        if (SessionManager.getCurrentUser() instanceof Buyer buyer
-                && listing.getSeller() instanceof com.hkust.marketplace.models.Seller seller) {
+        reportBtn.setOnAction(e -> showReportDialog(listing));
+        if (!fromDeal) {
+            // From My Deals the chat is shown below the listing instead.
+            actions.getChildren().add(chatBtn);
+        }
+        actions.getChildren().add(reportBtn);
+        if (SessionManager.getCurrentUser() instanceof Buyer buyer) {
+            // A plain variable, not a pattern: getSeller() already returns a Seller, which the
+            // Eclipse/VS Code compiler rejects in an instanceof pattern.
+            com.hkust.marketplace.models.Seller seller = listing.getSeller();
             Button favBtn = new Button();
             favBtn.getStyleClass().addAll("btn-outline", "btn-sm");
             Runnable showFav = () -> favBtn.setText(data.favourites().isFavourite(buyer, listing)
@@ -441,8 +476,15 @@ public class BuyerDashboardController {
         }
 
         VBox card = new VBox(12, photos, badges, title, price, description, fields, actions);
+        card.getChildren().add(sellerReviews(listing.getSellerUsername(), listing.getSellerFullName()));
         card.getStyleClass().add("listing-card");
         VBox root = new VBox(12, back, card);
+        if (fromDeal && SessionManager.getCurrentUser() instanceof Buyer buyer) {
+            Label chatTitle = new Label("Chat with " + listing.getSellerFullName());
+            chatTitle.getStyleClass().add("section-title");
+            root.getChildren().addAll(chatTitle,
+                    ChatViewBuilder.build(chatService, buyer, chatService.openThread(buyer, listing)));
+        }
         root.setPadding(new Insets(4));
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
@@ -460,7 +502,12 @@ public class BuyerDashboardController {
         return String.format("\u2605 %.1f (%d review%s)", average.getAsDouble(), count, count == 1 ? "" : "s");
     }
 
-    private void openChat(Listing listing) {
+    /**
+     * Chat About Listing (SRS UC-1.5) in the shared chat component: the one thread between this
+     * buyer and the listing's seller, created on first use. {@code back} returns to where the
+     * buyer came from.
+     */
+    private void openChat(Listing listing, String backTo, Runnable back) {
         if (!(SessionManager.getCurrentUser() instanceof Buyer buyer)) {
             new Alert(Alert.AlertType.WARNING, "You must be logged in as a buyer to chat.").showAndWait();
             return;
@@ -469,179 +516,521 @@ public class BuyerDashboardController {
         pageTitle.setText("Chat: " + listing.getTitle());
         contentPane.getChildren().clear();
 
-        Button back = new Button("\u2190 Back to Browse Marketplace");
-        back.getStyleClass().addAll("btn-outline", "btn-sm");
-        back.setOnAction(e -> showBrowse());
+        Button backBtn = new Button("\u2190 Back to " + backTo);
+        backBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        backBtn.setOnAction(e -> back.run());
 
         VBox root = new VBox(12);
-        root.getChildren().addAll(back, ChatViewBuilder.build(chatService, buyer, thread));
+        root.getChildren().addAll(backBtn, ChatViewBuilder.build(chatService, buyer, thread));
         contentPane.getChildren().add(root);
     }
 
+    /**
+     * The buyer's chat threads, most recent activity first, so an existing conversation can be
+     * reopened (SRS UC-1.5 step 1), including threads on listings that are no longer live.
+     */
+    @FXML
+    private void showChats() {
+        setActive(btnChats, "Chats");
+        contentPane.getChildren().clear();
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(4));
+        if (!(SessionManager.getCurrentUser() instanceof Buyer buyer)) {
+            root.getChildren().add(muted("Log in as a buyer to see your chats."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+        List<ChatThread> threads = new ArrayList<>(chatService.threadsForBuyer(buyer));
+        if (threads.isEmpty()) {
+            root.getChildren().add(muted("You have no chats yet. Open a listing and choose Chat to message its seller."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+        threads.sort(java.util.Comparator.comparing(this::lastActivity,
+                java.util.Comparator.nullsLast(java.util.Comparator.<LocalDateTime>reverseOrder())));
+        DateTimeFormatter when = DateTimeFormatter.ofPattern("dd MMM HH:mm");
+        for (ChatThread thread : threads) {
+            Listing listing = thread.getListing();
+            List<Message> history = chatService.history(thread);
+            Message last = history.isEmpty() ? null : history.get(history.size() - 1);
+            Label title = new Label(listing.getTitle());
+            title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            Label status = new Label(chatService.acceptsOffers(thread) ? "Live" : "Offers closed");
+            status.getStyleClass().addAll("badge", chatService.acceptsOffers(thread) ? "badge-live" : "badge-sold");
+            HBox titleRow = new HBox(8, title, status);
+            titleRow.setAlignment(Pos.CENTER_LEFT);
+            String preview = last == null ? "No messages yet"
+                    : (last.getSenderUsername().equalsIgnoreCase(buyer.getUsername()) ? "You: " : "")
+                    + last.getContent();
+            Label detail = muted("with " + thread.getSeller().getDisplayName() + "  \u00b7  " + preview);
+            detail.setMaxWidth(700);
+            detail.setWrapText(false);
+            Label time = new Label(last == null ? "" : last.getSentTime().format(when));
+            time.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
+            VBox info = new VBox(3, titleRow, detail, time);
+            HBox.setHgrow(info, Priority.ALWAYS);
+            Button open = new Button("Open");
+            open.getStyleClass().addAll("btn-primary", "btn-sm");
+            open.setOnAction(e -> openChat(listing, "Chats", this::showChats));
+            HBox row = new HBox(12, info, open);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("notif-item");
+            root.getChildren().add(row);
+        }
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    /** When the thread last had a message, or {@code null} if it has none. */
+    private LocalDateTime lastActivity(ChatThread thread) {
+        List<Message> history = chatService.history(thread);
+        return history.isEmpty() ? null : history.get(history.size() - 1).getSentTime();
+    }
+
+    // ---------- Make Deal Request (SRS UC-1.4) ----------
+
+    private final DealRequestService dealRequests = new DealRequestService(DummyDataService.getInstance());
+
+    /** S1: price offer. The dialog stays open with the reason until the offer is valid (A2) or cancelled (A5). */
     private void showOfferDialog(Listing listing) {
         if (!(listing instanceof SaleListing sale)) {
-            new Alert(Alert.AlertType.WARNING, "This listing is not for sale.").showAndWait();
             return;
         }
-        TextInputDialog dialog = new TextInputDialog(sale.getPrice().amount().toPlainString());
-        dialog.setTitle("Make an Offer");
-        dialog.setHeaderText("Offer for: " + listing.getTitle());
-        dialog.setContentText("Your offer price (HK$):");
-        dialog.showAndWait().ifPresent(priceStr -> {
-            try {
-                double price = Double.parseDouble(priceStr);
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Offer Submitted");
-                alert.setHeaderText(null);
-                alert.setContentText("Your offer of HK$" + price + " has been sent to " + listing.getSellerFullName() + ".\n\n(Demo only – no backend)");
-                alert.showAndWait();
-            } catch (NumberFormatException ex) {
-                new Alert(Alert.AlertType.ERROR, "Invalid price.").showAndWait();
+        TextField priceField = new TextField(sale.getPrice().amount().toPlainString());
+        priceField.setPromptText("e.g. 150 or 150.50");
+        Label error = dialogError();
+        VBox body = new VBox(8,
+                muted("Asking price: " + sale.getPriceDisplay()),
+                new Label("Your offer (HK$)"), priceField, error);
+
+        Dialog<ButtonType> dialog = requestDialog("Make an Offer", "Offer for: " + listing.getTitle(), body, "Send Offer");
+        onConfirm(dialog, error, () -> {
+            BigDecimal price = ListingSearch.parsePrice(priceField.getText());
+            if (price == null || price.signum() <= 0) {
+                throw new IllegalArgumentException("Please enter an offer above HK$0.");
             }
+            return dealRequests.submitOffer(SessionManager.getCurrentUser(), listing, price);
         });
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> requestSent("Your offer was sent to " + listing.getSellerFullName() + "."));
     }
 
+    /** S2: borrow request with a start and end date and time, checked against the listing's limit (A3). */
     private void showBorrowDialog(Listing listing) {
         if (!(listing instanceof LendListing lend)) {
-            new Alert(Alert.AlertType.WARNING, "This listing is not available for borrowing.").showAndWait();
             return;
         }
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Borrow Request");
-        alert.setHeaderText("Request to borrow: " + listing.getTitle());
-        alert.setContentText("Proposed duration: " + DurationText.format(lend.getLendingDuration()) +
-                "\n\nSend borrow request to seller?");
-        alert.showAndWait().ifPresent(resp -> {
-            if (resp == ButtonType.OK) {
-                new Alert(Alert.AlertType.INFORMATION, "Borrow request sent!\n(Demo only)").showAndWait();
-            }
-        });
+        // The next full hour at least an hour away, so the default never slips into the past.
+        LocalDateTime defaultStart = LocalDateTime.now().plusHours(2).truncatedTo(java.time.temporal.ChronoUnit.HOURS);
+        java.time.Duration longest = lend.getLendingDuration();
+        java.time.Duration suggested = longest.compareTo(java.time.Duration.ofDays(7)) < 0 ? longest
+                : java.time.Duration.ofDays(7);
+        LocalDateTime defaultEnd = defaultStart.plus(suggested);
+        DatePicker startDate = new DatePicker(defaultStart.toLocalDate());
+        TextField startTime = timeField(defaultStart);
+        DatePicker endDate = new DatePicker(defaultEnd.toLocalDate());
+        TextField endTime = timeField(defaultEnd);
+        Label error = dialogError();
+        VBox body = new VBox(8,
+                muted("You can borrow this for up to " + DurationText.format(longest) + "."),
+                new Label("Start"), new HBox(8, startDate, startTime),
+                new Label("End"), new HBox(8, endDate, endTime), error);
+
+        Dialog<ButtonType> dialog = requestDialog("Request to Borrow", "Borrow: " + listing.getTitle(), body,
+                "Send Request");
+        onConfirm(dialog, error, () -> dealRequests.submitBorrow(SessionManager.getCurrentUser(), listing,
+                dateTime(startDate, startTime, "start"), dateTime(endDate, endTime, "end")));
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> requestSent("Your borrow request was sent to " + listing.getSellerFullName() + "."));
     }
 
+    /** S3: claim with one confirmation; only the first claim wins (A4). */
     private void claimItem(Listing listing) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Claim Item");
-        alert.setHeaderText("Claim: " + listing.getTitle());
-        alert.setContentText("Are you sure you want to claim this giveaway item?");
-        alert.showAndWait().ifPresent(resp -> {
-            if (resp == ButtonType.OK) {
-                new Alert(Alert.AlertType.INFORMATION, "Item claimed successfully!\n(Demo only)").showAndWait();
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Claim '" + listing.getTitle() + "'? The item is reserved for you while "
+                        + listing.getSellerFullName() + " responds.", ButtonType.OK, ButtonType.CANCEL);
+        confirm.setTitle("Claim Item");
+        confirm.setHeaderText(null);
+        if (confirm.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) {
+            return; // A5
+        }
+        try {
+            dealRequests.claim(SessionManager.getCurrentUser(), listing);
+            requestSent("You claimed '" + listing.getTitle() + "'.");
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
+            new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
+            showBrowse();
+        } catch (RuntimeException e) {
+            new Alert(Alert.AlertType.ERROR, "Your claim could not be completed."
+                    + " Please check My Deals before trying again.").showAndWait();
+            showMyDeals();
+        }
+    }
+
+    private static Dialog<ButtonType> requestDialog(String title, String header, VBox body, String confirmText) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(header);
+        body.setPrefWidth(380);
+        dialog.getDialogPane().setContent(body);
+        dialog.getDialogPane().getButtonTypes().addAll(
+                new ButtonType(confirmText, ButtonBar.ButtonData.OK_DONE), ButtonType.CANCEL);
+        return dialog;
+    }
+
+    /**
+     * Submits when the buyer confirms. An invalid entry keeps the dialog open with the reason;
+     * if the listing has meanwhile become unavailable the dialog closes and says so.
+     */
+    private void onConfirm(Dialog<ButtonType> dialog, Label error, Supplier<?> submit) {
+        Button confirm = (Button) dialog.getDialogPane().getButtonTypes().stream()
+                .filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .map(b -> dialog.getDialogPane().lookupButton(b)).findFirst().orElseThrow();
+        confirm.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            try {
+                submit.get();
+            } catch (IllegalArgumentException e) {
+                showMessage(error, e.getMessage(), true);
+                event.consume();
+            } catch (SecurityException | IllegalStateException e) {
+                event.consume();
+                dialog.close();
+                new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
+                showBrowse();
+            } catch (RuntimeException e) {
+                // A database failure: the request may or may not have been saved.
+                event.consume();
+                dialog.close();
+                new Alert(Alert.AlertType.ERROR, "Your request could not be completed."
+                        + " Please check My Deals before trying again.").showAndWait();
+                showMyDeals();
             }
         });
     }
 
+    /** Step 7: confirm, and show the new Pending request in My Deals. */
+    private void requestSent(String message) {
+        new Alert(Alert.AlertType.INFORMATION, message + "\nYou can follow it in My Deals (status: Pending).")
+                .showAndWait();
+        showMyDeals();
+    }
+
+    /**
+     * The red message line in a request dialog. Its two lines are reserved from the start, because
+     * a dialog window does not grow when content appears, which would push the buttons out of view.
+     */
+    private static Label dialogError() {
+        Label error = new Label();
+        error.setWrapText(true);
+        error.setMinHeight(36);
+        return error;
+    }
+
+    private static TextField timeField(LocalDateTime value) {
+        TextField field = new TextField(value.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
+        field.setPromptText("HH:mm");
+        field.setPrefWidth(80);
+        return field;
+    }
+
+    private static LocalDateTime dateTime(DatePicker date, TextField time, String which) {
+        if (date.getValue() == null) {
+            throw new IllegalArgumentException("Please choose a " + which + " date.");
+        }
+        try {
+            return date.getValue().atTime(java.time.LocalTime.parse(time.getText().trim(),
+                    DateTimeFormatter.ofPattern("H:mm")));
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("Enter the " + which + " time as HH:mm, e.g. 14:30.");
+        }
+    }
+
+    private final MyDealsService myDeals = new MyDealsService(DummyDataService.getInstance());
+
+    /**
+     * My Deals (SRS UC-1.6): the buyer's Pending, Countered and Accepted requests with what can be
+     * done next: open the listing and chat, answer a counter, return a borrowed item or mark a
+     * purchase or claim complete.
+     */
     @FXML
     private void showMyDeals() {
         setActive(btnDeals, "My Deals");
         contentPane.getChildren().clear();
 
-        VBox root = new VBox(16);
+        VBox root = new VBox(12);
         root.setPadding(new Insets(4));
-
-        Label info = new Label("Active offers, borrow requests and claims");
-        info.setStyle("-fx-text-fill: #5a5a7a;");
-        root.getChildren().add(info);
-
-        TableView<String[]> table = new TableView<>();
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-
-        TableColumn<String[], String> colTitle = new TableColumn<>("Item");
-        colTitle.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue()[0]));
-        TableColumn<String[], String> colSeller = new TableColumn<>("Seller");
-        colSeller.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue()[1]));
-        TableColumn<String[], String> colType = new TableColumn<>("Type");
-        colType.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue()[2]));
-        TableColumn<String[], String> colStatus = new TableColumn<>("Status");
-        colStatus.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue()[3]));
-        TableColumn<String[], String> colAction = new TableColumn<>("Action");
-        colAction.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue()[4]));
-
-        table.getColumns().addAll(colTitle, colSeller, colType, colStatus, colAction);
-
-        String buyer = SessionManager.getCurrentUser().getUsername();
+        String buyer = SessionManager.getCurrentUser() == null ? "" : SessionManager.getCurrentUser().getUsername();
         DealStore deals = DummyDataService.getInstance().deals();
-        List<String[]> rows = new ArrayList<>();
-        for (DealRequest request : deals.openRequestsByBuyer(buyer)) {
-            boolean countered = request.getStatus() == RequestStatus.COUNTERED;
-            rows.add(new String[]{
-                    request.getListing().getTitle(),
-                    request.getListing().getSellerFullName(),
-                    requestTypeLabel(request.dealType()),
-                    (countered ? "Countered: " : "Pending: ") + requestTerms(request),
-                    countered ? "Respond to the seller's counter" : "Waiting for the seller"});
-        }
-        for (Deal deal : deals.activeDealsForBuyer(buyer)) {
-            rows.add(new String[]{
-                    deal.getListing().getTitle(),
-                    deal.getListing().getSellerFullName(),
-                    requestTypeLabel(deal.getDealType()),
-                    deal.getDueDate() != null
-                            ? "Accepted, due " + deal.getDueDate().format(DEAL_TIME)
-                            : "Accepted: " + requestTerms(deal.getRequest()),
-                    deal.getDealType() == DealType.LENT ? "Return the item" : "Mark complete when received"});
-        }
-        table.setItems(FXCollections.observableArrayList(rows));
-        table.setPlaceholder(new Label("You have no current offers, borrow requests or claims."));
+        List<DealRequest> open = deals.openRequestsByBuyer(buyer);
+        List<Deal> active = deals.activeDealsForBuyer(buyer);
 
-        root.getChildren().add(table);
-        Label note = new Label("💡 Responding to counters, returning and marking complete arrive with #21.");
-        note.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-        root.getChildren().add(note);
+        if (open.isEmpty() && active.isEmpty()) {
+            // SRS UC-1.6 A1: only View History remains.
+            Button history = new Button("View Deal History");
+            history.getStyleClass().addAll("btn-outline", "btn-sm");
+            history.setOnAction(e -> showHistory());
+            root.getChildren().addAll(muted("You have no current deals."), history);
+            contentPane.getChildren().add(root);
+            return;
+        }
 
-        contentPane.getChildren().add(root);
+        if (!active.isEmpty()) {
+            root.getChildren().add(sectionTitle("Accepted"));
+            for (Deal deal : active) {
+                root.getChildren().add(dealRow(deal));
+            }
+        }
+        if (!open.isEmpty()) {
+            root.getChildren().add(sectionTitle("Waiting for a response"));
+            for (DealRequest request : open) {
+                root.getChildren().add(requestRow(request));
+            }
+        }
+
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
     }
 
+    private HBox requestRow(DealRequest request) {
+        boolean countered = request.getStatus() == RequestStatus.COUNTERED;
+        Label status = new Label(countered ? "Countered" : "Pending");
+        status.getStyleClass().addAll("badge", countered ? "badge-pending" : "badge-sold");
+        VBox info = rowInfo(request.getListing(), requestTypeLabel(request.dealType()), status);
+        if (countered) {
+            info.getChildren().add(muted("You asked for " + askedTerms(request) + "  \u2192  the seller countered with "
+                    + counterTerms(request)));
+        } else {
+            info.getChildren().add(muted("You asked for " + askedTerms(request) + ". Waiting for the seller."));
+        }
+        HBox buttons = new HBox(8, openButton(request.getListing()));
+        if (countered) {
+            Button accept = new Button("Accept Counter");
+            accept.getStyleClass().addAll("btn-primary", "btn-sm");
+            accept.setOnAction(e -> confirmThen("Accept the counter-offer of " + counterTerms(request) + " for '"
+                    + request.getListing().getTitle() + "'?", () -> {
+                myDeals.acceptCounter(SessionManager.getCurrentUser(), request);
+                info("Counter-offer accepted. The deal for '" + request.getListing().getTitle() + "' is now active.");
+            }));
+            Button decline = new Button("Decline");
+            decline.getStyleClass().addAll("btn-outline", "btn-sm");
+            decline.setOnAction(e -> confirmThen("Decline the counter-offer? Your request will be closed.", () -> {
+                myDeals.declineCounter(SessionManager.getCurrentUser(), request);
+                info("Counter-offer declined.");
+            }));
+            buttons.getChildren().addAll(accept, decline);
+        }
+        return actionRow(info, buttons);
+    }
+
+    private HBox dealRow(Deal deal) {
+        Label status = new Label("Accepted");
+        status.getStyleClass().addAll("badge", "badge-live");
+        VBox info = rowInfo(deal.getListing(), requestTypeLabel(deal.getDealType()), status);
+        HBox buttons = new HBox(8, openButton(deal.getListing()));
+        if (deal.getDealType() == DealType.LENT) {
+            boolean overdue = !LocalDateTime.now().isBefore(deal.getDueDate());
+            Label due = muted("Borrowed " + requestTerms(deal.getRequest()) + "  \u00b7  due "
+                    + deal.getDueDate().format(DEAL_TIME) + (overdue ? " (overdue)" : ""));
+            info.getChildren().add(due);
+            Button returnBtn = new Button("Return Item");
+            returnBtn.getStyleClass().addAll("btn-primary", "btn-sm");
+            returnBtn.setOnAction(e -> confirmThen("Confirm you have returned '" + deal.getListing().getTitle()
+                    + "' to " + deal.getSellerDisplayName() + "?", () -> {
+                myDeals.returnItem(SessionManager.getCurrentUser(), deal);
+                info("Return recorded. '" + deal.getListing().getTitle() + "' is live again.");
+            }));
+            buttons.getChildren().add(returnBtn);
+        } else {
+            info.getChildren().add(muted((deal.getDealType() == DealType.SOLD ? "Price " : "")
+                    + requestTerms(deal.getRequest()) + "  \u00b7  mark complete once you have the item"));
+            Button complete = new Button("Mark Complete");
+            complete.getStyleClass().addAll("btn-primary", "btn-sm");
+            complete.setOnAction(e -> confirmThen("Confirm you have received '" + deal.getListing().getTitle() + "'?",
+                    () -> {
+                        myDeals.markComplete(SessionManager.getCurrentUser(), deal);
+                        promptRating(deal);
+                    }));
+            buttons.getChildren().add(complete);
+        }
+        return actionRow(info, buttons);
+    }
+
+    /** SRS UC-1.6 step 3.4.4: after completing, the buyer is invited to rate the seller. */
+    private void promptRating(Deal deal) {
+        Alert ask = new Alert(Alert.AlertType.CONFIRMATION, "Deal complete! Would you like to rate "
+                + deal.getSellerDisplayName() + " now?", new ButtonType("Rate Seller", ButtonBar.ButtonData.OK_DONE),
+                new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE));
+        ask.setHeaderText(null);
+        ask.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> showRateDialog(deal));
+    }
+
+    private VBox rowInfo(Listing listing, String type, Label status) {
+        Label title = new Label(listing.getTitle());
+        title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        HBox titleRow = new HBox(8, title, status);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+        return new VBox(3, titleRow, muted(type + "  \u00b7  " + listing.getSellerFullName()));
+    }
+
+    private Button openButton(Listing listing) {
+        Button open = new Button("Open");
+        open.getStyleClass().addAll("btn-outline", "btn-sm");
+        open.setOnAction(e -> showListingDetails(listing, true));
+        return open;
+    }
+
+    private static HBox actionRow(VBox info, HBox buttons) {
+        HBox.setHgrow(info, Priority.ALWAYS);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+        HBox row = new HBox(12, info, buttons);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("notif-item");
+        return row;
+    }
+
+    private static Label sectionTitle(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("section-title");
+        return label;
+    }
+
+    /**
+     * Asks to confirm, runs the action, then refreshes My Deals. A refusal (e.g. the counter is no
+     * longer valid, or the loan was already auto-returned) is shown and the list refreshed, since
+     * the action may have changed the deal before refusing.
+     */
+    private void confirmThen(String question, Runnable action) {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, question, ButtonType.OK, ButtonType.CANCEL);
+        confirm.setHeaderText(null);
+        if (confirm.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) {
+            return;
+        }
+        try {
+            action.run();
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
+            new Alert(Alert.AlertType.INFORMATION, e.getMessage()).showAndWait();
+        } catch (RuntimeException e) {
+            new Alert(Alert.AlertType.ERROR, "That could not be saved. Please try again.").showAndWait();
+        }
+        showMyDeals();
+    }
+
+    private static void info(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message);
+        alert.setHeaderText(null);
+        alert.showAndWait();
+    }
+
+    /** What the buyer originally asked for. */
+    private static String askedTerms(DealRequest request) {
+        if (request instanceof PriceOffer offer) {
+            return "HK$ " + offer.getOfferedPrice().toPlainString();
+        }
+        if (request instanceof BorrowRequest borrow) {
+            return borrow.getStartDate().format(DEAL_TIME) + " to " + borrow.getEndDate().format(DEAL_TIME);
+        }
+        return "the item";
+    }
+
+    /** The seller's counter terms. */
+    private static String counterTerms(DealRequest request) {
+        if (request instanceof PriceOffer offer && offer.getCounterPrice() != null) {
+            return "HK$ " + offer.getCounterPrice().toPlainString();
+        }
+        if (request instanceof BorrowRequest borrow && borrow.getCounterStart() != null) {
+            return borrow.getCounterStart().format(DEAL_TIME) + " to " + borrow.getCounterEnd().format(DEAL_TIME);
+        }
+        return requestTerms(request);
+    }
+
+    private static String listingStatusLabel(com.hkust.marketplace.models.ListingStatus status) {
+        String name = status.name().replace('_', ' ').toLowerCase();
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
+    /** Deal History (SRS UC-1.6 S1): finished deals, filtered by date range, category, seller and keyword. */
     @FXML
     private void showHistory() {
         setActive(btnHistory, "Deal History");
         contentPane.getChildren().clear();
 
-        VBox root = new VBox(16);
+        VBox root = new VBox(12);
         root.setPadding(new Insets(4));
 
-        HBox filters = new HBox(12);
-        filters.setAlignment(Pos.CENTER_LEFT);
         DatePicker from = new DatePicker();
         from.setPromptText("From");
+        from.setPrefWidth(140);
         DatePicker to = new DatePicker();
         to.setPromptText("To");
-        TextField search = new TextField();
-        search.setPromptText("Search by title / seller...");
-        filters.getChildren().addAll(new Label("Date range:"), from, new Label("–"), to, search);
-        root.getChildren().add(filters);
+        to.setPrefWidth(140);
+        ComboBox<Option<Category>> category =
+                optionBox("All categories", Arrays.asList(Category.values()), Category::getLabel);
+        TextField seller = new TextField();
+        seller.setPromptText("Seller");
+        seller.setPrefWidth(140);
+        TextField keyword = new TextField();
+        keyword.setPromptText("Keyword in title...");
+        keyword.setPrefWidth(180);
+        Button clear = new Button("Clear");
+        clear.getStyleClass().addAll("btn-outline", "btn-sm");
+        HBox filters = new HBox(10, new Label("From"), from, new Label("to"), to, category, seller, keyword, clear);
+        filters.setAlignment(Pos.CENTER_LEFT);
 
-        TableView<String[]> table = new TableView<>();
+        Label error = new Label();
+        error.setStyle("-fx-text-fill: #c0392b; -fx-font-size: 13px;");
+        error.setManaged(false);
+        error.setVisible(false);
+
+        TableView<Deal> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        TableColumn<String[], String> c1 = new TableColumn<>("Item Title");
-        c1.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[0]));
-        TableColumn<String[], String> c2 = new TableColumn<>("Seller");
-        c2.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[1]));
-        TableColumn<String[], String> c3 = new TableColumn<>("Deal Date");
-        c3.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[2]));
-        TableColumn<String[], String> c4 = new TableColumn<>("Type");
-        c4.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[3]));
-        TableColumn<String[], String> c5 = new TableColumn<>("Outcome");
-        c5.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue()[4]));
-        table.getColumns().addAll(c1, c2, c3, c4, c5);
-        String buyer = SessionManager.getCurrentUser().getUsername();
-        List<String[]> rows = new ArrayList<>();
-        for (Deal deal : DummyDataService.getInstance().deals().pastDealsForBuyer(buyer)) {
-            rows.add(new String[]{
-                    deal.getListing().getTitle(),
-                    deal.getListing().getSellerFullName(),
-                    deal.getCompletedDate().format(DEAL_TIME),
-                    switch (deal.getDealType()) {
-                        case SOLD -> "Bought";
-                        case LENT -> "Borrowed";
-                        case GIVEN -> "Received";
-                    },
-                    statusLabel(deal.getStatus())});
-        }
-        table.setItems(FXCollections.observableArrayList(rows));
-        table.setPlaceholder(new Label("No past deals yet."));
-        // TODO(#22): wire the date range and search filters.
-        root.getChildren().add(table);
+        table.getColumns().add(column("Item Title", d -> d.getListing().getTitle()));
+        table.getColumns().add(column("Seller", Deal::getSellerDisplayName));
+        table.getColumns().add(column("Category", d -> d.getListing().getCategory().getLabel()));
+        table.getColumns().add(column("Deal Date", d -> d.getCompletedDate().format(DEAL_TIME)));
+        table.getColumns().add(column("Type", d -> switch (d.getDealType()) {
+            case SOLD -> "Bought";
+            case LENT -> "Borrowed";
+            case GIVEN -> "Received";
+        }));
+        table.getColumns().add(column("Outcome", d -> statusLabel(d.getStatus())));
+
+        String buyer = SessionManager.getCurrentUser() == null ? "" : SessionManager.getCurrentUser().getUsername();
+        List<Deal> past = DummyDataService.getInstance().deals().pastDealsForBuyer(buyer);
+        table.setPlaceholder(new Label(past.isEmpty() ? "No past deals yet." : "No deals match these filters."));
+
+        Runnable refresh = () -> {
+            try {
+                table.setItems(FXCollections.observableArrayList(DealHistorySearch.filter(past,
+                        new DealHistorySearch.Criteria(from.getValue(), to.getValue(), selected(category),
+                                seller.getText(), keyword.getText()))));
+                error.setManaged(false);
+                error.setVisible(false);
+            } catch (IllegalArgumentException e) {
+                // SRS UC-1.6 A4: say why and keep the current results.
+                error.setText(e.getMessage());
+                error.setManaged(true);
+                error.setVisible(true);
+            }
+        };
+        from.setOnAction(e -> refresh.run());
+        to.setOnAction(e -> refresh.run());
+        category.setOnAction(e -> refresh.run());
+        seller.textProperty().addListener((o, a, b) -> refresh.run());
+        keyword.textProperty().addListener((o, a, b) -> refresh.run());
+        clear.setOnAction(e -> showHistory());
+        refresh.run();
+
+        root.getChildren().addAll(filters, error, table);
         contentPane.getChildren().add(root);
+    }
+
+    private static TableColumn<Deal, String> column(String title, Function<Deal, String> value) {
+        TableColumn<Deal, String> column = new TableColumn<>(title);
+        column.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(value.apply(d.getValue())));
+        return column;
     }
 
     private static final DateTimeFormatter DEAL_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -673,6 +1062,147 @@ public class BuyerDashboardController {
             case COMPLETED -> "Completed";
             case CANCELLED -> "Cancelled";
         };
+    }
+
+    // ---------- Manage Reviews (SRS UC-1.9) and Report Listing (UC-1.10) ----------
+
+    private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
+
+    /** Deals ready to review, then every review the buyer has written with any seller reply. */
+    @FXML
+    private void showReviews() {
+        setActive(btnReviews, "My Reviews");
+        contentPane.getChildren().clear();
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(4));
+        User user = SessionManager.getCurrentUser();
+        if (!(user instanceof Buyer)) {
+            root.getChildren().add(muted("Log in as a buyer to manage your reviews."));
+            contentPane.getChildren().add(root);
+            return;
+        }
+
+        root.getChildren().add(sectionTitle("Ready to review"));
+        List<Deal> reviewable = reviewService.reviewableDeals(user);
+        if (reviewable.isEmpty()) {
+            root.getChildren().add(muted("No finished deals are waiting for a review."));
+        }
+        for (Deal deal : reviewable) {
+            Label status = new Label(statusLabel(deal.getStatus()));
+            status.getStyleClass().addAll("badge", "badge-live");
+            VBox info = rowInfo(deal.getListing(), requestTypeLabel(deal.getDealType()), status);
+            info.getChildren().add(muted("Finished " + deal.getCompletedDate().format(DEAL_TIME)));
+            Button rate = new Button("Rate Seller");
+            rate.getStyleClass().addAll("btn-primary", "btn-sm");
+            rate.setOnAction(e -> {
+                showRateDialog(deal);
+                showReviews();
+            });
+            root.getChildren().add(actionRow(info, new HBox(8, rate)));
+        }
+
+        root.getChildren().add(sectionTitle("My reviews"));
+        List<Review> mine = reviewService.myReviews(user);
+        if (mine.isEmpty()) {
+            root.getChildren().add(muted("You haven't written any reviews yet."));
+        }
+        for (Review review : mine) {
+            Label stars = new Label(stars(review.getRating()) + "  " + review.getListingTitle());
+            stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            VBox item = new VBox(3, stars,
+                    muted("for " + displayName(review.getSellerUsername())
+                            + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)),
+                    new Label(review.getComment() == null ? "" : review.getComment()));
+            if (review.isHidden()) {
+                item.getChildren().add(muted("Hidden by the admin, so it no longer counts towards the rating."));
+            }
+            if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
+                Label reply = new Label("Seller replied: " + review.getSellerReply());
+                reply.setWrapText(true);
+                reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
+                item.getChildren().add(reply);
+            }
+            item.getStyleClass().add("notif-item");
+            root.getChildren().add(item);
+        }
+
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    /** The review form: 1-5 stars and text, checked on submit (A1, A2). */
+    private void showRateDialog(Deal deal) {
+        ToggleGroup starsGroup = new ToggleGroup();
+        HBox starRow = new HBox(6);
+        for (int i = 1; i <= 5; i++) {
+            ToggleButton star = new ToggleButton("\u2605".repeat(i));
+            star.setMinWidth(Region.USE_PREF_SIZE);
+            star.setUserData(i);
+            star.setToggleGroup(starsGroup);
+            starRow.getChildren().add(star);
+        }
+        TextArea text = new TextArea();
+        text.setPromptText("How was the deal with " + deal.getSellerDisplayName() + "?");
+        text.setPrefRowCount(4);
+        text.setWrapText(true);
+        Label error = dialogError();
+        VBox body = new VBox(8, new Label("Rating"), starRow, new Label("Review"), text, error);
+
+        Dialog<ButtonType> dialog = requestDialog("Rate Seller",
+                "Rate " + deal.getSellerDisplayName() + " for '" + deal.getListing().getTitle() + "'", body,
+                "Submit Review");
+        onConfirm(dialog, error, () -> reviewService.submitReview(SessionManager.getCurrentUser(), deal,
+                starsGroup.getSelectedToggle() == null ? 0 : (Integer) starsGroup.getSelectedToggle().getUserData(),
+                text.getText()));
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> info("Thank you! Your review of " + deal.getSellerDisplayName() + " has been submitted."));
+    }
+
+    /** Report Listing (UC-1.10): a reason is required (A1); Cancel discards the report (A2). */
+    private void showReportDialog(Listing listing) {
+        TextArea reason = new TextArea();
+        reason.setPromptText("What is wrong with this listing?");
+        reason.setPrefRowCount(4);
+        reason.setWrapText(true);
+        Label error = dialogError();
+        VBox body = new VBox(8, muted("The admin will review your report."), new Label("Reason"), reason, error);
+        Dialog<ButtonType> dialog = requestDialog("Report Listing", "Report: " + listing.getTitle(), body,
+                "Submit Report");
+        onConfirm(dialog, error, () -> reviewService.reportListing(SessionManager.getCurrentUser(), listing,
+                reason.getText()));
+        dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                .ifPresent(b -> info("Thank you. Your report has been sent to the admin."));
+    }
+
+    /** The seller's latest visible reviews, shown on the listing details (SRS UC-1.9 postconditions). */
+    private VBox sellerReviews(String sellerUsername, String sellerName) {
+        List<Review> visible = DummyDataService.getInstance().reviews().forSeller(sellerUsername).stream()
+                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())
+                .limit(3)
+                .toList();
+        VBox box = new VBox(4);
+        Label heading = new Label("Reviews of " + sellerName);
+        heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        box.getChildren().add(heading);
+        if (visible.isEmpty()) {
+            box.getChildren().add(muted("No reviews yet."));
+        }
+        for (Review review : visible) {
+            box.getChildren().add(muted(stars(review.getRating()) + "  \u201c" + review.getComment() + "\u201d  \u2014 "
+                    + displayName(review.getBuyerUsername())));
+        }
+        return box;
+    }
+
+    /** A user's name as others see it ("deleted user" after a soft delete). */
+    private static String displayName(String username) {
+        User user = DummyDataService.getInstance().users().find(username);
+        return user == null ? username : user.getDisplayName();
+    }
+
+    private static String stars(int rating) {
+        return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
     }
 
     /** The buyer's favourite listings and followed sellers (SRS UC-1.3 S1 steps 4-5). */
@@ -868,11 +1398,10 @@ public class BuyerDashboardController {
                 if (listing == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This chat's listing no longer exists.").showAndWait();
                 } else {
-                    openChat(listing);
+                    openChat(listing, "Notifications", this::showNotifications);
                 }
             }
-            // TODO(#23): open the buyer's review once Manage Reviews exists.
-            case REVIEW -> showHistory();
+            case REVIEW -> showReviews();
             case USER -> {
                 // A buyer is only ever told about their own account.
                 User me = SessionManager.getCurrentUser();
