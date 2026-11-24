@@ -3,6 +3,7 @@ package com.hkust.marketplace.controllers.admin;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.models.*;
+import com.hkust.marketplace.utils.AdminFilters;
 import com.hkust.marketplace.utils.AdminService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
@@ -86,14 +87,18 @@ public class AdminDashboardController {
         return label;
     }
 
+    private static Label sectionLabel(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("section-title");
+        return label;
+    }
+
     private static String statusText(ListingStatus status) {
         return status.name().replace('_', ' ');
     }
 
     private String party(String username) {
-        User user = DummyDataService.getInstance().users().find(username);
-        if (user == null) return username;
-        return user.isDeleted() ? "deleted user" : user.getFullName() + " (@" + username + ")";
+        return AdminFilters.partyLabel(DummyDataService.getInstance().users().find(username), username);
     }
 
     // ---------- Listing review ----------
@@ -376,8 +381,10 @@ public class AdminDashboardController {
                         return;
                     }
                     run(() -> adminService.dismissReport(admin(), report, text));
-                    dialog.close();
-                    showAllListings();
+                    content.getChildren().remove(card);
+                    if (content.getChildren().isEmpty()) {
+                        dialog.close();
+                    }
                 });
             });
             card.getChildren().add(dismiss);
@@ -386,9 +393,9 @@ public class AdminDashboardController {
         ButtonType takeDown = new ButtonType("Take down listing", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().setContent(content);
         dialog.getDialogPane().getButtonTypes().addAll(takeDown, ButtonType.CLOSE);
+        dialog.setOnHidden(e -> showAllListings());
         dialog.showAndWait().ifPresent(result -> {
             if (result == takeDown) {
-                showAllListings();
                 promptTakeDown(listing, this::showAllListings);
             }
         });
@@ -440,6 +447,10 @@ public class AdminDashboardController {
 
     @FXML
     private void showUsers() {
+        showUsers("");
+    }
+
+    private void showUsers(String initialSearch) {
         setActive(btnUsers, "Manage All Users");
         contentPane.getChildren().clear();
 
@@ -451,6 +462,7 @@ public class AdminDashboardController {
         add.setOnAction(e -> showAddUser());
         TextField search = new TextField();
         search.setPromptText("Search username or name...");
+        search.setText(initialSearch == null ? "" : initialSearch);
         HBox.setHgrow(search, Priority.ALWAYS);
         root.getChildren().addAll(new HBox(10, add, search));
 
@@ -687,8 +699,8 @@ public class AdminDashboardController {
 
         Runnable refresh = () -> table.setItems(FXCollections.observableArrayList(
                 DummyDataService.getInstance().deals().allDeals().stream()
-                        .filter(d -> dealMatches(d, search.getText(), type.getValue(), status.getValue(),
-                                from.getValue(), to.getValue()))
+                        .filter(d -> AdminFilters.matchesDeal(d, search.getText(), type.getValue(),
+                                status.getValue(), from.getValue(), to.getValue()))
                         .sorted(Comparator.comparing(Deal::getStartDate).reversed())
                         .toList()));
         search.textProperty().addListener((o, a, b) -> refresh.run());
@@ -733,34 +745,6 @@ public class AdminDashboardController {
         if (deal.getCompletedDate() != null) return deal.getCompletedDate().format(DATE);
         if (deal.getDueDate() != null) return "Due " + deal.getDueDate().format(DATE);
         return "—";
-    }
-
-    private boolean dealMatches(Deal deal, String keyword, String type, String status,
-                                LocalDate from, LocalDate to) {
-        String text = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
-        if (!text.isEmpty()) {
-            boolean match = contains(deal.getListing().getTitle(), text)
-                    || contains(deal.getBuyerUsername(), text)
-                    || contains(deal.getSellerUsername(), text)
-                    || contains(party(deal.getBuyerUsername()), text)
-                    || contains(party(deal.getSellerUsername()), text);
-            if (!match) return false;
-        }
-        if (type != null && !type.equals("All types") && !type.equals(deal.getDealType().name())) return false;
-        if (status != null && !status.equals("All statuses") && !status.equals(deal.getStatus().name())) return false;
-        if (from == null && to == null) return true;
-        LocalDate start = deal.getStartDate().toLocalDate();
-        LocalDate end = deal.getCompletedDate() != null ? deal.getCompletedDate().toLocalDate()
-                : deal.getDueDate() != null ? deal.getDueDate().toLocalDate() : null;
-        return inRange(start, from, to) || (end != null && inRange(end, from, to));
-    }
-
-    private static boolean contains(String value, String keyword) {
-        return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
-    }
-
-    private static boolean inRange(LocalDate date, LocalDate from, LocalDate to) {
-        return (from == null || !date.isBefore(from)) && (to == null || !date.isAfter(to));
     }
 
     private void showDealDetails(Deal deal) {
@@ -811,14 +795,14 @@ public class AdminDashboardController {
         List<Review> flagged = DummyDataService.getInstance().reviews().all().stream()
                 .filter(r -> r.isFlagged() && !r.isHidden())
                 .toList();
-        root.getChildren().add(label("Flagged reviews", "section-title"));
+        root.getChildren().add(sectionLabel("Flagged reviews"));
         if (flagged.isEmpty()) {
             root.getChildren().add(label("No flagged reviews await review.", "-fx-text-fill: #5a5a7a;"));
         } else {
             for (Review review : flagged) root.getChildren().add(reviewRow(review));
         }
 
-        root.getChildren().addAll(new Separator(), label("Seller overview", "section-title"));
+        root.getChildren().addAll(new Separator(), sectionLabel("Seller overview"));
         TextField sellerSearch = new TextField();
         sellerSearch.setPromptText("Filter by seller...");
         root.getChildren().add(sellerSearch);
@@ -849,7 +833,7 @@ public class AdminDashboardController {
         sellerSearch.textProperty().addListener((o, a, b) -> refreshSellers.run());
         refreshSellers.run();
 
-        root.getChildren().addAll(new Separator(), label("All reviews", "section-title"));
+        root.getChildren().addAll(new Separator(), sectionLabel("All reviews"));
         TextField reviewSearch = new TextField();
         reviewSearch.setPromptText("Filter by seller, buyer or text...");
         ComboBox<String> score = new ComboBox<>(FXCollections.observableArrayList(
@@ -861,19 +845,11 @@ public class AdminDashboardController {
         VBox reviews = new VBox(8);
         Runnable refreshReviews = () -> {
             reviews.getChildren().clear();
-            String keyword = reviewSearch.getText() == null ? "" : reviewSearch.getText().trim().toLowerCase(Locale.ROOT);
-            int stars = score.getSelectionModel().getSelectedIndex();
+            String keyword = reviewSearch.getText();
+            int scoreIndex = score.getSelectionModel().getSelectedIndex();
             String shown = visibility.getValue();
             List<Review> found = DummyDataService.getInstance().reviews().all().stream()
-                    .filter(r -> keyword.isEmpty()
-                            || contains(r.getSellerUsername(), keyword)
-                            || contains(r.getBuyerUsername(), keyword)
-                            || contains(r.getComment(), keyword))
-                    .filter(r -> stars == 0 || r.getRating() == stars)
-                    .filter(r -> shown == null || shown.equals("All reviews")
-                            || (shown.equals("Hidden") == r.isHidden())
-                            || (shown.equals("Visible") && !r.isHidden())
-                            || (shown.equals("Flagged") && r.isFlagged() && !r.isHidden()))
+                    .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, shown))
                     .sorted(Comparator.comparing(Review::getCreatedAt).reversed())
                     .toList();
             if (found.isEmpty()) reviews.getChildren().add(label("No matching reviews.", "-fx-text-fill: #5a5a7a;"));
@@ -931,7 +907,8 @@ public class AdminDashboardController {
         VBox items = new VBox(8);
         Runnable refresh = () -> {
             items.getChildren().clear();
-            List<Notification> notifications = DummyDataService.getInstance().notifications().forUser("admin");
+            List<Notification> notifications = DummyDataService.getInstance().notifications()
+                    .forUser(admin().getUsername());
             String chosen = filter.getValue();
             if (chosen != null && !chosen.equals("All notifications")) {
                 notifications = notifications.stream()
@@ -999,7 +976,7 @@ public class AdminDashboardController {
                     }
                 }
             }
-            case USER -> showUsers();
+            case USER -> showUsers(ref.getId());
             case REVIEW -> showRatings();
             default -> {
                 new Alert(Alert.AlertType.INFORMATION, notification.getMessage()).showAndWait();
@@ -1020,7 +997,7 @@ public class AdminDashboardController {
         form.setMaxWidth(420);
         form.getStyleClass().add("card");
         form.setPadding(new Insets(20));
-        form.getChildren().add(label("Admin Profile", "section-title"));
+        form.getChildren().add(sectionLabel("Admin Profile"));
 
         TextField name = new TextField(user != null ? user.getFullName() : "");
         PasswordField current = new PasswordField();

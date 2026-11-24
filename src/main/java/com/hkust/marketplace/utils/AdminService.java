@@ -32,9 +32,11 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -229,6 +231,9 @@ public final class AdminService {
         Objects.requireNonNull(seller, "seller");
         Objects.requireNonNull(state, "state");
         Objects.requireNonNull(photos, "photos");
+        if (!seller.isActive() || seller.isDeleted()) {
+            throw new IllegalStateException("Only an active seller can receive a listing.");
+        }
         var errors = state.validate(seller);
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException("Invalid listing: " + errors);
@@ -437,6 +442,12 @@ public final class AdminService {
         String oldHall = account instanceof Buyer buyer ? buyer.getResidenceHall() : null;
         String oldBio = account instanceof Seller seller ? seller.getBio() : null;
         Set<Location> oldMeetup = account instanceof Seller seller ? seller.getPreferredMeetup() : Set.of();
+        Map<Listing, ListingStatus> oldStatuses = new LinkedHashMap<>();
+        Map<Listing, String> oldReasons = new LinkedHashMap<>();
+        for (Listing listing : listings) {
+            oldStatuses.put(listing, listing.getStatus());
+            oldReasons.put(listing, listing.getTakedownReason());
+        }
         try {
             data.database().inTransaction(() -> {
                 for (DealRequest request : openRequests) {
@@ -490,6 +501,12 @@ public final class AdminService {
                 seller.setBio(oldBio);
                 seller.setPreferredMeetup(oldMeetup);
             }
+            // shortcut: the database rolled back, but cancelled deals and declined requests keep
+            // their in-memory state. Restore them if this cascade ever becomes likely to fail.
+            oldStatuses.forEach((listing, status) -> {
+                listing.setStatus(status);
+                listing.setTakedownReason(oldReasons.get(listing));
+            });
             throw e;
         }
     }

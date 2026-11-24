@@ -106,16 +106,21 @@ public final class ReviewService {
             throw new SecurityException("This review is not about you.");
         }
         review.setFlagged(flagged);
-        data.database().inTransaction(() -> {
-            data.reviews().save(review);
-            if (flagged) {
-                NotificationRef ref = new NotificationRef(NotificationRef.Target.REVIEW, review.getId());
-                for (User admin : data.users().byRole(UserRole.ADMIN)) {
-                    data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,
-                            "Seller @" + seller.getUsername() + " flagged a review: " + review.getComment(), ref);
+        try {
+            data.database().inTransaction(() -> {
+                data.reviews().save(review);
+                if (flagged) {
+                    NotificationRef ref = new NotificationRef(NotificationRef.Target.REVIEW, review.getId());
+                    for (User admin : data.users().byRole(UserRole.ADMIN)) {
+                        data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,
+                                "Seller @" + seller.getUsername() + " flagged a review: " + review.getComment(), ref);
+                    }
                 }
-            }
-        });
+            });
+        } catch (RuntimeException e) {
+            review.setFlagged(!flagged);
+            throw e;
+        }
     }
 
     /**

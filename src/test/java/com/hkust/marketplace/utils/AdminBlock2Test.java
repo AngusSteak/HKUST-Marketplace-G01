@@ -197,6 +197,23 @@ class AdminBlock2Test {
     }
 
     @Test
+    void addOnBehalfRefusesAnInactiveSeller() {
+        Seller charlie = (Seller) data.users().find("charlie");
+        admin.setActive(adminUser, charlie, false);
+        ListingFormState state = new ListingFormState();
+        state.setType(ListingType.GIVEAWAY);
+        state.setTitle("Old notes");
+        state.setDescription("Free");
+        state.setCategory(Category.BOOKS_AND_NOTES);
+        state.setCondition(Condition.USED);
+        state.setMeetupLocation(Location.LIBRARY);
+        PhotoStorage photos = (source, username, listingId) -> "unused";
+
+        assertThrows(IllegalStateException.class,
+                () -> admin.addListingOnBehalf(adminUser, charlie, state, photos));
+    }
+
+    @Test
     void reportsCanBeDismissedWithANote() {
         Buyer alice = (Buyer) data.users().find("alice");
         ListingReport report = data.reports().fileReport(alice, data.listings().find("L101"), "Looks fake");
