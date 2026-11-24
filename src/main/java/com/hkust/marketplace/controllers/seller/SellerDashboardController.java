@@ -350,12 +350,21 @@ public class SellerDashboardController {
         root.setPadding(new Insets(4));
 
         User user = SessionManager.getCurrentUser();
-        List<Review> reviews = DummyDataService.getInstance()
-                .reviews().forSeller(user != null ? user.getUsername() : "");
+        String sellerUsername = user != null ? user.getUsername() : "";
+        List<Review> reviews = DummyDataService.getInstance().reviews().forSeller(sellerUsername);
+
+        Label summary = new Label(ratingSummary(
+                DummyDataService.getInstance().reviews().averageRating(sellerUsername),
+                DummyDataService.getInstance().reviews().visibleCount(sellerUsername)));
+        summary.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 14px;");
+        root.getChildren().add(summary);
 
         if (reviews.isEmpty()) {
-            root.getChildren().add(new Label("No reviews yet."));
+            Label empty = new Label("No reviews yet.");
+            empty.setStyle("-fx-text-fill: #5a5a7a;");
+            root.getChildren().add(empty);
         } else {
+            UserStore users = DummyDataService.getInstance().users();
             for (Review r : reviews) {
                 VBox item = new VBox(6);
                 item.getStyleClass().add("card");
@@ -363,23 +372,30 @@ public class SellerDashboardController {
                 stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
                 Label comment = new Label(r.getComment());
                 comment.setWrapText(true);
-                UserStore users = DummyDataService.getInstance().users();
                 Label meta = new Label("by " + users.historicalLabel(r.getBuyerUsername())
                         + " · " + r.getListingTitle());
                 meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-                HBox actions = new HBox(8);
-                Button reply = new Button("Reply");
-                reply.getStyleClass().addAll("btn-outline", "btn-sm");
-                reply.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Reply sent to buyer (demo).").showAndWait());
-                Button flag = new Button("Flag");
-                flag.getStyleClass().addAll("btn-danger", "btn-sm");
-                flag.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Review flagged for admin (demo).").showAndWait());
-                actions.getChildren().addAll(reply, flag);
-                item.getChildren().addAll(stars, comment, meta, actions);
+                item.getChildren().addAll(stars, comment, meta);
+                if (r.getSellerReply() != null && !r.getSellerReply().isBlank()) {
+                    Label reply = new Label("Your reply: " + r.getSellerReply());
+                    reply.setWrapText(true);
+                    reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
+                    item.getChildren().add(reply);
+                }
                 root.getChildren().add(item);
             }
         }
-        contentPane.getChildren().add(new ScrollPane(root));
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    static String ratingSummary(OptionalDouble average, int count) {
+        String noun = count == 1 ? "review" : "reviews";
+        if (average == null || average.isEmpty()) {
+            return "No rating yet · " + count + " " + noun;
+        }
+        return String.format("Average rating: %.1f · %d %s", average.getAsDouble(), count, noun);
     }
 
     @FXML
