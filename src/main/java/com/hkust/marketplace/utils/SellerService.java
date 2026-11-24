@@ -292,6 +292,66 @@ public final class SellerService {
         return accepted.get();
     }
 
+    /**
+     * Declines one of the seller's own PENDING or COUNTERED requests through
+     * {@link DealLifecycle#decline}, relisting a pending giveaway claim to Live. The buyer gets
+     * one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and the status
+     * change and notice share one transaction so a failure part-way through changes nothing.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING or COUNTERED
+     */
+    public void declineRequest(User actor, DealRequest request) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(request, "request");
+        Listing listing = request.getListing();
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        if (!isOpen(request)) {
+            throw new IllegalStateException("Only a PENDING or COUNTERED request can be declined; was "
+                    + request.getStatus());
+        }
+
+        data.database().inTransaction(() -> {
+            data.deals().lifecycle().decline(request);
+            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                    "Your request for '" + listing.getTitle() + "' was declined.",
+                    new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));
+        });
+    }
+
+    /**
+     * Declines every PENDING or COUNTERED request on one of the seller's listings, looping the
+     * same {@link DealLifecycle#decline} call used by {@link #declineRequest}. Each affected buyer
+     * gets one OFFER_UPDATE notice even when they made several requests on the listing; no seller
+     * notice is sent and no bulk lifecycle method is added. All writes share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     */
+    public void declineAllForListing(User actor, Listing listing) {
+        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
+        Objects.requireNonNull(listing, "listing");
+        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
+            throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
+        }
+        List<DealRequest> open = data.deals().lifecycle().requestsFor(listing).stream()
+                .filter(SellerService::isOpen)
+                .toList();
+
+        data.database().inTransaction(() -> {
+            open.forEach(request -> data.deals().lifecycle().decline(request));
+            Set<String> notified = new HashSet<>();
+            for (DealRequest request : open) {
+                if (notified.add(normalize(request.getBuyerUsername()))) {
+                    data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,
+                            "Your request for '" + listing.getTitle() + "' was declined.",
+                            new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));
+                }
+            }
+        });
+    }
+
     public LinkedHashMap<Listing, List<DealRequest>> pendingRequestsByListing(User actor) {
         Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
         List<DealRequest> all = data.deals().allRequests();
