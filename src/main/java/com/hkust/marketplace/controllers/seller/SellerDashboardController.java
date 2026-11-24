@@ -14,6 +14,8 @@ import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SellerReviewService;
 import com.hkust.marketplace.utils.SellerService;
+import com.hkust.marketplace.utils.SellerStats;
+import com.hkust.marketplace.utils.SellerStatsService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.fxml.FXML;
@@ -61,6 +63,7 @@ public class SellerDashboardController {
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
     private final SellerReviewService sellerReviewService = new SellerReviewService(DummyDataService.getInstance());
     private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
+    private final SellerStatsService statsService = new SellerStatsService(DummyDataService.getInstance());
 
     @FXML
     public void initialize() {
@@ -460,22 +463,19 @@ public class SellerDashboardController {
         root.setPadding(new Insets(4));
 
         User user = SessionManager.getCurrentUser();
-        String sellerUsername = user != null ? user.getUsername() : "";
-        List<Listing> myListings = DummyDataService.getInstance()
-                .listings().bySeller(sellerUsername);
+        SellerStats.Totals totals = statsService.statsFor(user).totals();
 
         // Metric cards
-        OptionalDouble average = DummyDataService.getInstance().reviews().averageRating(sellerUsername);
-        int reviewCount = DummyDataService.getInstance().reviews().visibleCount(sellerUsername);
+        OptionalDouble average = totals.averageRating();
         String averageRating = average.isPresent()
                 ? String.format("%.1f", average.getAsDouble())
                 : "No rating yet";
         HBox metrics = new HBox(16);
         metrics.getChildren().addAll(
-                metricCard("Listings", String.valueOf(myListings.size()), "#003974"),
-                metricCard("Avg Rating", averageRating, "#A68137"),
-                metricCard("Reviews", String.valueOf(reviewCount), "#2e7d32"),
-                metricCard("Views (demo)", "128", "#1565c0")
+                metricCard("Total Views", String.valueOf(totals.views()), "#003974"),
+                metricCard("Offers Received", String.valueOf(totals.offers()), "#A68137"),
+                metricCard("Completed Deals", String.valueOf(totals.completed()), "#2e7d32"),
+                metricCard("Average Rating", averageRating, "#1565c0")
         );
         root.getChildren().add(metrics);
 
