@@ -1,0 +1,99 @@
+T6 - Glossary/ADR staging, PR notes and full verification (GitHub #30 plan)
+Task: docs(seller): stage glossary wording and PR notes for reviews
+Branch: feature/30-seller-review-reply-flag
+Date: 2026-11-24
+Plan: .omo/plans/seller-review-reply-flag.md (T6, lines 149-155)
+
+=== BASELINE / WORKTREE ===
+T1-T5 commits present on branch: 265f369, 2656625, 774f090, 546f0e6, c856d2b.
+Pre-existing unrelated worktree changes left untouched (NOT staged, NOT modified):
+  mvnw (mode change), untracked .codex/, untracked REVIEW-NOTES.md.
+No branch switch, reset, pull, push or PR was performed.
+
+=== EVIDENCE FILES FOR T0-T5 ===
+All six predecessor evidence files exist and are non-empty:
+  PRESENT .omo/evidence/task-0-seller-review-reply-flag.txt  (7 lines)
+  PRESENT .omo/evidence/task-1-seller-review-reply-flag.txt  (42 lines)
+  PRESENT .omo/evidence/task-2-seller-review-reply-flag.txt  (58 lines)
+  PRESENT .omo/evidence/task-3-seller-review-reply-flag.txt  (55 lines)
+  PRESENT .omo/evidence/task-4-seller-review-reply-flag.txt  (79 lines)
+  PRESENT .omo/evidence/task-5-seller-review-reply-flag.txt  (103 lines)
+  Missing: none.
+
+=== GLOSSARY CHANGE (GLOSSARY.md) ===
+GLOSSARY.md was ABSENT from this branch at the start (created only on the
+parallel feature/27-seller-offer-requests branch, commit 1cb1091). To honour
+"follow existing GLOSSARY.md format" and "do NOT change other canonical
+terms", the canonical base (Language / Listings / Deals / Chat, 111 lines) was
+reproduced byte-for-byte:
+  $ git show refs/heads/feature/27-seller-offer-requests:GLOSSARY.md > /tmp/glossary-base.md
+  $ diff -u /tmp/glossary-base.md <(head -n 111 GLOSSARY.md)
+  BASE_IDENTICAL=YES
+No pre-existing term was reworded, removed or reordered.
+
+A new "## Reviews" section was appended with the exact wording from
+.omo/drafts/seller-review-reply-flag.md (Open questions / reminders, line 59)
+and .omo/specs/seller-review-reply-flag.md (Further Notes, line 75), using the
+existing "**Term**:" / definition format:
+
+  **Review**:
+  a Buyer's rating from 1 to 5 with text on a completed Deal, one per Deal.
+
+  **Seller Reply**:
+  the Seller's single response to a Review, notified to the Buyer.
+
+  **Flag**:
+  the Seller's request for Admin attention on an inappropriate Review, distinct
+  from Admin Hide (which removes a Review from public view) and Buyer Report
+  Listing (which targets a Listing).
+
+(The two-line Flag wrap above is presentation only; the file holds the full
+definition on one line. Review / Seller Reply / Flag are distinct from Admin
+Hide and Buyer Report Listing, as required.)
+
+=== ADR CANDIDATE (recorded, NOT decided, NOT implemented) ===
+Verbatim open question (from the user; draft line 70 / plan line 57):
+  "Should replies become a stream of replies/chat session so that seller or
+  reviewer can't just leave inappropriate comment/unjustified facts and both
+  side cannot defend themselves?"
+
+Status: ADR CANDIDATE only. No new ADR file was written; docs/adr/ is unchanged
+(existing 0001-0006 untouched). Single seller reply remains the implemented
+behaviour; this two-sided exchange is deliberately left open.
+Rationale to carry into the decision: single seller reply versus a two-sided
+exchange; hard to reverse once stored, surprising to a future reader, genuine
+fairness trade-off. Resolve BEFORE extending the data model. This task does not
+decide or implement it.
+
+=== PR NOTES (for #30 description) ===
+- The admin "⚑ Flagged" badge is DEFERRED to the admin ticket owned by a
+  groupmate; it is not implemented here.
+- A flag currently has NO admin UI effect: no marker appears in the admin
+  Seller Ratings list and no flag notification is sent. The admin must inspect
+  flagged reviews by other means until that ticket lands. Say this explicitly
+  in the PR description.
+- Implemented in this PR: single non-empty seller reply per review with a
+  REVIEW_REPLY notice to the buyer; one flag per review with an "already
+  flagged" refusal; flagged reviews stay visible and counted.
+- Not in this PR: two-sided reply stream, admin badge, new notification
+  category, schema/FXML changes, buyer/admin screen changes.
+
+=== BUILD GATES (real exit codes) ===
+  $ ./mvnw -q test
+    TEST_EXIT=0
+  $ ./mvnw -q compile
+    COMPILE_EXIT=0
+  Surefire reports (target/surefire-reports): reports=65 tests=449
+    failures=0 errors=0 skipped=0
+
+=== SCOPE CHECK ===
+Only these files changed by T6: GLOSSARY.md (new), this evidence file, and an
+append to .omo/notepads/seller-review-reply-flag/learnings.md.
+No product code changed. No admin badge, no two-sided replies, no schema
+change, no NotificationCategory change, no FXML/pom.xml/TestFX change. #30 was
+not closed. No files outside scope were modified.
+
+=== LIMITATION ===
+Live JavaFX GUI walkthrough is not automatable in this environment; gates are
+the full JUnit suite + compile with exit codes captured above. Manual QA of the
+reply/flag flows is recorded in task-5 evidence for the worker to repeat.

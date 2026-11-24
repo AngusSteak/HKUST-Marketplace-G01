@@ -10,6 +10,7 @@ import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
 import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.SellerReviewService;
 import com.hkust.marketplace.utils.SellerService;
 import com.hkust.marketplace.utils.SessionManager;
 import com.hkust.marketplace.utils.UserStore;
@@ -46,8 +47,10 @@ public class SellerDashboardController {
     @FXML private Button btnListings, btnRequests, btnChats, btnCreate, btnStats, btnReviews, btnNotifications, btnProfile;
 
     private Button currentActiveBtn;
+    private VBox reviewsRoot;
     private final ChatService chatService = new ChatService(DummyDataService.getInstance());
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
+    private final SellerReviewService sellerReviewService = new SellerReviewService(DummyDataService.getInstance());
     private final ReviewService reviewService = new ReviewService(DummyDataService.getInstance());
 
     @FXML
@@ -514,49 +517,152 @@ public class SellerDashboardController {
     @FXML
     private void showReviews() {
         setActive(btnReviews, "Reviews & Feedback");
+        renderReviews();
+    }
+
+    private void renderReviews() {
         contentPane.getChildren().clear();
 
         VBox root = new VBox(12);
         root.setPadding(new Insets(4));
+        reviewsRoot = root;
 
         User user = SessionManager.getCurrentUser();
-        List<Review> reviews = DummyDataService.getInstance()
-                .reviews().forSeller(user != null ? user.getUsername() : "");
+        String sellerUsername = user != null ? user.getUsername() : "";
+        List<Review> reviews = DummyDataService.getInstance().reviews().forSeller(sellerUsername);
+
+        Label summary = new Label(ratingSummary(
+                DummyDataService.getInstance().reviews().averageRating(sellerUsername),
+                DummyDataService.getInstance().reviews().visibleCount(sellerUsername)));
+        summary.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 14px;");
+        root.getChildren().add(summary);
 
         if (reviews.isEmpty()) {
-            root.getChildren().add(new Label("No reviews yet."));
+            Label empty = new Label("No reviews yet.");
+            empty.setStyle("-fx-text-fill: #5a5a7a;");
+            root.getChildren().add(empty);
         } else {
+            UserStore users = DummyDataService.getInstance().users();
             for (Review r : reviews) {
-                VBox item = new VBox(6);
-                item.getStyleClass().add("card");
-                Label stars = new Label("★".repeat(r.getRating()) + "☆".repeat(5 - r.getRating()));
-                stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
-                Label comment = new Label(r.getComment());
-                comment.setWrapText(true);
-                UserStore users = DummyDataService.getInstance().users();
-                Label meta = new Label("by " + users.historicalLabel(r.getBuyerUsername())
-                        + " · " + r.getListingTitle());
-                meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-                HBox actions = new HBox(8);
-                Button reply = new Button("Reply");
-                reply.getStyleClass().addAll("btn-outline", "btn-sm");
-                reply.setOnAction(e -> new Alert(Alert.AlertType.INFORMATION, "Reply sent to buyer (demo).").showAndWait());
-                Button flag = new Button(r.isFlagged() ? "Unflag" : "Flag");
-                flag.getStyleClass().addAll("btn-danger", "btn-sm");
-                flag.setOnAction(e -> {
-                    try {
-                        reviewService.flagReview(SessionManager.getCurrentUser(), r, !r.isFlagged());
-                    } catch (SecurityException | IllegalArgumentException ex) {
-                        new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
-                    }
-                    showReviews();
-                });
-                actions.getChildren().addAll(reply, flag);
-                item.getChildren().addAll(stars, comment, meta, actions);
-                root.getChildren().add(item);
+                root.getChildren().add(createReviewRow(r, users));
             }
         }
-        contentPane.getChildren().add(new ScrollPane(root));
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    private VBox createReviewRow(Review review, UserStore users) {
+        VBox item = new VBox(6);
+        item.getStyleClass().add("card");
+        Label stars = new Label("★".repeat(review.getRating()) + "☆".repeat(5 - review.getRating()));
+        stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
+        Label comment = new Label(review.getComment());
+        comment.setWrapText(true);
+        Label meta = new Label("by " + users.historicalLabel(review.getBuyerUsername())
+                + " · " + review.getListingTitle());
+        meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
+        item.getChildren().addAll(stars, comment, meta);
+
+        if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
+            Label reply = new Label("Your reply: " + review.getSellerReply());
+            reply.setWrapText(true);
+            reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
+            item.getChildren().add(reply);
+        } else {
+            item.getChildren().add(createReplyEditor(review));
+        }
+        item.getChildren().add(createFlagControl(review));
+        return item;
+    }
+
+    private VBox createReplyEditor(Review review) {
+        VBox editor = new VBox(4);
+        TextArea input = new TextArea();
+        input.setPromptText("Write your reply...");
+        input.setPrefRowCount(2);
+        input.setMaxWidth(Double.MAX_VALUE);
+        Label message = new Label();
+        message.setStyle("-fx-text-fill: #c62828; -fx-font-size: 12px;");
+        Button save = new Button("Save Reply");
+        save.getStyleClass().addAll("btn-primary", "btn-sm");
+        save.setOnAction(e -> {
+            try {
+                sellerReviewService.replyToReview(SessionManager.getCurrentUser(), review, input.getText());
+                renderReviews();
+                showReviewFeedback("Reply saved.");
+            } catch (IllegalArgumentException | IllegalStateException | SecurityException ex) {
+                message.setText(reviewActionError("reply to", ex));
+            } catch (RuntimeException ex) {
+                message.setText(reviewActionError("reply to", ex));
+            }
+        });
+        editor.getChildren().addAll(input, message, save);
+        return editor;
+    }
+
+    private HBox createFlagControl(Review review) {
+        HBox control = new HBox(8);
+        control.setAlignment(Pos.CENTER_LEFT);
+        Button flag = new Button(flagButtonLabel(review.isFlagged()));
+        flag.getStyleClass().addAll("btn-outline", "btn-sm");
+        flag.setDisable(review.isFlagged());
+        Label message = new Label();
+        message.setStyle("-fx-text-fill: #c62828; -fx-font-size: 12px;");
+        flag.setOnAction(e -> {
+            Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Flag this review for admin attention?");
+            confirmation.showAndWait().ifPresent(answer -> {
+                if (answer != ButtonType.OK) {
+                    return;
+                }
+                try {
+                    if (!review.isFlagged()) {
+                        reviewService.flagReview(SessionManager.getCurrentUser(), review, true);
+                    }
+                    renderReviews();
+                    showReviewFeedback("Review flagged.");
+                } catch (IllegalStateException | SecurityException ex) {
+                    message.setText(reviewActionError("flag", ex));
+                } catch (RuntimeException ex) {
+                    message.setText(reviewActionError("flag", ex));
+                }
+            });
+        });
+        control.getChildren().addAll(flag, message);
+        return control;
+    }
+
+    private void showReviewFeedback(String message) {
+        if (reviewsRoot == null) {
+            return;
+        }
+        Label feedback = new Label(message);
+        feedback.setStyle("-fx-text-fill: #2e7d32; -fx-font-weight: bold;");
+        reviewsRoot.getChildren().add(0, feedback);
+    }
+
+    static String ratingSummary(OptionalDouble average, int count) {
+        String noun = count == 1 ? "review" : "reviews";
+        if (average == null || average.isEmpty()) {
+            return "No rating yet · " + count + " " + noun;
+        }
+        return String.format("Average rating: %.1f · %d %s", average.getAsDouble(), count, noun);
+    }
+
+    static String flagButtonLabel(boolean flagged) {
+        return flagged ? "Already flagged" : "Flag";
+    }
+
+    static String reviewActionError(String action, RuntimeException ex) {
+        if (ex instanceof SecurityException) {
+            return "You do not have permission to " + action + " this review.";
+        }
+        if (ex instanceof IllegalArgumentException || ex instanceof IllegalStateException) {
+            return ex.getMessage();
+        }
+        String detail = ex.getMessage();
+        return "Could not " + action + " this review" + (detail == null ? "." : ": " + detail);
     }
 
     @FXML

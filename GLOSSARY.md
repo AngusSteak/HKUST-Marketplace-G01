@@ -109,3 +109,14 @@ _Avoid_: Chat line, note, post
 **Formal Offer**:
 A Message that records a DealRequest made from within a ChatThread instead of free text. The request itself is managed through the Deal lifecycle; the Formal Offer is the conversation's record of it.
 _Avoid_: Offer message, offer bubble
+
+## Reviews
+
+**Review**:
+a Buyer's rating from 1 to 5 with text on a completed Deal, one per Deal.
+
+**Seller Reply**:
+the Seller's single response to a Review, notified to the Buyer.
+
+**Flag**:
+the Seller's request for Admin attention on an inappropriate Review, distinct from Admin Hide (which removes a Review from public view) and Buyer Report Listing (which targets a Listing).
