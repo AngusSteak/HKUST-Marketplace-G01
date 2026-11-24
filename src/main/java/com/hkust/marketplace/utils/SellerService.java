@@ -456,7 +456,7 @@ public final class SellerService {
         if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
             throw new SecurityException("@" + seller.getUsername() + " does not own listing " + listing.getId());
         }
-        if (!isAvailable(listing)) {
+        if (!isRespondableListing(listing)) {
             return List.of();
         }
         List<DealRequest> group = new ArrayList<>();
@@ -495,5 +495,10 @@ public final class SellerService {
         ListingStatus status = listing.getStatus();
         return status == ListingStatus.LIVE || status == ListingStatus.PENDING_REVIEW
                 || status == ListingStatus.REJECTED;
+    }
+
+    private static boolean isRespondableListing(Listing listing) {
+        return !listing.isDeleted()
+                && (isAvailable(listing) || listing.getStatus() == ListingStatus.RESERVED);
     }
 }

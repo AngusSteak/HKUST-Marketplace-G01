@@ -32,6 +32,7 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 public class SellerRequestsController {
@@ -46,9 +47,15 @@ public class SellerRequestsController {
     @FXML private Label feedbackLabel;
 
     private Consumer<ChatThread> onOpenChat;
+    private Listing filter;
 
     public void setOnOpenChat(Consumer<ChatThread> onOpenChat) {
         this.onOpenChat = onOpenChat;
+    }
+
+    public void renderFiltered(Listing listing) {
+        this.filter = Objects.requireNonNull(listing, "listing");
+        render();
     }
 
     @FXML
@@ -63,6 +70,10 @@ public class SellerRequestsController {
             showFeedback("Log in as a seller to manage requests.");
             return;
         }
+        if (filter != null) {
+            renderFilteredListing(user);
+            return;
+        }
         LinkedHashMap<Listing, List<DealRequest>> groups = sellerService.pendingRequestsByListing(user);
         if (groups.isEmpty()) {
             Label empty = new Label("No requests are waiting for a response.");
@@ -73,6 +84,43 @@ public class SellerRequestsController {
         for (Map.Entry<Listing, List<DealRequest>> entry : groups.entrySet()) {
             requestsBox.getChildren().add(buildListingGroup(entry.getKey(), entry.getValue(), user));
         }
+    }
+
+    private void renderFilteredListing(User user) {
+        List<DealRequest> requests = sellerService.pendingRequestsForListing(user, filter);
+        if (requests.isEmpty()) {
+            Label empty = new Label("No requests are waiting for a response on '" + filter.getTitle() + "'.");
+            empty.setStyle("-fx-text-fill: #5a5a7a;");
+            requestsBox.getChildren().add(empty);
+            return;
+        }
+        requestsBox.getChildren().add(buildDeclineAllBar(filter, requests.size(), user));
+        requestsBox.getChildren().add(buildListingGroup(filter, requests, user));
+    }
+
+    private HBox buildDeclineAllBar(Listing listing, int count, User user) {
+        HBox bar = new HBox(8);
+        bar.setAlignment(Pos.CENTER_RIGHT);
+        Button declineAll = new Button("Decline all (" + count + ")");
+        declineAll.getStyleClass().addAll("btn-danger", "btn-sm");
+        declineAll.setOnAction(e -> confirmDeclineAll(listing, count, user));
+        bar.getChildren().add(declineAll);
+        return bar;
+    }
+
+    private void confirmDeclineAll(Listing listing, int count, User user) {
+        String noun = count == 1 ? " offer" : " offers";
+        String message = "Decline all " + count + noun + " on '" + listing.getTitle() + "'?\n\n"
+                + "All " + count + " buyer" + (count == 1 ? "" : "s") + " will be notified.";
+        confirm("Decline all offers", message, () -> {
+            try {
+                sellerService.declineAllForListing(user, listing);
+                showFeedback("Declined " + count + noun + " on '" + listing.getTitle() + "'.");
+                render();
+            } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {
+                showFeedback(readable(ex));
+            }
+        });
     }
 
     private VBox buildListingGroup(Listing listing, List<DealRequest> requests, User user) {

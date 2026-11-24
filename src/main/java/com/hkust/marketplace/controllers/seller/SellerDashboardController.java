@@ -33,6 +33,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
+import java.util.function.Consumer;
 
 public class SellerDashboardController {
 
@@ -89,6 +90,14 @@ public class SellerDashboardController {
 
     @FXML
     private void showRequests() {
+        openRequestsView(SellerRequestsController::render);
+    }
+
+    private void showRequestsFiltered(Listing listing) {
+        openRequestsView(requests -> requests.renderFiltered(listing));
+    }
+
+    private void openRequestsView(Consumer<SellerRequestsController> render) {
         setActive(btnRequests, "Requests");
         contentPane.getChildren().clear();
         try {
@@ -97,7 +106,7 @@ public class SellerDashboardController {
             Parent view = loader.load();
             SellerRequestsController requests = loader.getController();
             requests.setOnOpenChat(this::showThread);
-            requests.render();
+            render.accept(requests);
             contentPane.getChildren().add(view);
         } catch (IOException ex) {
             new Alert(Alert.AlertType.ERROR,
@@ -140,25 +149,9 @@ public class SellerDashboardController {
                 .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
                 .toList();
         if (!openRequests.isEmpty()) {
-            VBox offers = new VBox(4);
-            offers.setPadding(new Insets(4, 0, 0, 12));
-            for (DealRequest r : openRequests) {
-                Label line = new Label(r.getBuyerDisplayName() + " · " + offerTerms(r)
-                        + " · " + r.getStatus());
-                line.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
-                offers.getChildren().add(line);
-            }
-            offers.setVisible(false);
-            offers.setManaged(false);
-
-            Hyperlink toggle = new Hyperlink("View " + openRequests.size() + " open offers");
-            toggle.setOnAction(e -> {
-                boolean willShow = !offers.isVisible();
-                offers.setVisible(willShow);
-                offers.setManaged(willShow);
-                toggle.setText((willShow ? "Hide " : "View ") + openRequests.size() + " open offers");
-            });
-            info.getChildren().addAll(toggle, offers);
+            Hyperlink link = new Hyperlink("View " + openRequests.size() + " open offers");
+            link.setOnAction(e -> showRequestsFiltered(l));
+            info.getChildren().add(link);
         }
 
         Label status = new Label(l.getStatus().name().replace('_', ' '));
@@ -246,17 +239,6 @@ public class SellerDashboardController {
 
         row.getChildren().addAll(info, status, editBtn, delBtn, soldBtn);
         return row;
-    }
-
-    private static String offerTerms(DealRequest request) {
-        if (request instanceof PriceOffer offer) {
-            return new Money(offer.agreedPrice()).getDisplay();
-        }
-        if (request instanceof BorrowRequest borrow) {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMM");
-            return borrow.agreedStart().format(fmt) + " – " + borrow.agreedEnd().format(fmt);
-        }
-        return "Giveaway claim";
     }
 
     @FXML
