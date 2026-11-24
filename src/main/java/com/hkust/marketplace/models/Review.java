@@ -13,6 +13,7 @@ public class Review {
     /** The completed deal this review is about (one review per deal); {@code null} for seeded demo reviews. */
     private String dealId;
     private boolean hidden; // admin can hide
+    private boolean flagged;
     private LocalDateTime createdAt;
 
     public Review() {
@@ -47,6 +48,9 @@ public class Review {
 
     public boolean isHidden() { return hidden; }
     public void setHidden(boolean hidden) { this.hidden = hidden; }
+
+    public boolean isFlagged() { return flagged; }
+    public void setFlagged(boolean flagged) { this.flagged = flagged; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
