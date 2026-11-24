@@ -16,7 +16,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -153,7 +152,7 @@ class RoleChecksTest {
     }
 
     @Test
-    void sellersDeleteOnlyTheirOwnUntouchedListings() {
+    void sellersDeleteOnlyTheirOwnAllowedListings() {
         Listing dianasFridge = data.listings().find("L104");
         assertThrows(SecurityException.class, () -> seller.deleteListing(charlie, dianasFridge));
         assertThrows(SecurityException.class, () -> seller.deleteListing(alice, dianasFridge));
@@ -164,12 +163,14 @@ class RoleChecksTest {
                 () -> seller.deleteListing(diana, data.listings().find("L102")));   // reserved by a claim
         assertEquals(SellerService.NOT_CHANGEABLE, reserved.getMessage());
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> seller.deleteListing(diana, data.listings().find("L103")));
-        assertEquals(SellerService.CANNOT_DELETE, refused.getMessage());
-
+        seller.deleteListing(diana, data.listings().find("L103"));
         seller.deleteListing(diana, dianasFridge);
-        assertNull(DummyDataService.open(db).listings().find("L104"));
+
+        DummyDataService saved = DummyDataService.open(db);
+        assertTrue(saved.listings().find("L103").isDeleted());
+        assertTrue(saved.listings().find("L104").isDeleted());
+        assertFalse(saved.listings().bySeller("diana").stream()
+                .anyMatch(l -> l.getId().equals("L103") || l.getId().equals("L104")));
     }
 
     private DummyDataService seeded() {

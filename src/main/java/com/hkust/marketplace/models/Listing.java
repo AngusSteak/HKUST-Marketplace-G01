@@ -25,6 +25,7 @@ public abstract class Listing {
     private String rejectionReason;
     private String takedownReason;
     private int viewCount;
+    private boolean deleted;
     private List<String> photoPaths;
 
     protected Listing(Seller seller, String title, String description, Category category,
@@ -109,6 +110,9 @@ public abstract class Listing {
 
     public int getViewCount() { return viewCount; }
     public void setViewCount(int viewCount) { this.viewCount = viewCount; }
+
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
 
     public List<String> getPhotoPaths() { return photoPaths; }
     public void setPhotoPaths(List<String> photoPaths) {

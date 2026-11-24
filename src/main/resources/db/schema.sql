@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS listings (
     rejection_reason          TEXT,
     takedown_reason           TEXT,
     view_count                INTEGER NOT NULL DEFAULT 0,
+    deleted                   INTEGER NOT NULL DEFAULT 0,  -- soft-delete visibility flag
     price                     TEXT,      -- SELL only
     lending_duration_seconds  INTEGER,   -- LEND only
     CHECK ((type = 'SELL') = (price IS NOT NULL)),

@@ -8,7 +8,7 @@ public final class LendListing extends Listing {
     public LendListing(Seller seller, String title, String description, Category category,
                        Condition condition, Location meetupLocation, Duration lendingDuration) {
         super(seller, title, description, category, condition, meetupLocation);
-        this.lendingDuration = LendingRules.requireLendingDuration(lendingDuration);
+        setLendingDuration(lendingDuration);
     }
 
     public Duration getLendingDuration() {
