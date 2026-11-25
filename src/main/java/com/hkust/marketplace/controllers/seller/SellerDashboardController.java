@@ -447,6 +447,7 @@ public class SellerDashboardController {
 
         listingForm = new ListingFormComponent(() -> seller, state -> submitEdit(target, state));
         listingForm.setOnCancel(this::showMyListings);
+        listingForm.prefillFrom(target);
 
         ScrollPane scroll = new ScrollPane(listingForm.getView());
         scroll.setFitToWidth(true);

@@ -8,6 +8,7 @@ import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
@@ -20,6 +21,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -211,5 +213,73 @@ class ListingFormStateTest {
         Listing listing = state.buildListing(CHARLIE);
         assertEquals(List.of("data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png"),
                 listing.getPhotoPaths());
+    }
+
+    @Test
+    void loadFromPrefillsASaleListing() {
+        SaleListing listing = new SaleListing(CHARLIE, "Desk lamp", "Warm light",
+                Category.ELECTRONICS, Condition.USED, Location.LIBRARY, Money.of("180.50"));
+        listing.setPhotoPaths(List.of(
+                "data/photos/charlie/L1/a.png", "data/photos/charlie/L1/b.png"));
+
+        ListingFormState state = new ListingFormState();
+        state.loadFrom(listing);
+
+        assertEquals(ListingType.SELL, state.getType());
+        assertEquals("Desk lamp", state.getTitle());
+        assertEquals("Warm light", state.getDescription());
+        assertEquals(Category.ELECTRONICS, state.getCategory());
+        assertEquals(Condition.USED, state.getCondition());
+        assertEquals(Location.LIBRARY, state.getMeetupLocation());
+        assertEquals("180.50", state.getRawPrice());
+        assertEquals(listing.getPhotoPaths(), state.getPhotoPaths());
+        assertTrue(state.validate(CHARLIE).isEmpty());
+    }
+
+    @Test
+    void loadFromPrefillsALendListingAndSplitsItsDuration() {
+        LendListing listing = new LendListing(CHARLIE, "Projector", "HD projector",
+                Category.ELECTRONICS, Condition.LIKE_NEW, Location.ACADEMIC_BUILDING,
+                Duration.ofDays(2).plusHours(3).plusSeconds(15));
+        listing.setPhotoPaths(List.of("data/photos/charlie/L2/a.png"));
+
+        ListingFormState state = new ListingFormState();
+        state.loadFrom(listing);
+
+        assertEquals(ListingType.LEND, state.getType());
+        assertEquals("Projector", state.getTitle());
+        assertEquals("HD projector", state.getDescription());
+        assertEquals(Category.ELECTRONICS, state.getCategory());
+        assertEquals(Condition.LIKE_NEW, state.getCondition());
+        assertEquals(Location.ACADEMIC_BUILDING, state.getMeetupLocation());
+        assertEquals("2", state.getRawDurationDays());
+        assertEquals("3", state.getRawDurationHours());
+        assertEquals("15", state.getRawDurationSeconds());
+        assertEquals(listing.getLendingDuration(), state.getLendingDuration());
+        assertEquals(listing.getPhotoPaths(), state.getPhotoPaths());
+        assertTrue(state.validate(CHARLIE).isEmpty());
+    }
+
+    @Test
+    void loadFromPrefillsAGiveawayWithoutAPriceOrDuration() {
+        GiveawayListing listing = new GiveawayListing(CHARLIE, "Old books", "Free to a good home",
+                Category.BOOKS_AND_NOTES, Condition.USED, Location.STUDENT_CENTRE);
+        listing.setPhotoPaths(List.of("data/photos/charlie/L3/a.png"));
+
+        ListingFormState state = new ListingFormState();
+        state.loadFrom(listing);
+
+        assertEquals(ListingType.GIVEAWAY, state.getType());
+        assertEquals("Old books", state.getTitle());
+        assertEquals("Free to a good home", state.getDescription());
+        assertEquals(Category.BOOKS_AND_NOTES, state.getCategory());
+        assertEquals(Condition.USED, state.getCondition());
+        assertEquals(Location.STUDENT_CENTRE, state.getMeetupLocation());
+        assertNull(state.getRawPrice());
+        assertNull(state.getRawDurationDays());
+        assertNull(state.getRawDurationHours());
+        assertNull(state.getRawDurationSeconds());
+        assertEquals(listing.getPhotoPaths(), state.getPhotoPaths());
+        assertTrue(state.validate(CHARLIE).isEmpty());
     }
 }

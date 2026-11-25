@@ -2,8 +2,11 @@ package com.hkust.marketplace.forms;
 
 import com.hkust.marketplace.models.Category;
 import com.hkust.marketplace.models.Condition;
+import com.hkust.marketplace.models.LendListing;
+import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.Seller;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -23,6 +26,8 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +37,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * A standalone, reusable create-listing form.
+ * A standalone, reusable create/edit listing form.
  *
  * <p>The component owns a {@link ListingFormState} and exposes only neutral hooks
  * ({@link #getView()}, {@link #validate()}, {@link #setOnSubmit(Consumer)}), so a future
@@ -45,6 +50,7 @@ public class ListingFormComponent {
     private final Supplier<Seller> sellerSupplier;
     private final ListingFormState state = new ListingFormState();
     private final VBox root = new VBox(12);
+    private final Label heading = new Label("Post a new item");
     private final Map<String, Label> errorLabels = new LinkedHashMap<>();
     private final Map<String, Node> fieldControls = new HashMap<>();
 
@@ -109,6 +115,36 @@ public class ListingFormComponent {
     /** Lets the admin-on-behalf flow label the button for its own outcome (saved as Live). */
     public void setSubmitLabel(String label) {
         submitButton.setText(label);
+    }
+
+    /**
+     * Fills every control from an existing listing so it can be edited. The listing type is
+     * locked, and photos already saved with the listing are shown as read-only thumbnails.
+     *
+     * @param listing the listing being edited
+     */
+    public void prefillFrom(Listing listing) {
+        state.loadFrom(listing);
+
+        typeCombo.setValue(typeLabel(listing.getType()));
+        nameField.setText(state.getTitle());
+        descriptionArea.setText(state.getDescription());
+        categoryCombo.setValue(state.getCategory());
+        conditionCombo.setValue(state.getCondition());
+        locationCombo.setValue(state.getMeetupLocation());
+        if (listing instanceof SaleListing) {
+            priceField.setText(state.getRawPrice());
+        } else if (listing instanceof LendListing) {
+            daysField.setText(state.getRawDurationDays());
+            hoursField.setText(state.getRawDurationHours());
+            secondsField.setText(state.getRawDurationSeconds());
+        }
+
+        updateTypeFields();
+        typeCombo.setDisable(true);
+        heading.setText("Edit item");
+        setSubmitLabel("Save and resubmit");
+        rebuildThumbnails();
     }
 
     /** Renders a field-key to message map into the per-field error labels. */
@@ -177,7 +213,6 @@ public class ListingFormComponent {
         root.setPadding(new Insets(20));
         root.setMaxWidth(560);
 
-        Label heading = new Label("Post a new item");
         heading.getStyleClass().add("section-title");
 
         typeCombo.setPromptText("Listing type *");
@@ -304,6 +339,9 @@ public class ListingFormComponent {
 
     private void rebuildThumbnails() {
         thumbnailStrip.getChildren().clear();
+        for (String path : state.getPhotoPaths()) {
+            thumbnailStrip.getChildren().add(storedPhotoThumbnail(path));
+        }
         for (PhotoDraft draft : state.getChosenPhotos()) {
             VBox thumbnail = new VBox(4);
             try {
@@ -330,6 +368,40 @@ public class ListingFormComponent {
         photoHint.setText(state.canAddMorePhotos()
                 ? ""
                 : "Maximum of 6 photos reached. Remove one to add another.");
+    }
+
+    private VBox storedPhotoThumbnail(String path) {
+        VBox thumbnail = new VBox(4);
+        thumbnail.getChildren().add(storedPhotoImage(path));
+        Label saved = new Label("Saved photo");
+        saved.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 11px;");
+        thumbnail.getChildren().add(saved);
+        return thumbnail;
+    }
+
+    private Node storedPhotoImage(String path) {
+        if (path != null && !path.isBlank()) {
+            try {
+                Path file = Path.of(path).toAbsolutePath();
+                if (Files.isRegularFile(file)) {
+                    Image image = new Image(file.toUri().toString(), 80, 80, true, true);
+                    if (!image.isError()) {
+                        ImageView view = new ImageView(image);
+                        view.setFitWidth(80);
+                        view.setFitHeight(80);
+                        view.setPreserveRatio(true);
+                        return view;
+                    }
+                }
+            } catch (RuntimeException ex) {
+                // The placeholder below covers an unreadable or missing file.
+            }
+        }
+        Label missing = new Label("Photo unavailable");
+        missing.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
+        missing.setWrapText(true);
+        missing.setPrefWidth(80);
+        return missing;
     }
 
     private void bindControls() {
@@ -396,6 +468,17 @@ public class ListingFormComponent {
             case "Lend" -> ListingType.LEND;
             case "Give Away" -> ListingType.GIVEAWAY;
             default -> null;
+        };
+    }
+
+    private static String typeLabel(ListingType type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case SELL -> "Sell";
+            case LEND -> "Lend";
+            case GIVEAWAY -> "Give Away";
         };
     }
 }

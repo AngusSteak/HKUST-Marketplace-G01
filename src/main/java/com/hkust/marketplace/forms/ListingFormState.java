@@ -172,6 +172,44 @@ public class ListingFormState {
         this.photoPaths = photoPaths == null ? new ArrayList<>() : new ArrayList<>(photoPaths);
     }
 
+    // --- Editing -------------------------------------------------------------------
+
+    /**
+     * Loads an existing listing into this state so the edit form can start prefilled.
+     *
+     * <p>The stored photo paths are copied for display, and the type-specific raw values are
+     * taken from the concrete subclass. Values belonging to the other kinds are cleared first,
+     * so a reused state can never leak a stale price or duration into the edited listing.
+     *
+     * @param listing the listing being edited
+     */
+    public void loadFrom(Listing listing) {
+        if (listing == null) {
+            throw new IllegalArgumentException("Listing must not be null");
+        }
+        setType(listing.getType());
+        setTitle(listing.getTitle());
+        setDescription(listing.getDescription());
+        setCategory(listing.getCategory());
+        setCondition(listing.getCondition());
+        setMeetupLocation(listing.getMeetupLocation());
+        setPhotoPaths(listing.getPhotoPaths());
+
+        setRawPrice(null);
+        setRawDurationDays(null);
+        setRawDurationHours(null);
+        setRawDurationSeconds(null);
+
+        if (listing instanceof SaleListing sale) {
+            setRawPrice(sale.getPrice().amount().toPlainString());
+        } else if (listing instanceof LendListing lend) {
+            long totalSeconds = lend.getLendingDuration().getSeconds();
+            setRawDurationDays(String.valueOf(totalSeconds / 86_400));
+            setRawDurationHours(String.valueOf((totalSeconds % 86_400) / 3_600));
+            setRawDurationSeconds(String.valueOf(totalSeconds % 3_600));
+        }
+    }
+
     // --- Validation ----------------------------------------------------------------
 
     /**
