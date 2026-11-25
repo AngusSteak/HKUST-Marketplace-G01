@@ -4,12 +4,20 @@ import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
 import com.hkust.marketplace.utils.DurationText;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import javafx.geometry.Insets;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
@@ -76,9 +84,11 @@ public final class ListingDetailDialog {
 
         content.getChildren().addAll(title, badges, price, fields, description);
         if (!listing.getPhotoPaths().isEmpty()) {
-            Label photoNote = new Label("Photos are not shown in this preview.");
-            photoNote.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-            content.getChildren().add(photoNote);
+            FlowPane photos = new FlowPane(8, 8);
+            for (String path : listing.getPhotoPaths()) {
+                photos.getChildren().add(photoThumb(path));
+            }
+            content.getChildren().add(photos);
         }
 
         dialog.getDialogPane().setContent(content);
@@ -91,6 +101,36 @@ public final class ListingDetailDialog {
         Label valueLabel = new Label(value);
         valueLabel.setStyle("-fx-text-fill: #1a1a2e; -fx-font-size: 13px;");
         grid.addRow(row, nameLabel, valueLabel);
+    }
+
+    private static StackPane photoThumb(String path) {
+        double width = 150;
+        double height = 110;
+        StackPane box = new StackPane();
+        box.setPrefSize(width, height);
+        box.setMinSize(width, height);
+        box.setMaxSize(width, height);
+        box.setStyle("-fx-background-color: #eef2f7; -fx-background-radius: 8;");
+        Label placeholder = new Label("No photo");
+        placeholder.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 11px;");
+        box.getChildren().add(placeholder);
+        if (path == null) {
+            return box;
+        }
+        Path file = Path.of(path);
+        if (!Files.isRegularFile(file)) {
+            return box;
+        }
+        Image image = new Image(file.toUri().toString(), width, height, true, true, true);
+        if (image.isError()) {
+            return box;
+        }
+        ImageView view = new ImageView(image);
+        view.setFitWidth(width);
+        view.setFitHeight(height);
+        view.setPreserveRatio(true);
+        box.getChildren().setAll(view);
+        return box;
     }
 
     private static String statusText(Listing listing) {
