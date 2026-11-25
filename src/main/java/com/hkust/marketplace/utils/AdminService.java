@@ -188,6 +188,7 @@ public final class AdminService {
     /**
      * Edits a listing's details without changing its status (SRS UC-3.7 S1), then audits the
      * change and notifies the seller. Prices and lending durations keep their existing rules.
+     * The listing keeps its current photos.
      *
      * @param admin the acting admin
      * @param listing the listing to edit
@@ -204,6 +205,39 @@ public final class AdminService {
                             String rawPrice, Duration lendingDuration) {
         AccessControl.require(admin, UserRole.ADMIN);
         Objects.requireNonNull(listing, "listing");
+        editListing(admin, listing, title, description, category, condition, location,
+                rawPrice, lendingDuration, List.copyOf(listing.getPhotoPaths()), List.of(), null);
+    }
+
+    /**
+     * Edits a listing's details and photos without changing its status (SRS UC-3.7 step 3.1.2),
+     * then audits the change and notifies the seller. The admin keeps some of the listing's
+     * existing photo paths and adds new JPEG/PNG files, with at most six photos in total
+     * (SRS UC-3.7 A4). New photos are stored under the listing's seller and id.
+     *
+     * <p>Removed photos only leave the listing's stored paths; the files on disk are kept.
+     *
+     * @param admin the acting admin
+     * @param listing the listing to edit
+     * @param title the new title
+     * @param description the new description
+     * @param category the new category
+     * @param condition the new condition
+     * @param location the new meetup location
+     * @param rawPrice the new asking price for a Sale listing; ignored for other types
+     * @param lendingDuration the new duration for a Lend listing; ignored for other types
+     * @param keptPhotoPaths the existing photo paths that stay on the listing
+     * @param newPhotos the newly chosen photo files to store
+     * @param photos storage for the new photos; may be {@code null} when none are added
+     * @throws IllegalArgumentException if the combined photos exceed six, a new file is not a
+     *         supported JPEG/PNG, or a text/price/duration rule fails
+     */
+    public void editListing(User admin, Listing listing, String title, String description,
+                            Category category, Condition condition, Location location,
+                            String rawPrice, Duration lendingDuration,
+                            List<String> keptPhotoPaths, List<PhotoDraft> newPhotos, PhotoStorage photos) {
+        AccessControl.require(admin, UserRole.ADMIN);
+        Objects.requireNonNull(listing, "listing");
         String newTitle = requireText(title, "Title");
         // Validated as in Post Listing (SRS UC-3.7 step 3.1.2), which requires a description.
         String newDescription = requireText(description, "Description");
@@ -214,6 +248,30 @@ public final class AdminService {
         Duration duration = listing instanceof LendListing
                 ? LendingRules.requireLendingDuration(lendingDuration) : null;
 
+        List<String> kept = keptPhotoPaths == null
+                ? List.copyOf(listing.getPhotoPaths()) : List.copyOf(keptPhotoPaths);
+        List<PhotoDraft> additions = newPhotos == null ? List.of() : List.copyOf(newPhotos);
+        if (kept.size() + additions.size() > ListingFormState.MAX_PHOTOS) {
+            throw new IllegalArgumentException("A listing can have at most "
+                    + ListingFormState.MAX_PHOTOS + " photos");
+        }
+        for (String path : kept) {
+            if (path == null || path.isBlank()) {
+                throw new IllegalArgumentException("Photo path must not be blank");
+            }
+        }
+        for (PhotoDraft draft : additions) {
+            if (draft == null || draft.source() == null) {
+                throw new IllegalArgumentException("A photo file is required");
+            }
+            if (!isSupportedImage(draft.source().getFileName().toString())) {
+                throw new IllegalArgumentException("Only JPEG and PNG photos are supported");
+            }
+        }
+        if (!additions.isEmpty()) {
+            Objects.requireNonNull(photos, "photos");
+        }
+
         String oldTitle = listing.getTitle();
         String oldDescription = listing.getDescription();
         Category oldCategory = listing.getCategory();
@@ -221,13 +279,21 @@ public final class AdminService {
         Location oldLocation = listing.getMeetupLocation();
         Money oldPrice = listing instanceof SaleListing sale ? sale.getPrice() : null;
         Duration oldDuration = listing instanceof LendListing lend ? lend.getLendingDuration() : null;
+        List<String> oldPhotoPaths = List.copyOf(listing.getPhotoPaths());
+        List<String> storedPaths = new ArrayList<>();
         try {
+            for (PhotoDraft draft : additions) {
+                storedPaths.add(photos.store(draft.source(), listing.getSellerUsername(), listing.getId()));
+            }
+            List<String> combinedPaths = new ArrayList<>(kept);
+            combinedPaths.addAll(storedPaths);
             data.database().inTransaction(() -> {
                 listing.setTitle(newTitle);
                 listing.setDescription(newDescription);
                 listing.setCategory(category);
                 listing.setCondition(condition);
                 listing.setMeetupLocation(location);
+                listing.setPhotoPaths(combinedPaths);
                 if (listing instanceof SaleListing sale) {
                     sale.setPrice(price);
                 } else if (listing instanceof LendListing lend) {
@@ -245,10 +311,18 @@ public final class AdminService {
             listing.setCategory(oldCategory);
             listing.setCondition(oldCondition);
             listing.setMeetupLocation(oldLocation);
+            listing.setPhotoPaths(oldPhotoPaths);
             if (listing instanceof SaleListing sale) {
                 sale.setPrice(oldPrice);
             } else if (listing instanceof LendListing lend) {
                 lend.setLendingDuration(oldDuration);
+            }
+            for (String path : storedPaths) {
+                try {
+                    Files.deleteIfExists(Path.of(path));
+                } catch (IOException ignored) {
+                    // best-effort cleanup of a photo whose listing edit did not save
+                }
             }
             throw e;
         }
@@ -706,6 +780,15 @@ public final class AdminService {
             }
         }
         return open;
+    }
+
+    private static boolean isSupportedImage(String filename) {
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0) {
+            return false;
+        }
+        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        return extension.equals("jpg") || extension.equals("jpeg") || extension.equals("png");
     }
 
     private static Money requirePrice(String rawPrice) {

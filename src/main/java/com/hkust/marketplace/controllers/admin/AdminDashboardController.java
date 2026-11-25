@@ -4,6 +4,7 @@ import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.AdminFilters;
@@ -21,8 +22,12 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 
+import java.io.File;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -362,6 +367,37 @@ public class AdminDashboardController {
             seconds.setText(String.valueOf(duration.toSecondsPart()));
         }
 
+        List<String> keptPhotoPaths = new ArrayList<>(listing.getPhotoPaths());
+        List<PhotoDraft> newPhotos = new ArrayList<>();
+        HBox photoStrip = new HBox(8);
+        Button addPhotos = new Button("Add photos");
+        addPhotos.getStyleClass().addAll("btn-outline", "btn-sm");
+        Label photoHint = new Label();
+        addPhotos.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Choose photos (JPEG/PNG, up to " + ListingFormState.MAX_PHOTOS + ")");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                    "Images", "*.jpg", "*.jpeg", "*.png"));
+            var window = dialog.getDialogPane().getScene() == null
+                    ? null : dialog.getDialogPane().getScene().getWindow();
+            List<File> files = chooser.showOpenMultipleDialog(window);
+            if (files == null) {
+                return;
+            }
+            for (File file : files) {
+                if (keptPhotoPaths.size() + newPhotos.size() >= ListingFormState.MAX_PHOTOS) {
+                    break;
+                }
+                if (isSupportedImageFile(file.getName())) {
+                    newPhotos.add(new PhotoDraft(file.toPath(), file.getName()));
+                }
+            }
+            refreshAdminPhotoStrip(photoStrip, addPhotos, photoHint, keptPhotoPaths, newPhotos);
+        });
+        VBox photoArea = new VBox(8,
+                new Label("Photos (up to " + ListingFormState.MAX_PHOTOS + ", JPEG/PNG)"),
+                addPhotos, photoHint, photoStrip);
+
         VBox form = new VBox(8,
                 new Label("Title"), title,
                 new Label("Description"), description,
@@ -380,6 +416,8 @@ public class AdminDashboardController {
             seconds.setPromptText("Seconds (min 5)");
             form.getChildren().addAll(new Label("Lending duration"), durationRow);
         }
+        form.getChildren().add(photoArea);
+        refreshAdminPhotoStrip(photoStrip, addPhotos, photoHint, keptPhotoPaths, newPhotos);
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
@@ -390,7 +428,8 @@ public class AdminDashboardController {
                     .plusSeconds(parseLong(seconds.getText()))
                     : null;
             run(() -> adminService.editListing(admin(), listing, title.getText(), description.getText(),
-                    category.getValue(), condition.getValue(), location.getValue(), price.getText(), duration));
+                    category.getValue(), condition.getValue(), location.getValue(), price.getText(), duration,
+                    keptPhotoPaths, newPhotos, photoStorage));
         } catch (NumberFormatException ex) {
             new Alert(Alert.AlertType.WARNING, "Lending days, hours and seconds must be whole numbers.").showAndWait();
         }
@@ -399,6 +438,57 @@ public class AdminDashboardController {
 
     private static long parseLong(String text) {
         return text == null || text.isBlank() ? 0 : Long.parseLong(text.trim());
+    }
+
+    private void refreshAdminPhotoStrip(HBox strip, Button addPhotos, Label hint,
+                                        List<String> keptPaths, List<PhotoDraft> drafts) {
+        strip.getChildren().clear();
+        for (String path : keptPaths) {
+            VBox thumbnail = new VBox(4, ListingPhotos.photo(path, 80, 80));
+            Button remove = new Button("Remove");
+            remove.getStyleClass().addAll("btn-danger", "btn-sm");
+            remove.setOnAction(e -> {
+                keptPaths.remove(path);
+                refreshAdminPhotoStrip(strip, addPhotos, hint, keptPaths, drafts);
+            });
+            thumbnail.getChildren().add(remove);
+            strip.getChildren().add(thumbnail);
+        }
+        for (PhotoDraft draft : drafts) {
+            VBox thumbnail = new VBox(4);
+            try {
+                Image image = new Image(draft.source().toUri().toString(), 80, 80, true, true);
+                ImageView view = new ImageView(image);
+                view.setFitWidth(80);
+                view.setFitHeight(80);
+                view.setPreserveRatio(true);
+                thumbnail.getChildren().add(view);
+            } catch (RuntimeException ex) {
+                thumbnail.getChildren().add(new Label("Preview unavailable"));
+            }
+            Button remove = new Button("Remove");
+            remove.getStyleClass().addAll("btn-danger", "btn-sm");
+            remove.setOnAction(e -> {
+                drafts.remove(draft);
+                refreshAdminPhotoStrip(strip, addPhotos, hint, keptPaths, drafts);
+            });
+            thumbnail.getChildren().add(remove);
+            strip.getChildren().add(thumbnail);
+        }
+        boolean full = keptPaths.size() + drafts.size() >= ListingFormState.MAX_PHOTOS;
+        addPhotos.setDisable(full);
+        hint.setText(full
+                ? "Maximum of " + ListingFormState.MAX_PHOTOS + " photos reached. Remove one to add another."
+                : "");
+    }
+
+    private static boolean isSupportedImageFile(String filename) {
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0) {
+            return false;
+        }
+        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        return extension.equals("jpg") || extension.equals("jpeg") || extension.equals("png");
     }
 
     private void promptTakeDown(Listing listing, Runnable after) {
