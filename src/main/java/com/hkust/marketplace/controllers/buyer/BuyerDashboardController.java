@@ -1004,7 +1004,7 @@ public class BuyerDashboardController {
             case GIVEN -> "Received";
         }));
         table.getColumns().add(column("Outcome", d -> statusLabel(d.getStatus())));
-        table.getStyleClass().add("history-table");
+        table.getStyleClass().add("link-table");
         table.setFocusTraversable(false);
 
         String buyer = SessionManager.getCurrentUser() == null ? "" : SessionManager.getCurrentUser().getUsername();

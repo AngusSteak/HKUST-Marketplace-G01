@@ -212,23 +212,23 @@
     -fx-background-color: #e8f0f8;
 }
 
-/* Deal history: the item title is the link, so rows themselves never highlight. */
-.history-table .table-row-cell,
-.history-table .table-row-cell:odd,
-.history-table .table-row-cell:filled:hover,
-.history-table .table-row-cell:filled:selected,
-.history-table .table-row-cell:filled:focused,
-.history-table .table-row-cell:filled:selected:focused {
+/* Deal tables (buyer history, admin all deals): the title is the link, so rows never highlight. */
+.link-table .table-row-cell,
+.link-table .table-row-cell:odd,
+.link-table .table-row-cell:filled:hover,
+.link-table .table-row-cell:filled:selected,
+.link-table .table-row-cell:filled:focused,
+.link-table .table-row-cell:filled:selected:focused {
     -fx-background-color: white;
 }
 
-.history-table .table-row-cell:filled:selected .table-cell {
+.link-table .table-row-cell:filled:selected .table-cell {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
     -fx-text-fill: #1a1a2e;
 }
 
-.history-table:focused {
+.link-table:focused {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
 }

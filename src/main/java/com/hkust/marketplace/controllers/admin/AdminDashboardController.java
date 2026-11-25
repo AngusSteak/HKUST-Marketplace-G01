@@ -717,7 +717,7 @@ public class AdminDashboardController {
         TableView<Deal> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPrefHeight(500);
-        table.getColumns().add(dealColumn("Title", d -> d.getListing().getTitle(), 200));
+        table.getColumns().add(dealTitleColumn());
         table.getColumns().add(dealColumn("Buyer", d -> party(d.getBuyerUsername()), 160));
         table.getColumns().add(dealColumn("Seller", d -> party(d.getSellerUsername()), 160));
         table.getColumns().add(dealColumn("Type", d -> d.getDealType().name(), 80));
@@ -738,25 +738,11 @@ public class AdminDashboardController {
         to.valueProperty().addListener((o, a, b) -> refresh.run());
         refresh.run();
 
-        Button details = new Button("View details");
-        details.getStyleClass().add("btn-outline");
-        details.setOnAction(e -> {
-            Deal selected = table.getSelectionModel().getSelectedItem();
-            if (selected == null) {
-                new Alert(Alert.AlertType.INFORMATION, "Select a deal first.").showAndWait();
-            } else {
-                showDealDetails(selected);
-            }
-        });
-        table.setRowFactory(tv -> {
-            TableRow<Deal> row = new TableRow<>();
-            row.setOnMouseClicked(e -> {
-                if (e.getClickCount() == 2 && !row.isEmpty()) showDealDetails(row.getItem());
-            });
-            return row;
-        });
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
 
-        root.getChildren().addAll(new HBox(10, search, type, status, from, to, details), table);
+        root.getChildren().addAll(new HBox(10, search, type, status, from, to),
+                label("Click a title to view details.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"), table);
         contentPane.getChildren().add(root);
     }
 
@@ -766,6 +752,37 @@ public class AdminDashboardController {
         TableColumn<Deal, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
         column.setCellValueFactory(c -> new SimpleStringProperty(value.apply(c.getValue())));
+        return column;
+    }
+
+    private TableColumn<Deal, String> dealTitleColumn() {
+        TableColumn<Deal, String> column = dealColumn("Title", d -> d.getListing().getTitle(), 200);
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    Deal deal = getTableRow() == null ? null : getTableRow().getItem();
+                    if (deal != null) {
+                        showDealDetails(deal);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
         return column;
     }
 
