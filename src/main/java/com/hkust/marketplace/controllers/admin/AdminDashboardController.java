@@ -1,15 +1,16 @@
 package com.hkust.marketplace.controllers.admin;
 
 import com.hkust.marketplace.controllers.common.ListingDetailDialog;
-import com.hkust.marketplace.controllers.common.PhotoGallery;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.AdminFilters;
 import com.hkust.marketplace.utils.AdminService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.beans.property.SimpleStringProperty;
@@ -177,7 +178,15 @@ public class AdminDashboardController {
         view.setOnAction(e -> ListingDetailDialog.show(
                 contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), l));
 
-        card.getChildren().addAll(title, meta, submitted, new HBox(10, view, approve, reject));
+        // SRS UC-3.2 / brief 3.2: the submission's photos and status are part of what the admin reviews.
+        Label status = new Label("Pending Review");
+        status.getStyleClass().addAll("badge", "badge-pending");
+        status.setMinWidth(Region.USE_PREF_SIZE);   // a long title wraps instead of pushing the badge out
+        title.setWrapText(true);
+        HBox titleRow = new HBox(10, title, status);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+        card.getChildren().addAll(titleRow, meta, submitted, ListingPhotos.gallery(l, 160, 110),
+                new HBox(10, view, approve, reject));
         return card;
     }
 
@@ -853,7 +862,7 @@ public class AdminDashboardController {
                     + " to " + borrow.getEndDate().format(DATE), "-fx-text-fill: #5a5a7a;"));
         }
         if (!deal.getListing().getPhotoPaths().isEmpty()) {
-            content.getChildren().add(PhotoGallery.thumbnails(deal.getListing().getPhotoPaths()));
+            content.getChildren().add(ListingPhotos.gallery(deal.getListing(), 150, 110));
         }
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Deal details");
@@ -1043,6 +1052,12 @@ public class AdminDashboardController {
         next.setPromptText("New password");
         PasswordField confirm = new PasswordField();
         confirm.setPromptText("Confirm new password");
+        HBox currentRow = new HBox(6, current);
+        PasswordVisibility.attach(current, currentRow);
+        HBox nextRow = new HBox(6, next);
+        PasswordVisibility.attach(next, nextRow);
+        HBox confirmRow = new HBox(6, confirm);
+        PasswordVisibility.attach(confirm, confirmRow);
         Button save = new Button("Save");
         save.getStyleClass().add("btn-success");
         save.setOnAction(e -> {
@@ -1065,7 +1080,7 @@ public class AdminDashboardController {
         form.getChildren().addAll(
                 new Label("Full name"), name,
                 new Label("Change password (leave all three empty to keep it)"),
-                current, next, confirm, save);
+                currentRow, nextRow, confirmRow, save);
         contentPane.getChildren().add(form);
     }
 

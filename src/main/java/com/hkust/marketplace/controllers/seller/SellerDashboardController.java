@@ -10,6 +10,7 @@ import com.hkust.marketplace.utils.ChatService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.ProfileService;
 import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SceneManager;
@@ -1020,6 +1021,12 @@ public class SellerDashboardController {
         newPass.setPromptText("New password");
         PasswordField confirmPass = new PasswordField();
         confirmPass.setPromptText("Confirm new password");
+        HBox currentPassRow = new HBox(6, currentPass);
+        PasswordVisibility.attach(currentPass, currentPassRow);
+        HBox newPassRow = new HBox(6, newPass);
+        PasswordVisibility.attach(newPass, newPassRow);
+        HBox confirmPassRow = new HBox(6, confirmPass);
+        PasswordVisibility.attach(confirmPass, confirmPassRow);
         Label rules = new Label("8\u201364 characters with an uppercase letter, a lowercase letter, a digit and a"
                 + " special character; no spaces; not your username.");
         rules.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
@@ -1068,9 +1075,9 @@ public class SellerDashboardController {
                 new Label("Bio"), bio, counter,
                 new Label("Preferred Meet-up Locations"), meetupScroll, clearAll,
                 passwordTitle,
-                new Label("Current password"), currentPass,
-                new Label("New password"), newPass,
-                new Label("Confirm new password"), confirmPass, rules,
+                new Label("Current password"), currentPassRow,
+                new Label("New password"), newPassRow,
+                new Label("Confirm new password"), confirmPassRow, rules,
                 message, new HBox(10, saveBtn, cancelBtn));
 
         ScrollPane scroll = new ScrollPane(form);

@@ -2,6 +2,7 @@ package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
 import com.hkust.marketplace.controllers.common.ListingDetailDialog;
+import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
@@ -32,25 +33,22 @@ import com.hkust.marketplace.utils.DealRequestService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingSearch;
 import com.hkust.marketplace.utils.MyDealsService;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.ProfileService;
 import com.hkust.marketplace.utils.ReviewService;
+import com.hkust.marketplace.utils.SellerProfileService;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -316,41 +314,8 @@ public class BuyerDashboardController {
         return listing.getPhotoPaths().isEmpty() ? null : listing.getPhotoPaths().get(0);
     }
 
-    /**
-     * A photo, or a placeholder when there is none or the file is missing or unreadable. Photos
-     * load in the background so the screen never waits on them; "Loading photo..." shows
-     * underneath until the image appears, and turns into "No photo" if loading fails.
-     */
     private static StackPane photo(String path, double width, double height) {
-        StackPane box = new StackPane();
-        box.setPrefSize(width, height);
-        box.setMinSize(width, height);
-        box.setMaxSize(width, height);
-        box.setStyle("-fx-background-color: #eef2f7; -fx-background-radius: 8;");
-        Label placeholder = new Label("No photo");
-        placeholder.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
-        box.getChildren().add(placeholder);
-        Path file = path == null ? null : Path.of(path);
-        if (file == null || !Files.isRegularFile(file)) {
-            return box;
-        }
-        Image image = new Image(file.toUri().toString(), width, height, true, true, true);
-        ImageView view = new ImageView(image);
-        Runnable fallBack = () -> {
-            box.getChildren().remove(view);
-            placeholder.setText("No photo");
-        };
-        if (image.isError()) {
-            return box;
-        }
-        placeholder.setText("Loading photo...");
-        box.getChildren().add(view);
-        image.errorProperty().addListener((obs, was, failed) -> {
-            if (failed) {
-                fallBack.run();
-            }
-        });
-        return box;
+        return ListingPhotos.photo(path, width, height);
     }
 
     // ---------- Listing details (SRS UC-1.3 S1) ----------
@@ -369,13 +334,18 @@ public class BuyerDashboardController {
      * without the deal button once it is no longer available, and with the linked chat below.
      */
     private void showListingDetails(Listing listing, boolean fromDeal) {
+        showListingDetails(listing, fromDeal, !fromDeal);
+    }
+
+    /** As above; {@code countView} is false when returning to the page, e.g. from the seller's profile. */
+    private void showListingDetails(Listing listing, boolean fromDeal, boolean countView) {
         boolean available = ListingSearch.isBrowsable(listing);
         DummyDataService data = DummyDataService.getInstance();
-        if (!fromDeal) {
-            if (!available) {
-                new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
-                return;
-            }
+        if (!fromDeal && !available) {
+            new Alert(Alert.AlertType.INFORMATION, "This listing is no longer available.").showAndWait();
+            return;
+        }
+        if (countView) {
             try {
                 data.listings().recordView(listing);
             } catch (IllegalArgumentException e) {
@@ -397,13 +367,7 @@ public class BuyerDashboardController {
             }
         });
 
-        FlowPane photos = new FlowPane(10, 10);
-        List<String> paths = listing.getPhotoPaths();
-        if (paths.isEmpty()) {
-            photos.getChildren().add(photo(null, 260, 180));
-        } else {
-            paths.forEach(path -> photos.getChildren().add(photo(path, 260, 180)));
-        }
+        FlowPane photos = ListingPhotos.gallery(listing, 260, 180);
 
         Label typeBadge = new Label(listing.getTypeDisplay());
         typeBadge.getStyleClass().addAll("badge", listing.getType() == ListingType.SELL ? "badge-sold"
@@ -442,6 +406,10 @@ public class BuyerDashboardController {
             value.setStyle("-fx-text-fill: #1a1a2e; -fx-font-size: 13px;");
             fields.addRow(i, name, value);
         }
+        Hyperlink sellerLink = new Hyperlink("View " + listing.getSellerFullName() + "'s profile and reviews");
+        sellerLink.setOnAction(e -> showSellerProfile(listing.getSellerUsername(), "listing",
+                () -> showListingDetails(listing, fromDeal, false)));
+        fields.addRow(rows.length, new Label(""), sellerLink);
 
         HBox actions = new HBox(8);
         if (available) {
@@ -494,6 +462,83 @@ public class BuyerDashboardController {
                     ChatViewBuilder.build(chatService, buyer, chatService.openThread(buyer, listing)));
         }
         root.setPadding(new Insets(4));
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        contentPane.getChildren().add(scroll);
+    }
+
+    // ---------- Seller profile (brief 1.10) ----------
+
+    /**
+     * A seller's public profile: details, average rating, every visible review with any seller
+     * reply, and their live listings (each opens its details). {@code back} returns to where the
+     * buyer came from.
+     */
+    private void showSellerProfile(String username, String backTo, Runnable back) {
+        showSellerProfile(username, backTo, back, btnBrowse);
+    }
+
+    /** As above, keeping {@code section} highlighted in the sidebar (where the profile was opened). */
+    private void showSellerProfile(String username, String backTo, Runnable back, Button section) {
+        SellerProfileService.SellerProfile profile;
+        try {
+            profile = new SellerProfileService(DummyDataService.getInstance()).profile(username);
+        } catch (IllegalArgumentException e) {
+            new Alert(Alert.AlertType.INFORMATION, "This seller could not be found.").showAndWait();
+            return;
+        }
+        com.hkust.marketplace.models.Seller seller = profile.seller();
+        setActive(section, "Seller: " + seller.getDisplayName());
+        contentPane.getChildren().clear();
+
+        Button backBtn = new Button("\u2190 Back to " + backTo);
+        backBtn.getStyleClass().addAll("btn-outline", "btn-sm");
+        backBtn.setOnAction(e -> back.run());
+
+        Label name = new Label(seller.getDisplayName() + (profile.deleted() ? "" : "  (@" + seller.getUsername() + ")"));
+        name.setStyle("-fx-font-weight: bold; -fx-font-size: 22px; -fx-text-fill: #1a1a2e;");
+        Label rating = new Label(profile.averageRating().isEmpty() ? "No ratings yet"
+                : String.format("\u2605 %.1f (%d review%s)", profile.averageRating().getAsDouble(),
+                        profile.reviews().size(), profile.reviews().size() == 1 ? "" : "s"));
+        rating.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 16px;");
+        VBox header = new VBox(6, name, rating);
+        if (profile.deleted()) {
+            header.getChildren().add(muted("This account has been deleted. Its past reviews are kept."));
+        } else {
+            if (seller.getBio() != null && !seller.getBio().isBlank()) {
+                Label bio = new Label(seller.getBio());
+                bio.setWrapText(true);
+                header.getChildren().add(bio);
+            }
+            String meetup = seller.getPreferredMeetup().isEmpty() ? "Not set"
+                    : seller.getPreferredMeetup().stream().map(l -> l.getLabel()).sorted()
+                            .collect(java.util.stream.Collectors.joining(", "));
+            header.getChildren().addAll(muted("Preferred meet-up: " + meetup),
+                    muted("Member since " + seller.getCreatedAt().format(DateTimeFormatter.ofPattern("MMM yyyy"))));
+        }
+        header.getStyleClass().add("listing-card");
+
+        VBox root = new VBox(12, backBtn, header, sectionTitle("Reviews (" + profile.reviews().size() + ")"));
+        root.setPadding(new Insets(4));
+        if (profile.reviews().isEmpty()) {
+            root.getChildren().add(muted("No reviews yet."));
+        }
+        for (Review review : profile.reviews()) {
+            root.getChildren().add(reviewCard(review, "by " + displayName(review.getBuyerUsername())));
+        }
+
+        if (!profile.deleted()) {
+            root.getChildren().add(sectionTitle("Live listings (" + profile.liveListings().size() + ")"));
+            if (profile.liveListings().isEmpty()) {
+                root.getChildren().add(muted("No live listings right now."));
+            } else {
+                FlowPane grid = new FlowPane(16, 16);
+                grid.setPrefWrapLength(900);
+                profile.liveListings().forEach(l -> grid.getChildren().add(createListingCard(l)));
+                root.getChildren().add(grid);
+            }
+        }
+
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
         contentPane.getChildren().add(scroll);
@@ -1153,37 +1198,13 @@ public class BuyerDashboardController {
             root.getChildren().add(muted("You haven't written any reviews yet."));
         }
         for (Review review : mine) {
-            Label stars = new Label(stars(review.getRating()));
-            stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
-            Listing resolvedListing = reviewService.listingOf(review);
-            Node title = resolvedListing != null
-                    ? new Hyperlink(review.getListingTitle())
-                    : new Label(review.getListingTitle());
-            if (!(title instanceof Hyperlink)) {
-                title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
-            }
-            if (title instanceof Hyperlink link) {
-                link.setOnAction(e -> ListingDetailDialog.show(
-                        contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), resolvedListing));
-            }
-            HBox titleRow = new HBox(8, stars, title);
-            titleRow.setAlignment(Pos.CENTER_LEFT);
-            Label comment = new Label(review.getComment() == null ? "" : review.getComment());
-            comment.setWrapText(true);
-            VBox item = new VBox(3, titleRow,
-                    muted("for " + displayName(review.getSellerUsername())
-                            + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)),
-                    comment);
+            Listing reviewed = reviewService.listingOf(review);
+            VBox item = reviewCard(review, "for " + displayName(review.getSellerUsername()),
+                    reviewed == null ? null : () -> ListingDetailDialog.show(
+                            contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), reviewed));
             if (review.isHidden()) {
-                item.getChildren().add(muted("Hidden by the admin, so it no longer counts towards the rating."));
+                item.getChildren().add(2, muted("Hidden by the admin, so it no longer counts towards the rating."));
             }
-            if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
-                Label reply = new Label("Seller replied: " + review.getSellerReply());
-                reply.setWrapText(true);
-                reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
-                item.getChildren().add(reply);
-            }
-            item.getStyleClass().add("notif-item");
             root.getChildren().add(item);
         }
 
@@ -1262,6 +1283,48 @@ public class BuyerDashboardController {
         return user == null ? username : user.getDisplayName();
     }
 
+    /**
+     * One review as a card: stars and listing title, who and when, the text, and any seller reply.
+     * Shared by My Reviews and the seller profile so both show reviews the same way.
+     */
+    private static VBox reviewCard(Review review, String byLine) {
+        return reviewCard(review, byLine, null);
+    }
+
+    /**
+     * As above; when {@code onTitle} is given, the listing title is a link that runs it (e.g. to
+     * show the reviewed item).
+     */
+    private static VBox reviewCard(Review review, String byLine, Runnable onTitle) {
+        Label stars = new Label(stars(review.getRating()));
+        stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        HBox heading = new HBox(8, stars);
+        heading.setAlignment(Pos.CENTER_LEFT);
+        if (review.getListingTitle() != null) {
+            if (onTitle != null) {
+                Hyperlink title = new Hyperlink(review.getListingTitle());
+                title.setStyle("-fx-font-weight: bold;");
+                title.setOnAction(e -> onTitle.run());
+                heading.getChildren().add(title);
+            } else {
+                Label title = new Label(review.getListingTitle());
+                title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+                heading.getChildren().add(title);
+            }
+        }
+        Label comment = new Label(review.getComment() == null ? "" : review.getComment());
+        comment.setWrapText(true);
+        VBox item = new VBox(3, heading, muted(byLine + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)), comment);
+        if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
+            Label reply = new Label("Seller replied: " + review.getSellerReply());
+            reply.setWrapText(true);
+            reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
+            item.getChildren().add(reply);
+        }
+        item.getStyleClass().add("notif-item");
+        return item;
+    }
+
     private static String stars(int rating) {
         return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
     }
@@ -1328,13 +1391,16 @@ public class BuyerDashboardController {
             Label detail = muted(ratingText(username) + "  \u00b7  " + live + " live listing" + (live == 1 ? "" : "s"));
             VBox info = new VBox(2, name, detail);
             HBox.setHgrow(info, Priority.ALWAYS);
+            Button profile = new Button("Profile");
+            profile.getStyleClass().addAll("btn-primary", "btn-sm");
+            profile.setOnAction(e -> showSellerProfile(username, "Favourites", this::showFavourites, btnFavourites));
             Button unfollow = new Button("Unfollow");
             unfollow.getStyleClass().addAll("btn-outline", "btn-sm");
             unfollow.setOnAction(e -> {
                 data.favourites().toggleFollow(buyer, seller);
                 showFavourites();
             });
-            HBox row = new HBox(10, info, unfollow);
+            HBox row = new HBox(10, info, profile, unfollow);
             row.setAlignment(Pos.CENTER_LEFT);
             row.getStyleClass().add("notif-item");
             root.getChildren().add(row);
@@ -1450,6 +1516,12 @@ public class BuyerDashboardController {
         newPass.setPromptText("New password");
         PasswordField confirmPass = new PasswordField();
         confirmPass.setPromptText("Confirm new password");
+        HBox currentPassRow = new HBox(6, currentPass);
+        PasswordVisibility.attach(currentPass, currentPassRow);
+        HBox newPassRow = new HBox(6, newPass);
+        PasswordVisibility.attach(newPass, newPassRow);
+        HBox confirmPassRow = new HBox(6, confirmPass);
+        PasswordVisibility.attach(confirmPass, confirmPassRow);
         Label rules = muted("8\u201364 characters with an uppercase letter, a lowercase letter, a digit and a"
                 + " special character; no spaces; not your username.");
 
@@ -1488,9 +1560,9 @@ public class BuyerDashboardController {
                 new Label("Full Name"), nameField,
                 new Label("Residence hall"), residence,
                 passwordTitle,
-                new Label("Current password"), currentPass,
-                new Label("New password"), newPass,
-                new Label("Confirm new password"), confirmPass, rules,
+                new Label("Current password"), currentPassRow,
+                new Label("New password"), newPassRow,
+                new Label("Confirm new password"), confirmPassRow, rules,
                 message, new HBox(10, saveBtn, cancelBtn));
 
         contentPane.getChildren().add(form);

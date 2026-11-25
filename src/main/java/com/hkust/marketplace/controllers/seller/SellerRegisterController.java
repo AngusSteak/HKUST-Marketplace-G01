@@ -5,6 +5,7 @@ import com.hkust.marketplace.models.PasswordRule;
 import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.RegistrationService;
 import com.hkust.marketplace.utils.PasswordHasher;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.UserStore;
@@ -54,7 +55,8 @@ public class SellerRegisterController {
         Location meetup = meetupCombo.getValue();
         if (meetup != null) user.setPreferredMeetup(EnumSet.of(meetup));
         if (bioArea.getText() != null && !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());
-        if (!DummyDataService.getInstance().users().register(user)) {
+        // Saves the account and notifies the admin (SRS UC-2.1, like UC-1.1 step 7).
+        if (!new RegistrationService(DummyDataService.getInstance()).register(user)) {
             showError("Username already taken."); return;
         }
 

@@ -77,7 +77,7 @@ public final class ListingDetailDialog {
 
         content.getChildren().addAll(title, badges, price, fields, description);
         if (!listing.getPhotoPaths().isEmpty()) {
-            content.getChildren().add(PhotoGallery.thumbnails(listing.getPhotoPaths()));
+            content.getChildren().add(ListingPhotos.gallery(listing, 150, 110));
         }
 
         dialog.getDialogPane().setContent(content);

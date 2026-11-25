@@ -68,7 +68,13 @@ public class DummyDataService {
     public static synchronized DummyDataService getInstance() {
         if (instance == null) {
             boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, "false"));
-            instance = open(Database.openFile(Path.of(DATABASE_FILE), reset));
+            Database db = Database.openFile(Path.of(DATABASE_FILE), reset);
+            try {
+                instance = open(db);
+            } catch (RuntimeException e) {
+                db.close();   // release the file and its lock if loading or seeding fails
+                throw e;
+            }
         }
         return instance;
     }
