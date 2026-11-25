@@ -8,6 +8,7 @@ import javafx.scene.control.TextInputControl;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 
 /**
  * Adds a show/hide toggle button beside a {@link PasswordField}.
@@ -50,7 +51,9 @@ public final class PasswordVisibility {
         reveal.setVisible(false);
         reveal.setManaged(false);
 
-        Button button = new Button("👁");
+        // A word, not an eye emoji: JavaFX's default fonts on Windows may not have the emoji.
+        Button button = new Button("Show");
+        button.setMinWidth(Region.USE_PREF_SIZE);
         button.getStyleClass().add("password-toggle");
         button.setFocusTraversable(false);
         Tooltip tooltip = new Tooltip("Show password");
@@ -74,6 +77,7 @@ public final class PasswordVisibility {
             to.requestFocus();
             String text = to.getText();
             to.positionCaret(text == null ? 0 : text.length());
+            button.setText(revealed[0] ? "Hide" : "Show");
             tooltip.setText(revealed[0] ? "Hide password" : "Show password");
         });
 
