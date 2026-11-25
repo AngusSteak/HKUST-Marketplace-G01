@@ -38,8 +38,11 @@
                     <PasswordField fx:id="confirmPasswordField" promptText="Re-enter password" prefHeight="38"/>
                 </VBox>
                 <VBox spacing="5">
-                    <Label text="Preferred Meet-up Location (optional)" style="-fx-font-weight: 600;"/>
-                    <ComboBox fx:id="meetupCombo" promptText="Select location" prefHeight="38" maxWidth="Infinity"/>
+                    <Label text="Preferred Meet-up Locations (optional)" style="-fx-font-weight: 600;"/>
+                    <ScrollPane fitToWidth="true" prefViewportHeight="150" maxWidth="Infinity"
+                                style="-fx-background-color: transparent; -fx-background: transparent;">
+                        <GridPane fx:id="meetupGrid" hgap="16" vgap="8" style="-fx-padding: 6;"/>
+                    </ScrollPane>
                 </VBox>
                 <VBox spacing="5">
                     <Label text="Seller Bio (optional)" style="-fx-font-weight: 600;"/>
