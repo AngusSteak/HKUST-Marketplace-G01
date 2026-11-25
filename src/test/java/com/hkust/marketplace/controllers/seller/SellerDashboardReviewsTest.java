@@ -1,11 +1,14 @@
 package com.hkust.marketplace.controllers.seller;
 
+import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.utils.SellerReviewService;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.OptionalDouble;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SellerDashboardReviewsTest {
 
@@ -25,6 +28,20 @@ class SellerDashboardReviewsTest {
     void summaryWithNoVisibleReviewsSaysNoRatingYet() {
         assertEquals("No rating yet · 0 reviews",
                 SellerDashboardController.ratingSummary(OptionalDouble.empty(), 0));
+    }
+
+    @Test
+    void reviewMetaShowsBuyerListingAndFormattedDate() {
+        Review review = new Review();
+        review.setListingTitle("Calculus Textbook");
+        review.setCreatedAt(LocalDateTime.of(2026, 11, 26, 14, 30));
+
+        String meta = SellerDashboardController.reviewMeta(review, "alice");
+
+        assertEquals("by alice · Calculus Textbook · 2026-11-26 14:30", meta);
+        assertTrue(meta.contains("alice"));
+        assertTrue(meta.contains("Calculus Textbook"));
+        assertTrue(meta.contains("2026-11-26 14:30"));
     }
 
     @Test

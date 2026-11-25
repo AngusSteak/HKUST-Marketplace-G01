@@ -35,6 +35,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.io.IOException;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -54,6 +55,8 @@ public class SellerDashboardController {
     private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
     private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
     private static final String BACK_TO_NOTIFICATIONS = "\u2190 Back to Notifications";
+    private static final DateTimeFormatter REVIEW_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     static final List<NotificationCategory> SELLER_CATEGORIES = List.of(
             NotificationCategory.LISTING_APPROVED, NotificationCategory.LISTING_REJECTED,
@@ -733,8 +736,7 @@ public class SellerDashboardController {
         stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
         Label comment = new Label(review.getComment());
         comment.setWrapText(true);
-        Label meta = new Label("by " + users.historicalLabel(review.getBuyerUsername())
-                + " · " + review.getListingTitle());
+        Label meta = new Label(reviewMeta(review, users.historicalLabel(review.getBuyerUsername())));
         meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
         item.getChildren().addAll(stars, comment, meta);
         Listing resolvedListing = reviewService.listingOf(review);
@@ -829,6 +831,14 @@ public class SellerDashboardController {
             return "No rating yet · " + count + " " + noun;
         }
         return String.format("Average rating: %.1f · %d %s", average.getAsDouble(), count, noun);
+    }
+
+    /** Meta line for a seller review: buyer, listing title and the review date (UC-2.9). */
+    static String reviewMeta(Review review, String buyerLabel) {
+        String base = "by " + buyerLabel + " · " + review.getListingTitle();
+        return review.getCreatedAt() == null
+                ? base
+                : base + " · " + REVIEW_DATE_FORMAT.format(review.getCreatedAt());
     }
 
     static String flagButtonLabel(boolean flagged) {
