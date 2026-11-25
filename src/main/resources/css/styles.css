@@ -212,6 +212,44 @@
     -fx-background-color: #e8f0f8;
 }
 
+/* Deal history: the item title is the link, so rows themselves never highlight. */
+.history-table .table-row-cell,
+.history-table .table-row-cell:odd,
+.history-table .table-row-cell:filled:hover,
+.history-table .table-row-cell:filled:selected,
+.history-table .table-row-cell:filled:focused,
+.history-table .table-row-cell:filled:selected:focused {
+    -fx-background-color: white;
+}
+
+.history-table .table-row-cell:filled:selected .table-cell {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-text-fill: #1a1a2e;
+}
+
+.history-table:focused {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.deal-link {
+    -fx-text-fill: #003974;
+    -fx-underline: false;
+    -fx-cursor: hand;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+}
+
+.deal-link:hover {
+    -fx-underline: true;
+    -fx-text-fill: #A68137;
+}
+
+.deal-link:focused {
+    -fx-border-color: transparent;
+}
+
 /* ---------- Welcome / Auth screens ---------- */
 .auth-pane {
     -fx-background-color: white;
