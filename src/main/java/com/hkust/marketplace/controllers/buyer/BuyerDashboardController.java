@@ -32,6 +32,7 @@ import com.hkust.marketplace.utils.DealRequestService;
 import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.ListingSearch;
 import com.hkust.marketplace.utils.MyDealsService;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.ProfileService;
 import com.hkust.marketplace.utils.ReviewService;
 import com.hkust.marketplace.utils.SellerProfileService;
@@ -1450,6 +1451,12 @@ public class BuyerDashboardController {
         newPass.setPromptText("New password");
         PasswordField confirmPass = new PasswordField();
         confirmPass.setPromptText("Confirm new password");
+        HBox currentPassRow = new HBox(6, currentPass);
+        PasswordVisibility.attach(currentPass, currentPassRow);
+        HBox newPassRow = new HBox(6, newPass);
+        PasswordVisibility.attach(newPass, newPassRow);
+        HBox confirmPassRow = new HBox(6, confirmPass);
+        PasswordVisibility.attach(confirmPass, confirmPassRow);
         Label rules = muted("8\u201364 characters with an uppercase letter, a lowercase letter, a digit and a"
                 + " special character; no spaces; not your username.");
 
@@ -1488,9 +1495,9 @@ public class BuyerDashboardController {
                 new Label("Full Name"), nameField,
                 new Label("Residence hall"), residence,
                 passwordTitle,
-                new Label("Current password"), currentPass,
-                new Label("New password"), newPass,
-                new Label("Confirm new password"), confirmPass, rules,
+                new Label("Current password"), currentPassRow,
+                new Label("New password"), newPassRow,
+                new Label("Confirm new password"), confirmPassRow, rules,
                 message, new HBox(10, saveBtn, cancelBtn));
 
         contentPane.getChildren().add(form);

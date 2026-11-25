@@ -360,3 +360,12 @@
 .hyperlink:hover {
     -fx-text-fill: #A68137;
 }
+
+.password-toggle {
+    -fx-background-color: transparent;
+    -fx-padding: 0 6 0 6;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #003974;
+    -fx-cursor: hand;
+}

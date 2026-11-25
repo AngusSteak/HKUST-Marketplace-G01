@@ -9,6 +9,7 @@ import com.hkust.marketplace.utils.AdminFilters;
 import com.hkust.marketplace.utils.AdminService;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.beans.property.SimpleStringProperty;
@@ -990,6 +991,12 @@ public class AdminDashboardController {
         next.setPromptText("New password");
         PasswordField confirm = new PasswordField();
         confirm.setPromptText("Confirm new password");
+        HBox currentRow = new HBox(6, current);
+        PasswordVisibility.attach(current, currentRow);
+        HBox nextRow = new HBox(6, next);
+        PasswordVisibility.attach(next, nextRow);
+        HBox confirmRow = new HBox(6, confirm);
+        PasswordVisibility.attach(confirm, confirmRow);
         Button save = new Button("Save");
         save.getStyleClass().add("btn-success");
         save.setOnAction(e -> {
@@ -1012,7 +1019,7 @@ public class AdminDashboardController {
         form.getChildren().addAll(
                 new Label("Full name"), name,
                 new Label("Change password (leave all three empty to keep it)"),
-                current, next, confirm, save);
+                currentRow, nextRow, confirmRow, save);
         contentPane.getChildren().add(form);
     }
 
