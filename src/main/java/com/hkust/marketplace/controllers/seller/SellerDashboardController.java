@@ -245,13 +245,15 @@ public class SellerDashboardController {
             });
         });
 
-        boolean markSoldAllowed = !l.isDeleted()
-                && l.getStatus() == ListingStatus.LIVE
-                && l instanceof SaleListing;
+        String markSoldReason = markSoldUnavailableReason(l);
         Button soldBtn = new Button("Mark sold");
         soldBtn.getStyleClass().addAll("btn-primary", "btn-sm");
-        soldBtn.setDisable(!markSoldAllowed);
         soldBtn.setOnAction(e -> {
+            // SRS UC-2.4 A2/A3: tell the seller why, instead of a disabled button with no message.
+            if (markSoldReason != null) {
+                new Alert(Alert.AlertType.WARNING, markSoldReason).showAndWait();
+                return;
+            }
             int affected = openRequests.size();
             String message = affected == 0
                     ? "Mark this listing as sold?\n\nAny open offers will be closed and their buyers notified."
@@ -279,6 +281,22 @@ public class SellerDashboardController {
 
         row.getChildren().addAll(info, status, editBtn, delBtn, soldBtn);
         return row;
+    }
+
+    /**
+     * Why the seller cannot mark {@code listing} as sold (SRS UC-2.4 A2/A3), or {@code null}
+     * when the action is available. The dashboard shows this text so the seller is told the
+     * reason instead of only seeing a disabled button.
+     */
+    static String markSoldUnavailableReason(Listing listing) {
+        if (listing == null || listing.isDeleted()) {
+            return SellerService.NOT_CHANGEABLE;
+        }
+        return switch (listing.getStatus()) {
+            case RESERVED, SOLD, LENT, GIVEN, TAKEN_DOWN -> SellerService.NOT_CHANGEABLE;
+            case PENDING_REVIEW, REJECTED -> SellerService.NOT_LIVE;
+            case LIVE -> listing instanceof SaleListing ? null : SellerService.NOT_SALE_LISTING;
+        };
     }
 
     @FXML
