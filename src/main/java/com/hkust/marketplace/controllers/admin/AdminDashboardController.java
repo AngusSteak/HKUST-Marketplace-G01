@@ -205,7 +205,7 @@ public class AdminDashboardController {
         TableView<Listing> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPrefHeight(520);
-        table.getColumns().add(textColumn("Title", l -> l.getTitle(), 220));
+        table.getColumns().add(listingTitleColumn());
         table.getColumns().add(textColumn("Seller", l -> l.getSellerFullName() + " (@" + l.getSellerUsername() + ")", 160));
         table.getColumns().add(textColumn("Type", l -> l.getTypeDisplay(), 100));
         table.getColumns().add(textColumn("Status", l -> statusText(l.getStatus()), 110));
@@ -230,8 +230,43 @@ public class AdminDashboardController {
         status.valueProperty().addListener((o, a, b) -> refresh.run());
         refresh.run();
 
-        root.getChildren().addAll(new HBox(10, add, search, status), table);
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
+        root.getChildren().addAll(new HBox(10, add, search, status),
+                label("Click a title to preview the item.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"), table);
         contentPane.getChildren().add(root);
+    }
+
+    private TableColumn<Listing, String> listingTitleColumn() {
+        TableColumn<Listing, String> column = textColumn("Title", Listing::getTitle, 220);
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    Listing listing = getTableRow() == null ? null : getTableRow().getItem();
+                    if (listing != null) {
+                        ListingDetailDialog.show(
+                                contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
+        return column;
     }
 
     private static <T> TableColumn<Listing, String> textColumn(String title,
@@ -253,16 +288,14 @@ public class AdminDashboardController {
 
     private TableColumn<Listing, Void> listingActions() {
         TableColumn<Listing, Void> column = new TableColumn<>("Actions");
-        column.setPrefWidth(360);
+        column.setPrefWidth(280);
         column.setCellFactory(c -> new TableCell<>() {
-            private final Button view = new Button("View");
             private final Button edit = new Button("Edit");
             private final Button reports = new Button("Reports");
             private final Button takeDown = new Button("Take down");
-            private final HBox box = new HBox(6, view, edit, reports, takeDown);
+            private final HBox box = new HBox(6, edit, reports, takeDown);
 
             {
-                view.getStyleClass().addAll("btn-outline", "btn-sm");
                 edit.getStyleClass().addAll("btn-outline", "btn-sm");
                 reports.getStyleClass().addAll("btn-outline", "btn-sm");
                 takeDown.getStyleClass().addAll("btn-danger", "btn-sm");
@@ -278,8 +311,6 @@ public class AdminDashboardController {
                 Listing listing = getTableView().getItems().get(getIndex());
                 int open = DummyDataService.getInstance().reports().openReports(listing).size();
                 reports.setText(open == 0 ? "Reports" : "Reports (" + open + ")");
-                view.setOnAction(e -> ListingDetailDialog.show(
-                        contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing));
                 edit.setOnAction(e -> showEditListing(listing));
                 reports.setOnAction(e -> showReports(listing));
                 takeDown.setOnAction(e -> promptTakeDown(listing, AdminDashboardController.this::showAllListings));
