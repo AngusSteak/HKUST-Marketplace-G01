@@ -132,7 +132,8 @@ public final class Database implements AutoCloseable {
             throw e;
         } catch (OverlappingFileLockException e) {
             // Should not happen (the open-files check comes first), but never treat it as free.
-            closeQuietly(channel);
+            // Deliberately left open: closing this handle would release the lock this process
+            // already holds on the file (see OPEN_IN_THIS_PROCESS), so a leaked handle is safer.
             throw new DatabaseInUseException(file);
         }
         if (lock == null) {
