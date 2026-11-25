@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.seller;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
@@ -209,6 +210,13 @@ public class SellerDashboardController {
 
         Button delBtn = new Button("Delete");
         delBtn.getStyleClass().addAll("btn-danger", "btn-sm");
+        boolean deleteAllowed = !l.isDeleted()
+                && (l.getStatus() == ListingStatus.LIVE || l.getStatus() == ListingStatus.PENDING_REVIEW
+                    || l.getStatus() == ListingStatus.REJECTED);
+        delBtn.setDisable(!deleteAllowed);
+        if (!deleteAllowed) {
+            delBtn.setTooltip(new Tooltip("Sold, reserved, lent, given or taken-down listings can no longer be changed."));
+        }
         delBtn.setOnAction(e -> {
             int affected = openRequests.size();
             String message = affected == 0
@@ -728,6 +736,13 @@ public class SellerDashboardController {
                 + " · " + review.getListingTitle());
         meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
         item.getChildren().addAll(stars, comment, meta);
+        Listing resolvedListing = reviewService.listingOf(review);
+        if (resolvedListing != null) {
+            Hyperlink link = new Hyperlink("View listing");
+            link.setOnAction(e -> ListingDetailDialog.show(
+                    contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), resolvedListing));
+            item.getChildren().add(link);
+        }
 
         if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
             Label reply = new Label("Your reply: " + review.getSellerReply());
@@ -889,7 +904,8 @@ public class SellerDashboardController {
                 if (listing == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This listing no longer exists.").showAndWait();
                 } else if (listing.isDeleted() || listing.getStatus() == ListingStatus.TAKEN_DOWN) {
-                    new Alert(Alert.AlertType.INFORMATION, "This listing was taken down by an admin.").showAndWait();
+                    ListingDetailDialog.show(
+                            contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
                 } else {
                     showMyListings();
                 }
@@ -899,8 +915,13 @@ public class SellerDashboardController {
                 if (request == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This request no longer exists.").showAndWait();
                     showRequests();
-                } else {
+                } else if (request.getStatus() == RequestStatus.PENDING
+                        || request.getStatus() == RequestStatus.COUNTERED) {
                     showRequestsFiltered(request.getListing());
+                } else {
+                    ListingDetailDialog.show(
+                            contentPane.getScene() == null ? null : contentPane.getScene().getWindow(),
+                            request.getListing());
                 }
             }
             case DEAL -> showRequests();

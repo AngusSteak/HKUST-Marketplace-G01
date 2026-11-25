@@ -16,6 +16,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -114,6 +115,16 @@ class ReviewServiceTest {
         assertEquals("Thanks Alice!", mine.get(0).getSellerReply());
         assertEquals(2, reviews.myReviews(bob).size(), "bob's seeded review and the new one");
         assertEquals("Worked well", reviews.myReviews(bob).get(0).getComment());
+    }
+
+    @Test
+    void theReviewedListingIsFoundThroughItsDeal() {
+        Deal textbook = completeAlicesTextbook();
+        Review review = reviews.submitReview(alice, textbook, 5, "Great");
+
+        assertEquals("L100", reviews.listingOf(review).getId());
+        assertNull(reviews.listingOf(data.reviews().all().get(0)), "a seeded review has no deal");
+        assertNull(reviews.listingOf(null));
     }
 
     @Test

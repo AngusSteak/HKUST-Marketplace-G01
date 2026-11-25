@@ -1,5 +1,6 @@
 package com.hkust.marketplace.controllers.admin;
 
+import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
@@ -172,6 +173,11 @@ public class AdminDashboardController {
             });
         });
 
+        Button view = new Button("View");
+        view.getStyleClass().addAll("btn-outline", "btn-sm");
+        view.setOnAction(e -> ListingDetailDialog.show(
+                contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), l));
+
         // SRS UC-3.2 / brief 3.2: the submission's photos and status are part of what the admin reviews.
         Label status = new Label("Pending Review");
         status.getStyleClass().addAll("badge", "badge-pending");
@@ -180,7 +186,7 @@ public class AdminDashboardController {
         HBox titleRow = new HBox(10, title, status);
         titleRow.setAlignment(Pos.CENTER_LEFT);
         card.getChildren().addAll(titleRow, meta, submitted, ListingPhotos.gallery(l, 160, 110),
-                new HBox(10, approve, reject));
+                new HBox(10, view, approve, reject));
         return card;
     }
 
@@ -209,7 +215,7 @@ public class AdminDashboardController {
         TableView<Listing> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPrefHeight(520);
-        table.getColumns().add(textColumn("Title", l -> l.getTitle(), 220));
+        table.getColumns().add(listingTitleColumn());
         table.getColumns().add(textColumn("Seller", l -> l.getSellerFullName() + " (@" + l.getSellerUsername() + ")", 160));
         table.getColumns().add(textColumn("Type", l -> l.getTypeDisplay(), 100));
         table.getColumns().add(textColumn("Status", l -> statusText(l.getStatus()), 110));
@@ -234,8 +240,43 @@ public class AdminDashboardController {
         status.valueProperty().addListener((o, a, b) -> refresh.run());
         refresh.run();
 
-        root.getChildren().addAll(new HBox(10, add, search, status), table);
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
+        root.getChildren().addAll(new HBox(10, add, search, status),
+                label("Click a title to preview the item.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"), table);
         contentPane.getChildren().add(root);
+    }
+
+    private TableColumn<Listing, String> listingTitleColumn() {
+        TableColumn<Listing, String> column = textColumn("Title", Listing::getTitle, 220);
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    Listing listing = getTableRow() == null ? null : getTableRow().getItem();
+                    if (listing != null) {
+                        ListingDetailDialog.show(
+                                contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
+        return column;
     }
 
     private static <T> TableColumn<Listing, String> textColumn(String title,
@@ -717,7 +758,7 @@ public class AdminDashboardController {
         TableView<Deal> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPrefHeight(500);
-        table.getColumns().add(dealColumn("Title", d -> d.getListing().getTitle(), 200));
+        table.getColumns().add(dealTitleColumn());
         table.getColumns().add(dealColumn("Buyer", d -> party(d.getBuyerUsername()), 160));
         table.getColumns().add(dealColumn("Seller", d -> party(d.getSellerUsername()), 160));
         table.getColumns().add(dealColumn("Type", d -> d.getDealType().name(), 80));
@@ -738,25 +779,11 @@ public class AdminDashboardController {
         to.valueProperty().addListener((o, a, b) -> refresh.run());
         refresh.run();
 
-        Button details = new Button("View details");
-        details.getStyleClass().add("btn-outline");
-        details.setOnAction(e -> {
-            Deal selected = table.getSelectionModel().getSelectedItem();
-            if (selected == null) {
-                new Alert(Alert.AlertType.INFORMATION, "Select a deal first.").showAndWait();
-            } else {
-                showDealDetails(selected);
-            }
-        });
-        table.setRowFactory(tv -> {
-            TableRow<Deal> row = new TableRow<>();
-            row.setOnMouseClicked(e -> {
-                if (e.getClickCount() == 2 && !row.isEmpty()) showDealDetails(row.getItem());
-            });
-            return row;
-        });
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
 
-        root.getChildren().addAll(new HBox(10, search, type, status, from, to, details), table);
+        root.getChildren().addAll(new HBox(10, search, type, status, from, to),
+                label("Click a title to view details.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"), table);
         contentPane.getChildren().add(root);
     }
 
@@ -766,6 +793,37 @@ public class AdminDashboardController {
         TableColumn<Deal, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
         column.setCellValueFactory(c -> new SimpleStringProperty(value.apply(c.getValue())));
+        return column;
+    }
+
+    private TableColumn<Deal, String> dealTitleColumn() {
+        TableColumn<Deal, String> column = dealColumn("Title", d -> d.getListing().getTitle(), 200);
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    Deal deal = getTableRow() == null ? null : getTableRow().getItem();
+                    if (deal != null) {
+                        showDealDetails(deal);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
         return column;
     }
 
@@ -802,6 +860,9 @@ public class AdminDashboardController {
         } else if (deal.getRequest() instanceof BorrowRequest borrow) {
             content.getChildren().add(label("Borrow: " + borrow.getStartDate().format(DATE)
                     + " to " + borrow.getEndDate().format(DATE), "-fx-text-fill: #5a5a7a;"));
+        }
+        if (!deal.getListing().getPhotoPaths().isEmpty()) {
+            content.getChildren().add(ListingPhotos.gallery(deal.getListing(), 150, 110));
         }
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Deal details");

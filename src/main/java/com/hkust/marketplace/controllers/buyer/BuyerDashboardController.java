@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.models.BorrowRequest;
@@ -1038,7 +1039,7 @@ public class BuyerDashboardController {
 
         TableView<Deal> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.getColumns().add(column("Item Title", d -> d.getListing().getTitle()));
+        table.getColumns().add(dealTitleColumn());
         table.getColumns().add(column("Seller", Deal::getSellerDisplayName));
         table.getColumns().add(column("Category", d -> d.getListing().getCategory().getLabel()));
         table.getColumns().add(column("Deal Date", d -> d.getCompletedDate().format(DEAL_TIME)));
@@ -1048,6 +1049,8 @@ public class BuyerDashboardController {
             case GIVEN -> "Received";
         }));
         table.getColumns().add(column("Outcome", d -> statusLabel(d.getStatus())));
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
 
         String buyer = SessionManager.getCurrentUser() == null ? "" : SessionManager.getCurrentUser().getUsername();
         List<Deal> past = DummyDataService.getInstance().deals().pastDealsForBuyer(buyer);
@@ -1075,13 +1078,45 @@ public class BuyerDashboardController {
         clear.setOnAction(e -> showHistory());
         refresh.run();
 
-        root.getChildren().addAll(filters, error, table);
+        root.getChildren().addAll(filters, error, muted("Click an item title to see the item."), table);
         contentPane.getChildren().add(root);
     }
 
     private static TableColumn<Deal, String> column(String title, Function<Deal, String> value) {
         TableColumn<Deal, String> column = new TableColumn<>(title);
         column.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(value.apply(d.getValue())));
+        return column;
+    }
+
+    private TableColumn<Deal, String> dealTitleColumn() {
+        TableColumn<Deal, String> column = column("Item Title", d -> d.getListing().getTitle());
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    Deal deal = getTableRow() == null ? null : getTableRow().getItem();
+                    if (deal != null) {
+                        ListingDetailDialog.show(getScene() == null ? null : getScene().getWindow(),
+                                deal.getListing());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
         return column;
     }
 
@@ -1150,7 +1185,11 @@ public class BuyerDashboardController {
                 showRateDialog(deal);
                 showReviews();
             });
-            root.getChildren().add(actionRow(info, new HBox(8, rate)));
+            Button view = new Button("View item");
+            view.getStyleClass().addAll("btn-outline", "btn-sm");
+            view.setOnAction(e -> ListingDetailDialog.show(
+                    contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), deal.getListing()));
+            root.getChildren().add(actionRow(info, new HBox(8, view, rate)));
         }
 
         root.getChildren().add(sectionTitle("My reviews"));
@@ -1159,7 +1198,10 @@ public class BuyerDashboardController {
             root.getChildren().add(muted("You haven't written any reviews yet."));
         }
         for (Review review : mine) {
-            VBox item = reviewCard(review, "for " + displayName(review.getSellerUsername()));
+            Listing reviewed = reviewService.listingOf(review);
+            VBox item = reviewCard(review, "for " + displayName(review.getSellerUsername()),
+                    reviewed == null ? null : () -> ListingDetailDialog.show(
+                            contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), reviewed));
             if (review.isHidden()) {
                 item.getChildren().add(2, muted("Hidden by the admin, so it no longer counts towards the rating."));
             }
@@ -1246,9 +1288,30 @@ public class BuyerDashboardController {
      * Shared by My Reviews and the seller profile so both show reviews the same way.
      */
     private static VBox reviewCard(Review review, String byLine) {
-        String listing = review.getListingTitle() == null ? "" : "  " + review.getListingTitle();
-        Label heading = new Label(stars(review.getRating()) + listing);
-        heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        return reviewCard(review, byLine, null);
+    }
+
+    /**
+     * As above; when {@code onTitle} is given, the listing title is a link that runs it (e.g. to
+     * show the reviewed item).
+     */
+    private static VBox reviewCard(Review review, String byLine, Runnable onTitle) {
+        Label stars = new Label(stars(review.getRating()));
+        stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        HBox heading = new HBox(8, stars);
+        heading.setAlignment(Pos.CENTER_LEFT);
+        if (review.getListingTitle() != null) {
+            if (onTitle != null) {
+                Hyperlink title = new Hyperlink(review.getListingTitle());
+                title.setStyle("-fx-font-weight: bold;");
+                title.setOnAction(e -> onTitle.run());
+                heading.getChildren().add(title);
+            } else {
+                Label title = new Label(review.getListingTitle());
+                title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+                heading.getChildren().add(title);
+            }
+        }
         Label comment = new Label(review.getComment() == null ? "" : review.getComment());
         comment.setWrapText(true);
         VBox item = new VBox(3, heading, muted(byLine + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)), comment);
@@ -1395,8 +1458,10 @@ public class BuyerDashboardController {
                 Listing listing = data.listings().find(ref.getId());
                 if (listing == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This listing no longer exists.").showAndWait();
-                } else {
+                } else if (ListingSearch.isBrowsable(listing)) {
                     showListingDetails(listing);
+                } else {
+                    ListingDetailDialog.show(contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
                 }
             }
             case REQUEST, DEAL -> showMyDeals();
