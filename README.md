@@ -14,7 +14,11 @@ Data is stored in a local **SQLite** database (`data/marketplace.db`, kept acros
      ```
    - Both commands must work. If `javac` is missing, you only have a JRE — install the JDK.
 
-2. **Maven is optional** — this project includes the **Maven Wrapper** (`mvnw.cmd` on Windows).
+2. **Maven is optional** — this project includes the **Maven Wrapper** (`mvnw.cmd` on Windows, `mvnw` on macOS/Linux).
+
+> **Always start the app through Maven (`javafx:run`).** Running `MarketplaceApp.java` directly
+> (right-click → Run in an IDE) fails with *"JavaFX runtime components are missing"*: JavaFX must
+> be loaded as modules, which the Maven JavaFX plugin sets up for you.
 
 ## How to Run (Windows)
 
@@ -27,6 +31,12 @@ Open **PowerShell** or **Command Prompt** in the project folder
 
 First run downloads Maven automatically (needs internet). Then the app window should open.
 
+### macOS / Linux
+
+```bash
+./mvnw clean javafx:run
+```
+
 ### Alternative: if you already installed Maven and added it to PATH
 
 ```powershell
@@ -35,15 +45,19 @@ mvn clean javafx:run
 
 ### Run from IntelliJ IDEA
 
-1. Open the project folder as a Maven project
-2. Wait for dependencies to download
-3. Open `MarketplaceApp.java` → right-click → **Run**
+1. **File → Open** the project folder; IntelliJ imports it as a Maven project. Wait for the dependencies to download.
+2. Open the **Maven** tool window (right-hand side) → **marketplace → Plugins → javafx → `javafx:run`** and double-click it.
+3. To rerun with one click: **Run → Edit Configurations → + → Maven**, set *Command line* to `clean javafx:run`, and save. It then appears in the Run menu and toolbar.
+
+Do not right-click `MarketplaceApp.java` → Run; see the note under Prerequisites.
 
 ### Run from VS Code
 
 1. Install **Extension Pack for Java**
 2. Open the folder
-3. Run `MarketplaceApp.java`
+3. In a terminal, run `.\mvnw.cmd javafx:run` (Windows) or `./mvnw javafx:run` (macOS/Linux), or use the **Maven** sidebar → **Plugins → javafx → run**.
+
+Leave out `clean` in VS Code: its Java extension rebuilds `target/classes` as soon as `clean` deletes it, and the two compilers' files mixing can make the running app fail with `NoClassDefFoundError`.
 
 ## Demo Credentials
 
@@ -63,7 +77,7 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 - **Schema:** [`src/main/resources/db/schema.sql`](src/main/resources/db/schema.sql), applied on every start (`CREATE TABLE IF NOT EXISTS`). Open the file with [DB Browser for SQLite](https://sqlitebrowser.org/) or `sqlite3` to inspect it.
 - **How it works:** each store (`users()`, `listings()`, ...) keeps its objects in memory, writes every change to the database straight away, and reads everything back once at startup (`persistence/Database`, `utils/DummyDataService`).
 - **What is saved:** everything — users, listings (with their photo paths), deal requests and deals, favourites and follows, chat threads and messages, notifications, reviews, listing reports and the admin audit log. Data is **kept across restarts**.
-- **Reset to the demo data:** quit the app and delete the `data/` folder; the next launch creates a fresh database with the demo data. Alternatively run `MarketplaceApp` once from IntelliJ with the VM option `-Dmarketplace.resetDb=true` (Run → Edit Configurations → Modify options → Add VM options).
+- **Reset to the demo data:** quit the app and delete the `data/` folder; the next launch creates a fresh database with the demo data.
 - **Changing the schema:** `CREATE TABLE IF NOT EXISTS` does not alter existing tables, so after changing a table in `schema.sql`, delete `data/` (or reset as above) to recreate it.
 - **One-time reset for the hidden flag:** listings now persist a `deleted` visibility column (`0` = visible, `1` = hidden). A database created before this column existed will not gain it from `CREATE TABLE IF NOT EXISTS`, so delete `data/` once (or reset as above) after pulling this change. The first launch afterwards recreates the schema with the column; no further reset is needed and data is kept across restarts as usual.
 - **Tests** use a private in-memory SQLite database per `new DummyDataService()`, so they never touch `data/`.
