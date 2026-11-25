@@ -63,7 +63,8 @@ public final class SellerStatsService {
                         listing.getStatus(),
                         listing.getViewCount(),
                         countRequestsFor(requests, listing.getId()),
-                        countCompletedDealsFor(deals, listing.getId())))
+                        countCompletedDealsFor(deals, listing.getId()),
+                        completedDealTypeFor(deals, listing.getId())))
                 .toList();
 
         int views = visible.stream().mapToInt(Listing::getViewCount).sum();
@@ -93,5 +94,13 @@ public final class SellerStatsService {
         return (int) deals.stream()
                 .filter(deal -> deal.getListing().getId().equals(listingId) && isCompleted(deal.getStatus()))
                 .count();
+    }
+
+    private static DealType completedDealTypeFor(List<Deal> deals, String listingId) {
+        return deals.stream()
+                .filter(deal -> deal.getListing().getId().equals(listingId) && isCompleted(deal.getStatus()))
+                .map(Deal::getDealType)
+                .findFirst()
+                .orElse(null);
     }
 }

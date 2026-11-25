@@ -677,6 +677,7 @@ public class SellerDashboardController {
         table.getColumns().addAll(List.of(
                 statColumn("Listing", SellerStats.ListingStat::title),
                 statColumn("Status", row -> row.status().name().replace('_', ' ')),
+                statColumn("Outcome", row -> outcomeLabel(row.outcome())),
                 statColumn("Views", row -> String.valueOf(row.views())),
                 statColumn("Offers", row -> String.valueOf(row.offers())),
                 statColumn("Completed", row -> String.valueOf(row.completed()))));
@@ -1110,6 +1111,23 @@ public class SellerDashboardController {
             text += "\nSeller reply: " + sellerReply;
         }
         return text;
+    }
+
+    /**
+     * The listing's deal outcome as shown on the stats drill-down (SRS UC-2.8 step 5).
+     *
+     * @param type the completed deal's type, or {@code null} when the listing has no completed deal
+     * @return "Sold", "Lent" or "Given", or an em dash when there is no completed deal
+     */
+    static String outcomeLabel(DealType type) {
+        if (type == null) {
+            return "\u2014";
+        }
+        return switch (type) {
+            case SOLD -> "Sold";
+            case LENT -> "Lent";
+            case GIVEN -> "Given";
+        };
     }
 
     private static String dealTypeLabel(DealType type) {
