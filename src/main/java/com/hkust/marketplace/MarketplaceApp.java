@@ -37,6 +37,16 @@ public class MarketplaceApp extends Application {
             alert.showAndWait();
             Platform.exit();
             return;
+        } catch (RuntimeException e) {
+            // e.g. a read-only data/ folder or a file system without locking
+            Alert alert = new Alert(Alert.AlertType.ERROR,
+                    "The database in the data/ folder could not be opened:\n" + e.getMessage()
+                            + "\n\nCheck that the project folder is writable, then start the app again.");
+            alert.setHeaderText("Could not open the database");
+            alert.setTitle("HKUST Marketplace");
+            alert.showAndWait();
+            Platform.exit();
+            return;
         }
         loanTimer.start();
         SceneManager.init(primaryStage);
