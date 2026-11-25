@@ -3,16 +3,24 @@ package com.hkust.marketplace.controllers.common;
 import com.hkust.marketplace.models.LendListing;
 import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.Review;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.DurationText;
+import com.hkust.marketplace.utils.ReviewStore;
 
 import javafx.geometry.Insets;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
+
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * A small read-only preview of one listing. It is used from screens that only link to a listing
@@ -79,9 +87,75 @@ public final class ListingDetailDialog {
         if (!listing.getPhotoPaths().isEmpty()) {
             content.getChildren().add(ListingPhotos.gallery(listing, 150, 110));
         }
+        content.getChildren().add(reviewsSection(listing));
 
-        dialog.getDialogPane().setContent(content);
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setPrefViewportHeight(540);
+        dialog.getDialogPane().setContent(scroll);
         dialog.showAndWait();
+    }
+
+    /**
+     * Every visible (non-hidden) review of a seller, newest first.
+     *
+     * @param sellerUsername the seller's username
+     * @return the seller's reviews that are not hidden, most recent first; never {@code null}
+     */
+    public static List<Review> visibleSellerReviews(String sellerUsername) {
+        return visibleSellerReviews(DummyDataService.getInstance().reviews(), sellerUsername);
+    }
+
+    /**
+     * As above, reading from {@code reviews}. Visible so it can be tested with an in-memory store.
+     *
+     * @param reviews the review store to read
+     * @param sellerUsername the seller's username
+     * @return the seller's reviews that are not hidden, most recent first; never {@code null}
+     */
+    public static List<Review> visibleSellerReviews(ReviewStore reviews, String sellerUsername) {
+        return reviews.forSeller(sellerUsername).stream()
+                .sorted(Comparator.comparing(Review::getCreatedAt).reversed())
+                .toList();
+    }
+
+    private static VBox reviewsSection(Listing listing) {
+        VBox section = new VBox(6);
+        Label heading = new Label("Reviews of " + listing.getSellerFullName());
+        heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        section.getChildren().add(heading);
+        List<Review> reviews = visibleSellerReviews(listing.getSellerUsername());
+        if (reviews.isEmpty()) {
+            Label none = new Label("No reviews yet.");
+            none.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 13px;");
+            section.getChildren().add(none);
+            return section;
+        }
+        for (Review review : reviews) {
+            section.getChildren().add(reviewItem(review));
+        }
+        return section;
+    }
+
+    private static VBox reviewItem(Review review) {
+        Label stars = new Label(stars(review.getRating()));
+        stars.setStyle("-fx-text-fill: #A68137; -fx-font-weight: bold;");
+        Label comment = new Label(review.getComment() == null ? "" : "\u201c" + review.getComment() + "\u201d");
+        comment.setWrapText(true);
+        Label by = new Label("\u2014 " + displayName(review.getBuyerUsername()));
+        by.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        VBox item = new VBox(2, stars, comment, by);
+        item.getStyleClass().add("notif-item");
+        return item;
+    }
+
+    private static String stars(int rating) {
+        return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
+    }
+
+    private static String displayName(String username) {
+        User user = DummyDataService.getInstance().users().find(username);
+        return user == null ? username : user.getDisplayName();
     }
 
     private static void addField(GridPane grid, int row, String name, String value) {

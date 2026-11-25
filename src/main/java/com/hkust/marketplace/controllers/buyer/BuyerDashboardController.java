@@ -1257,12 +1257,9 @@ public class BuyerDashboardController {
                 .ifPresent(b -> info("Thank you. Your report has been sent to the admin."));
     }
 
-    /** The seller's latest visible reviews, shown on the listing details (SRS UC-1.9 postconditions). */
+    /** Every visible seller review, newest first, shown on the listing details (SRS UC-1.9 postconditions). */
     private VBox sellerReviews(String sellerUsername, String sellerName) {
-        List<Review> visible = DummyDataService.getInstance().reviews().forSeller(sellerUsername).stream()
-                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())
-                .limit(3)
-                .toList();
+        List<Review> visible = ListingDetailDialog.visibleSellerReviews(sellerUsername);
         VBox box = new VBox(4);
         Label heading = new Label("Reviews of " + sellerName);
         heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
