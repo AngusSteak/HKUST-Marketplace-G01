@@ -22,15 +22,18 @@ public final class AdminFilters {
 
     /**
      * Matches the review list filters (SRS UC-3.6): keyword over seller, buyer and comment, then
-     * a star score and a visibility state.
+     * a star score, a visibility state and an inclusive created-date range.
      *
      * @param review the review to test
      * @param keyword text to find in the seller, buyer or comment; blank means any
      * @param scoreIndex 0 for "All scores", otherwise 1 for 5 stars down to 5 for 1 star
      * @param visibility "All reviews", "Visible", "Hidden" or "Flagged"
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
      * @return {@code true} when the review passes every filter
      */
-    public static boolean matchesReview(Review review, String keyword, int scoreIndex, String visibility) {
+    public static boolean matchesReview(Review review, String keyword, int scoreIndex, String visibility,
+                                        LocalDate from, LocalDate to) {
         String text = normalise(keyword);
         if (!text.isEmpty()
                 && !contains(review.getSellerUsername(), text)
@@ -42,16 +45,19 @@ public final class AdminFilters {
         if (wanted != 0 && review.getRating() != wanted) {
             return false;
         }
-        if ("Hidden".equals(visibility)) {
-            return review.isHidden();
+        if ("Hidden".equals(visibility) && !review.isHidden()) {
+            return false;
         }
-        if ("Visible".equals(visibility)) {
-            return !review.isHidden();
+        if ("Visible".equals(visibility) && review.isHidden()) {
+            return false;
         }
-        if ("Flagged".equals(visibility)) {
-            return review.isFlagged() && !review.isHidden();
+        if ("Flagged".equals(visibility) && !(review.isFlagged() && !review.isHidden())) {
+            return false;
         }
-        return true;
+        if (from == null && to == null) {
+            return true;
+        }
+        return inRange(review.getCreatedAt().toLocalDate(), from, to);
     }
 
     /**

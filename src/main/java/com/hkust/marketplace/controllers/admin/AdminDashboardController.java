@@ -971,14 +971,23 @@ public class AdminDashboardController {
         ComboBox<String> visibility = new ComboBox<>(FXCollections.observableArrayList(
                 "All reviews", "Visible", "Hidden", "Flagged"));
         visibility.getSelectionModel().selectFirst();
+        DatePicker reviewFrom = new DatePicker();
+        reviewFrom.setPromptText("From");
+        DatePicker reviewTo = new DatePicker();
+        reviewTo.setPromptText("To");
         VBox reviews = new VBox(8);
         Runnable refreshReviews = () -> {
             reviews.getChildren().clear();
             String keyword = reviewSearch.getText();
             int scoreIndex = score.getSelectionModel().getSelectedIndex();
             String shown = visibility.getValue();
+            if (!AdminFilters.isValidDealDateRange(reviewFrom.getValue(), reviewTo.getValue())) {
+                reviews.getChildren().add(label(AdminFilters.INVALID_DEAL_DATE_RANGE, "-fx-text-fill: #b3261e;"));
+                return;
+            }
             List<Review> found = DummyDataService.getInstance().reviews().all().stream()
-                    .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, shown))
+                    .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, shown,
+                            reviewFrom.getValue(), reviewTo.getValue()))
                     .sorted(Comparator.comparing(Review::getCreatedAt).reversed())
                     .toList();
             if (found.isEmpty()) reviews.getChildren().add(label("No matching reviews.", "-fx-text-fill: #5a5a7a;"));
@@ -987,9 +996,11 @@ public class AdminDashboardController {
         reviewSearch.textProperty().addListener((o, a, b) -> refreshReviews.run());
         score.valueProperty().addListener((o, a, b) -> refreshReviews.run());
         visibility.valueProperty().addListener((o, a, b) -> refreshReviews.run());
+        reviewFrom.valueProperty().addListener((o, a, b) -> refreshReviews.run());
+        reviewTo.valueProperty().addListener((o, a, b) -> refreshReviews.run());
         refreshReviews.run();
 
-        root.getChildren().addAll(new HBox(10, reviewSearch, score, visibility), reviews);
+        root.getChildren().addAll(new HBox(10, reviewSearch, score, visibility, reviewFrom, reviewTo), reviews);
         contentPane.getChildren().add(scroll(root));
     }
 
