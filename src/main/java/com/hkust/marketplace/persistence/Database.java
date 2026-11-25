@@ -6,7 +6,11 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -18,6 +22,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The application's SQLite database: one JDBC connection, foreign keys on, and the schema in
@@ -37,8 +43,25 @@ public final class Database implements AutoCloseable {
     private final Connection connection;
     /** Work to run once the current transaction commits; dropped if it rolls back. */
     private final List<Runnable> afterCommit = new ArrayList<>();
+    /** The lock that keeps a second running copy of the app off this file; {@code null} in memory. */
+    private final FileChannel lockChannel;
+    /** This database's entry in {@link #OPEN_IN_THIS_PROCESS}; {@code null} in memory. */
+    private final Path openKey;
+
+    /**
+     * Database files this process has open. A second open is refused here, before any new handle
+     * to the lock file is created: on Linux and macOS a file lock belongs to the whole process, so
+     * opening and then closing another handle to the lock file would release the first lock too.
+     */
+    private static final Set<Path> OPEN_IN_THIS_PROCESS = ConcurrentHashMap.newKeySet();
 
     private Database(String url) {
+        this(url, null, null);
+    }
+
+    private Database(String url, FileChannel lockChannel, Path openKey) {
+        this.lockChannel = lockChannel;
+        this.openKey = openKey;
         try {
             this.connection = DriverManager.getConnection(url);
             try (Statement statement = connection.createStatement()) {
@@ -53,21 +76,81 @@ public final class Database implements AutoCloseable {
     /**
      * Opens (creating if needed) the database file. With {@code reset} the existing file is
      * deleted first, so the app starts from a fresh, re-seeded database.
+     *
+     * <p>Only one running copy of the app may use the file at a time: an operating-system lock
+     * on {@code <file>.lock} is taken first and held until {@link #close()} (the system also
+     * releases it if the app crashes). The lock is taken before a reset, so a second copy can
+     * never delete the file under the first.
+     *
+     * @throws DatabaseInUseException if another running copy already has the file open
      */
     public static Database openFile(Path file, boolean reset) {
         Objects.requireNonNull(file, "file");
+        Path path;
         try {
-            Path parent = file.toAbsolutePath().getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            if (reset) {
-                Files.deleteIfExists(file);
-            }
+            Path absolute = file.toAbsolutePath().normalize();
+            Files.createDirectories(absolute.getParent());
+            // The real directory, so two spellings of the same folder (symlinks, "..") match.
+            path = absolute.getParent().toRealPath().resolve(absolute.getFileName());
         } catch (IOException e) {
             throw new UncheckedIOException("Could not prepare database file " + file, e);
         }
-        return new Database("jdbc:sqlite:" + file.toAbsolutePath());
+        if (!OPEN_IN_THIS_PROCESS.add(path)) {
+            throw new DatabaseInUseException(path);   // no new lock-file handle was opened
+        }
+        FileChannel lock = null;
+        try {
+            lock = lock(path);
+            if (reset) {
+                Files.deleteIfExists(path);
+            }
+            return new Database("jdbc:sqlite:" + path, lock, path);
+        } catch (IOException | RuntimeException e) {
+            if (lock != null) {
+                closeQuietly(lock);
+            }
+            OPEN_IN_THIS_PROCESS.remove(path);
+            if (e instanceof IOException io) {
+                throw new UncheckedIOException("Could not prepare database file " + path, io);
+            }
+            throw (RuntimeException) e;
+        }
+    }
+
+    /**
+     * Takes the lock on {@code <file>.lock}, or refuses if another process holds it. Only called
+     * when this process does not have the file open (see {@link #OPEN_IN_THIS_PROCESS}).
+     */
+    private static FileChannel lock(Path file) throws IOException {
+        Path lockFile = file.resolveSibling(file.getFileName() + ".lock");
+        FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        FileLock lock;
+        try {
+            lock = channel.tryLock();
+        } catch (IOException e) {
+            closeQuietly(channel);
+            throw e;
+        } catch (OverlappingFileLockException e) {
+            // Should not happen (the open-files check comes first), but never treat it as free.
+            // Deliberately left open: closing this handle would release the lock this process
+            // already holds on the file (see OPEN_IN_THIS_PROCESS), so a leaked handle is safer.
+            throw new DatabaseInUseException(file);
+        }
+        if (lock == null) {
+            // Held by another process. Closing this handle is safe: this process has no lock on
+            // the file to lose, as the open-files check above ruled out an earlier open here.
+            channel.close();
+            throw new DatabaseInUseException(file);
+        }
+        return channel;
+    }
+
+    private static void closeQuietly(FileChannel channel) {
+        try {
+            channel.close();   // closing the channel releases its lock
+        } catch (IOException ignored) {
+            // nothing more to release
+        }
     }
 
     /** A private, empty database that lives only as long as this object; used by tests. */
@@ -161,6 +244,13 @@ public final class Database implements AutoCloseable {
             connection.close();
         } catch (SQLException e) {
             throw new DatabaseException("Could not close database", e);
+        } finally {
+            if (lockChannel != null) {
+                closeQuietly(lockChannel);
+            }
+            if (openKey != null) {
+                OPEN_IN_THIS_PROCESS.remove(openKey);
+            }
         }
     }
 
