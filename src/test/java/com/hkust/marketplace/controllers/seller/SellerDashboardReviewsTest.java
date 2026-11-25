@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.OptionalDouble;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SellerDashboardReviewsTest {
@@ -47,7 +48,14 @@ class SellerDashboardReviewsTest {
     @Test
     void flagButtonLabelReflectsFlaggedState() {
         assertEquals("Flag", SellerDashboardController.flagButtonLabel(false));
-        assertEquals("Already flagged", SellerDashboardController.flagButtonLabel(true));
+        assertEquals("Awaiting moderation", SellerDashboardController.flagButtonLabel(true));
+    }
+
+    @Test
+    void flaggedReviewExplainsItIsAwaitingModeration() {
+        assertNull(SellerDashboardController.flagTooltip(false));
+        assertEquals("This review is already awaiting admin moderation.",
+                SellerDashboardController.flagTooltip(true));
     }
 
     @Test

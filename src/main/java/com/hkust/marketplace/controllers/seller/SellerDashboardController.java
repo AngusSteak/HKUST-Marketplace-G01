@@ -810,6 +810,10 @@ public class SellerDashboardController {
         Button flag = new Button(flagButtonLabel(review.isFlagged()));
         flag.getStyleClass().addAll("btn-outline", "btn-sm");
         flag.setDisable(review.isFlagged());
+        String tooltip = flagTooltip(review.isFlagged());
+        if (tooltip != null) {
+            flag.setTooltip(new Tooltip(tooltip));
+        }
         Label message = new Label();
         message.setStyle("-fx-text-fill: #c62828; -fx-font-size: 12px;");
         flag.setOnAction(e -> {
@@ -861,8 +865,17 @@ public class SellerDashboardController {
                 : base + " · " + REVIEW_DATE_FORMAT.format(review.getCreatedAt());
     }
 
+    /**
+     * Label for the flag button: an already flagged review is awaiting admin moderation
+     * (SRS UC-2.9 A3), so the button says so instead of just reporting it was flagged.
+     */
     static String flagButtonLabel(boolean flagged) {
-        return flagged ? "Already flagged" : "Flag";
+        return flagged ? "Awaiting moderation" : "Flag";
+    }
+
+    /** Tooltip explaining the flag button's state, or {@code null} when no hint is needed. */
+    static String flagTooltip(boolean flagged) {
+        return flagged ? "This review is already awaiting admin moderation." : null;
     }
 
     static String reviewActionError(String action, RuntimeException ex) {
