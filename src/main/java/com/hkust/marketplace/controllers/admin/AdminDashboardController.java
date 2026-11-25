@@ -17,6 +17,7 @@ import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -34,6 +35,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -417,9 +419,42 @@ public class AdminDashboardController {
             form.getChildren().addAll(new Label("Lending duration"), durationRow);
         }
         form.getChildren().add(photoArea);
+        Label errorSummary = new Label();
+        errorSummary.getStyleClass().add("input-error-label");
+        errorSummary.setWrapText(true);
+        errorSummary.setVisible(false);
+        errorSummary.setManaged(false);
+        form.getChildren().add(errorSummary);
         refreshAdminPhotoStrip(photoStrip, addPhotos, photoHint, keptPhotoPaths, newPhotos);
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        ListingType type = listing instanceof SaleListing ? ListingType.SELL
+                : listing instanceof LendListing ? ListingType.LEND : ListingType.GIVEAWAY;
+        List<Node> inputs = List.<Node>of(title, description, price, days, hours, seconds);
+        Map<String, List<Node>> errorControls = Map.of(
+                "title", List.<Node>of(title),
+                "description", List.<Node>of(description),
+                "price", List.<Node>of(price),
+                "duration", List.<Node>of(days, hours, seconds));
+        Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okButton.addEventFilter(ActionEvent.ACTION, event -> {
+            inputs.forEach(field -> field.getStyleClass().remove("input-error"));
+            errorSummary.setText("");
+            errorSummary.setVisible(false);
+            errorSummary.setManaged(false);
+            Map<String, String> errors = adminEditErrors(type, title.getText(), description.getText(),
+                    price.getText(), days.getText(), hours.getText(), seconds.getText());
+            if (errors.isEmpty()) {
+                return;
+            }
+            errors.forEach((key, message) -> errorControls.getOrDefault(key, List.of())
+                    .forEach(field -> field.getStyleClass().add("input-error")));
+            errorSummary.setText(String.join("\n", errors.values()));
+            errorSummary.setVisible(true);
+            errorSummary.setManaged(true);
+            event.consume();
+        });
 
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
         try {
@@ -434,6 +469,44 @@ public class AdminDashboardController {
             new Alert(Alert.AlertType.WARNING, "Lending days, hours and seconds must be whole numbers.").showAndWait();
         }
         showAllListings();
+    }
+
+    /**
+     * Validates the Admin's listing Edit fields before the dialog closes (SRS UC-3.7 A4),
+     * reusing the same {@link Money} and {@link LendingRules} checks as
+     * {@link AdminService#editListing}. The returned map is keyed by the dialog control that
+     * owns each message: {@code title}, {@code description}, {@code price} or {@code duration}.
+     *
+     * @return field-key to message; empty when the input is valid
+     */
+    static Map<String, String> adminEditErrors(ListingType type, String title, String description,
+                                               String rawPrice, String days, String hours, String seconds) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        if (title == null || title.isBlank()) {
+            errors.put("title", "Title is required");
+        }
+        if (description == null || description.isBlank()) {
+            errors.put("description", "Description is required");
+        }
+        if (type == ListingType.SELL) {
+            try {
+                Money.of(rawPrice);
+            } catch (IllegalArgumentException ex) {
+                errors.put("price", ex.getMessage());
+            }
+        } else if (type == ListingType.LEND) {
+            try {
+                Duration duration = Duration.ofDays(parseLong(days))
+                        .plusHours(parseLong(hours))
+                        .plusSeconds(parseLong(seconds));
+                LendingRules.requireLendingDuration(duration);
+            } catch (NumberFormatException | ArithmeticException ex) {
+                errors.put("duration", "Lending days, hours and seconds must be whole numbers.");
+            } catch (IllegalArgumentException ex) {
+                errors.put("duration", ex.getMessage());
+            }
+        }
+        return errors;
     }
 
     private static long parseLong(String text) {
