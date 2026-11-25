@@ -1,9 +1,12 @@
 package com.hkust.marketplace;
 
+import com.hkust.marketplace.persistence.DatabaseInUseException;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.LoanTimer;
 import com.hkust.marketplace.utils.SceneManager;
 import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
 import javafx.stage.Stage;
 
 /**
@@ -21,7 +24,20 @@ public class MarketplaceApp extends Application {
     /** Starts the JavaFX window and the loan timer. */
     @Override
     public void start(Stage primaryStage) {
-        loanTimer = new LoanTimer(DummyDataService.getInstance());
+        try {
+            loanTimer = new LoanTimer(DummyDataService.getInstance());
+        } catch (DatabaseInUseException e) {
+            // A second copy would not see the first one's changes and could overwrite them.
+            Alert alert = new Alert(Alert.AlertType.WARNING,
+                    "HKUST Marketplace is already running on this computer.\n\n"
+                            + "Use the window that is already open, or close it and start the app again. "
+                            + "To switch user, log out and log in again.");
+            alert.setHeaderText("Already running");
+            alert.setTitle("HKUST Marketplace");
+            alert.showAndWait();
+            Platform.exit();
+            return;
+        }
         loanTimer.start();
         SceneManager.init(primaryStage);
         SceneManager.showWelcome();
