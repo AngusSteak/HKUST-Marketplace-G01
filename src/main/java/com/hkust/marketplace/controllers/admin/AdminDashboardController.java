@@ -985,12 +985,28 @@ public class AdminDashboardController {
                 label(review.getCreatedAt().format(DATE_TIME), "-fx-text-fill: #9aa0b0; -fx-font-size: 11px;"));
         Button hide = new Button(review.isHidden() ? "Unhide" : "Hide");
         hide.getStyleClass().addAll("btn-outline", "btn-sm");
-        hide.setOnAction(e -> {
-            run(() -> adminService.setReviewHidden(admin(), review, !review.isHidden()));
-            showRatings();
-        });
+        hide.setOnAction(e -> new Alert(Alert.AlertType.CONFIRMATION, hideReviewMessage(review.isHidden()))
+                .showAndWait().ifPresent(r -> {
+                    if (r == ButtonType.OK) {
+                        run(() -> adminService.setReviewHidden(admin(), review, !review.isHidden()));
+                        showRatings();
+                    }
+                }));
         row.getChildren().addAll(info, hide);
         return row;
+    }
+
+    /**
+     * Confirmation wording for hiding or unhiding a review (SRS UC-3.8 step 5.1 / A2).
+     * A hidden review is left out of the seller's rating, so the two prompts differ.
+     *
+     * @param hidden whether the review is currently hidden
+     * @return the question shown before the visibility change
+     */
+    static String hideReviewMessage(boolean hidden) {
+        return hidden
+                ? "Unhide this review? It will count towards the seller's rating again."
+                : "Hide this review? It will no longer count towards the seller's rating.";
     }
 
     // ---------- Notifications (SRS UC-3.6) ----------
