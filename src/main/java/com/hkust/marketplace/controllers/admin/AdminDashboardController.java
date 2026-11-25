@@ -9,6 +9,7 @@ import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.AdminFilters;
 import com.hkust.marketplace.utils.AdminService;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
 import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
@@ -833,6 +834,23 @@ public class AdminDashboardController {
         return "—";
     }
 
+    /**
+     * Builds the listing-basics text on a deal: status, category and type, then the asking price
+     * (Sale) or lending duration (Lend) and the meet-up location (SRS UC-3.5 step 6).
+     */
+    static String listingBasics(Listing listing) {
+        StringBuilder text = new StringBuilder("Status: ")
+                .append(statusText(listing.getStatus()))
+                .append(" · ").append(listing.getCategory())
+                .append(" · ").append(listing.getTypeDisplay());
+        if (listing instanceof SaleListing sale) {
+            text.append('\n').append("Price: ").append(sale.getPriceDisplay());
+        } else if (listing instanceof LendListing lend) {
+            text.append('\n').append("Lending: ").append(DurationText.format(lend.getLendingDuration()));
+        }
+        return text.append('\n').append("Meet-up: ").append(listing.getMeetupLocation().getLabel()).toString();
+    }
+
     private void showDealDetails(Deal deal) {
         VBox content = new VBox(6);
         content.setPrefWidth(460);
@@ -846,9 +864,7 @@ public class AdminDashboardController {
                 label("Return / due: " + dealEnd(deal), ""),
                 new Separator(),
                 label("Listing", "-fx-font-weight: bold;"),
-                label("Status: " + statusText(deal.getListing().getStatus())
-                        + " · " + deal.getListing().getCategory()
-                        + " · " + deal.getListing().getTypeDisplay(), "-fx-text-fill: #5a5a7a;"),
+                label(listingBasics(deal.getListing()), "-fx-text-fill: #5a5a7a;"),
                 label("Request " + deal.getRequest().getId() + " · " + deal.getRequest().getStatus(),
                         "-fx-text-fill: #5a5a7a;"),
                 label("Submitted: " + deal.getRequest().getSubmittedTime().format(DATE_TIME),
