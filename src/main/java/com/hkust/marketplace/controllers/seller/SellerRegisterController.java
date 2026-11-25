@@ -60,9 +60,12 @@ public class SellerRegisterController {
             showError("Username already taken."); return;
         }
 
-        showSuccess("Seller account created! You can now login.");
+        String message = "Seller account created! You can now login.";
+        showSuccess(message);
         usernameField.clear(); fullNameField.clear(); passwordField.clear();
         confirmPasswordField.clear(); meetupCombo.getSelectionModel().clearSelection(); bioArea.clear();
+        showInfo("Seller account created", message);
+        SceneManager.showSellerLogin();
     }
 
     private void showError(String msg) {
@@ -74,6 +77,14 @@ public class SellerRegisterController {
     private void hideMessages() {
         errorLabel.setVisible(false); errorLabel.setManaged(false);
         successLabel.setVisible(false); successLabel.setManaged(false);
+    }
+
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     @FXML private void goLogin() { SceneManager.showSellerLogin(); }

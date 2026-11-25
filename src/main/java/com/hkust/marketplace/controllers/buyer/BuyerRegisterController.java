@@ -78,13 +78,16 @@ public class BuyerRegisterController {
             return;
         }
 
-        showSuccess("Registration successful! You can now login.");
+        String message = "Registration successful! You can now login.";
+        showSuccess(message);
         // Clear form
         usernameField.clear();
         fullNameField.clear();
         passwordField.clear();
         confirmPasswordField.clear();
         residenceCombo.getSelectionModel().clearSelection();
+        showInfo("Registration successful", message);
+        SceneManager.showBuyerLogin();
     }
 
     private void showError(String msg) {
@@ -104,6 +107,14 @@ public class BuyerRegisterController {
         errorLabel.setManaged(false);
         successLabel.setVisible(false);
         successLabel.setManaged(false);
+    }
+
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     @FXML private void goLogin() { SceneManager.showBuyerLogin(); }
