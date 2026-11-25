@@ -365,9 +365,18 @@ public class ListingFormComponent {
             thumbnailStrip.getChildren().add(thumbnail);
         }
         addPhotosButton.setDisable(!state.canAddMorePhotos());
-        photoHint.setText(state.canAddMorePhotos()
-                ? ""
-                : "Maximum of 6 photos reached. Remove one to add another.");
+        photoHint.setText(photoHintText());
+    }
+
+    private String photoHintText() {
+        if (state.canAddMorePhotos()) {
+            return "";
+        }
+        if (state.getChosenPhotos().isEmpty()) {
+            return "Maximum of " + ListingFormState.MAX_PHOTOS + " photos reached. "
+                    + "Saved photos cannot be removed here.";
+        }
+        return "Maximum of " + ListingFormState.MAX_PHOTOS + " photos reached. Remove one to add another.";
     }
 
     private VBox storedPhotoThumbnail(String path) {

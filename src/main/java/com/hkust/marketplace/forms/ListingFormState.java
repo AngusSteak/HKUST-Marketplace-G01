@@ -138,12 +138,17 @@ public class ListingFormState {
         return Collections.unmodifiableList(chosenPhotos);
     }
 
-    /** Whether another photo can be added (at most six). */
+    /**
+     * Whether another photo can be added (at most six overall).
+     *
+     * <p>Photos already saved with the listing count toward the cap too, so an edit form can
+     * never hold more than {@link #MAX_PHOTOS} photos between its stored and newly chosen ones.
+     */
     public boolean canAddMorePhotos() {
-        return chosenPhotos.size() < MAX_PHOTOS;
+        return photoPaths.size() + chosenPhotos.size() < MAX_PHOTOS;
     }
 
-    /** Adds a photo chosen in the form, rejecting a seventh. */
+    /** Adds a photo chosen in the form, rejecting one past the overall cap. */
     public void addChosenPhoto(PhotoDraft draft) {
         if (draft == null) {
             throw new IllegalArgumentException("Photo draft must not be null");

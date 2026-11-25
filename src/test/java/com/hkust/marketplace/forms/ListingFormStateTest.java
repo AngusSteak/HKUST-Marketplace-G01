@@ -206,6 +206,42 @@ class ListingFormStateTest {
     }
 
     @Test
+    void sixStoredPhotosLeaveNoRoomForAnother() {
+        ListingFormState state = new ListingFormState();
+        state.setPhotoPaths(List.of(
+                "data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png",
+                "data/photos/charlie/L100/c.png", "data/photos/charlie/L100/d.png",
+                "data/photos/charlie/L100/e.png", "data/photos/charlie/L100/f.png"));
+
+        assertFalse(state.canAddMorePhotos());
+        assertTrue(state.getChosenPhotos().isEmpty());
+        assertThrows(IllegalStateException.class,
+                () -> state.addChosenPhoto(new PhotoDraft(java.nio.file.Path.of("g.png"), "g.png")));
+    }
+
+    @Test
+    void storedPhotosCountTowardTheCapAlongsideChosenPhotos() {
+        ListingFormState state = new ListingFormState();
+        state.setPhotoPaths(List.of(
+                "data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png",
+                "data/photos/charlie/L100/c.png", "data/photos/charlie/L100/d.png"));
+        assertTrue(state.canAddMorePhotos());
+
+        state.addChosenPhoto(new PhotoDraft(java.nio.file.Path.of("e.png"), "e.png"));
+        assertTrue(state.canAddMorePhotos());
+        state.addChosenPhoto(new PhotoDraft(java.nio.file.Path.of("f.png"), "f.png"));
+
+        assertFalse(state.canAddMorePhotos());
+        assertEquals(2, state.getChosenPhotos().size());
+        assertThrows(IllegalStateException.class,
+                () -> state.addChosenPhoto(new PhotoDraft(java.nio.file.Path.of("g.png"), "g.png")));
+
+        state.removeChosenPhoto(state.getChosenPhotos().get(0));
+        assertTrue(state.canAddMorePhotos());
+        assertEquals(1, state.getChosenPhotos().size());
+    }
+
+    @Test
     void storedPhotoPathsAreAttachedToTheBuiltListing() {
         ListingFormState state = validState(ListingType.GIVEAWAY);
         state.setPhotoPaths(List.of("data/photos/charlie/L100/a.png", "data/photos/charlie/L100/b.png"));
