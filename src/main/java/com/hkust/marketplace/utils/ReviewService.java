@@ -95,6 +95,20 @@ public final class ReviewService {
         return data.reviews().byBuyer(requireBuyer(actor).getUsername());
     }
 
+    /** The listing a review is about, resolved through its completed deal, or null if unknown. */
+    public Listing listingOf(Review review) {
+        String dealId = review == null ? null : review.getDealId();
+        if (dealId == null) {
+            return null;
+        }
+        for (Deal deal : data.deals().allDeals()) {
+            if (deal.getId().equals(dealId)) {
+                return deal.getListing();
+            }
+        }
+        return null;
+    }
+
     /**
      * Seller flags (or unflags) a review they received, so the admin sees it first (SRS UC-3.8).
      * The review stays visible and keeps counting towards the seller's rating until the admin

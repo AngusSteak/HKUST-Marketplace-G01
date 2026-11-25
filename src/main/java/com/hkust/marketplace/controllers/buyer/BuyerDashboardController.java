@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.Buyer;
@@ -39,6 +40,7 @@ import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.control.*;
@@ -1002,6 +1004,16 @@ public class BuyerDashboardController {
             case GIVEN -> "Received";
         }));
         table.getColumns().add(column("Outcome", d -> statusLabel(d.getStatus())));
+        table.setRowFactory(tv -> {
+            TableRow<Deal> row = new TableRow<>();
+            row.setOnMouseClicked(e -> {
+                if (e.getClickCount() == 2 && !row.isEmpty()) {
+                    ListingDetailDialog.show(row.getScene() == null ? null : row.getScene().getWindow(),
+                            row.getItem().getListing());
+                }
+            });
+            return row;
+        });
 
         String buyer = SessionManager.getCurrentUser() == null ? "" : SessionManager.getCurrentUser().getUsername();
         List<Deal> past = DummyDataService.getInstance().deals().pastDealsForBuyer(buyer);
@@ -1029,7 +1041,7 @@ public class BuyerDashboardController {
         clear.setOnAction(e -> showHistory());
         refresh.run();
 
-        root.getChildren().addAll(filters, error, table);
+        root.getChildren().addAll(filters, error, muted("Tip: double-click a deal to see the item."), table);
         contentPane.getChildren().add(root);
     }
 
@@ -1104,7 +1116,11 @@ public class BuyerDashboardController {
                 showRateDialog(deal);
                 showReviews();
             });
-            root.getChildren().add(actionRow(info, new HBox(8, rate)));
+            Button view = new Button("View item");
+            view.getStyleClass().addAll("btn-outline", "btn-sm");
+            view.setOnAction(e -> ListingDetailDialog.show(
+                    contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), deal.getListing()));
+            root.getChildren().add(actionRow(info, new HBox(8, view, rate)));
         }
 
         root.getChildren().add(sectionTitle("My reviews"));
@@ -1113,12 +1129,27 @@ public class BuyerDashboardController {
             root.getChildren().add(muted("You haven't written any reviews yet."));
         }
         for (Review review : mine) {
-            Label stars = new Label(stars(review.getRating()) + "  " + review.getListingTitle());
+            Label stars = new Label(stars(review.getRating()));
             stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
-            VBox item = new VBox(3, stars,
+            Listing resolvedListing = reviewService.listingOf(review);
+            Node title = resolvedListing != null
+                    ? new Hyperlink(review.getListingTitle())
+                    : new Label(review.getListingTitle());
+            if (!(title instanceof Hyperlink)) {
+                title.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+            }
+            if (title instanceof Hyperlink link) {
+                link.setOnAction(e -> ListingDetailDialog.show(
+                        contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), resolvedListing));
+            }
+            HBox titleRow = new HBox(8, stars, title);
+            titleRow.setAlignment(Pos.CENTER_LEFT);
+            Label comment = new Label(review.getComment() == null ? "" : review.getComment());
+            comment.setWrapText(true);
+            VBox item = new VBox(3, titleRow,
                     muted("for " + displayName(review.getSellerUsername())
                             + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)),
-                    new Label(review.getComment() == null ? "" : review.getComment()));
+                    comment);
             if (review.isHidden()) {
                 item.getChildren().add(muted("Hidden by the admin, so it no longer counts towards the rating."));
             }
@@ -1337,8 +1368,10 @@ public class BuyerDashboardController {
                 Listing listing = data.listings().find(ref.getId());
                 if (listing == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This listing no longer exists.").showAndWait();
-                } else {
+                } else if (ListingSearch.isBrowsable(listing)) {
                     showListingDetails(listing);
+                } else {
+                    ListingDetailDialog.show(contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
                 }
             }
             case REQUEST, DEAL -> showMyDeals();
