@@ -114,6 +114,16 @@ public class DealStore {
         return List.copyOf(past);
     }
 
+    /**
+     * The buyer's recently returned loans: Returned or Auto-Returned, most recently finished first
+     * (My Deals "Recently returned"). A loan moved on to Completed is no longer included.
+     */
+    public List<Deal> returnedDealsForBuyer(String username) {
+        return pastDealsForBuyer(username).stream()
+                .filter(d -> d.getStatus() == DealStatus.RETURNED || d.getStatus() == DealStatus.AUTO_RETURNED)
+                .toList();
+    }
+
     // ---------- Persistence ----------
 
     /** Saves the listing's requests and deals, then the listing itself (its status changed). */

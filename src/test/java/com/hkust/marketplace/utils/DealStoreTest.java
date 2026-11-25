@@ -10,6 +10,7 @@ import com.hkust.marketplace.models.PriceOffer;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,6 +75,30 @@ class DealStoreTest {
         assertEquals(2, past.size());
         assertEquals(second, past.get(0));
         assertTrue(!past.get(0).getCompletedDate().isBefore(past.get(1).getCompletedDate()));
+    }
+
+    @Test
+    void returnedDealsIncludeReturnedAndAutoReturnedButNotCompleted() {
+        DummyDataService data = seeded();
+        DealStore store = data.deals();
+
+        Deal returned = store.lifecycle().accept(store.openRequestsByBuyer("bob").get(0));
+        store.lifecycle().returnItem(returned);
+
+        LocalDateTime now = LocalDateTime.now();
+        Deal auto = store.lifecycle().accept(store.lifecycle().submitBorrow(
+                returned.getBuyer(), returned.getListing(), now.plusMinutes(1), now.plusDays(7)));
+        store.lifecycle().autoReturn(auto);
+
+        List<Deal> recentlyReturned = store.returnedDealsForBuyer("bob");
+
+        assertEquals(2, recentlyReturned.size());
+        assertEquals(auto, recentlyReturned.get(0));
+        assertEquals(returned, recentlyReturned.get(1));
+        assertTrue(recentlyReturned.stream().anyMatch(d -> d.getStatus() == DealStatus.RETURNED));
+        assertTrue(recentlyReturned.stream().anyMatch(d -> d.getStatus() == DealStatus.AUTO_RETURNED));
+        assertTrue(recentlyReturned.stream().noneMatch(d -> d.getStatus() == DealStatus.COMPLETED));
+        assertTrue(store.returnedDealsForBuyer("alice").isEmpty());
     }
 
     private static DummyDataService seeded() {

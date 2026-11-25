@@ -817,8 +817,9 @@ public class BuyerDashboardController {
         DealStore deals = DummyDataService.getInstance().deals();
         List<DealRequest> open = deals.openRequestsByBuyer(buyer);
         List<Deal> active = deals.activeDealsForBuyer(buyer);
+        List<Deal> returned = deals.returnedDealsForBuyer(buyer);
 
-        if (open.isEmpty() && active.isEmpty()) {
+        if (open.isEmpty() && active.isEmpty() && returned.isEmpty()) {
             // SRS UC-1.6 A1: only View History remains.
             Button history = new Button("View Deal History");
             history.getStyleClass().addAll("btn-outline", "btn-sm");
@@ -838,6 +839,12 @@ public class BuyerDashboardController {
             root.getChildren().add(sectionTitle("Waiting for a response"));
             for (DealRequest request : open) {
                 root.getChildren().add(requestRow(request));
+            }
+        }
+        if (!returned.isEmpty()) {
+            root.getChildren().add(sectionTitle("Recently returned"));
+            for (Deal deal : returned) {
+                root.getChildren().add(returnedRow(deal));
             }
         }
 
@@ -908,6 +915,17 @@ public class BuyerDashboardController {
             buttons.getChildren().add(complete);
         }
         return actionRow(info, buttons);
+    }
+
+    /** A read-only recently returned loan: outcome, listing, seller and return date, no actions. */
+    private HBox returnedRow(Deal deal) {
+        Label status = new Label(statusLabel(deal.getStatus()));
+        status.getStyleClass().addAll("badge", "badge-sold");
+        VBox info = rowInfo(deal.getListing(), requestTypeLabel(deal.getDealType()), status);
+        String date = deal.getCompletedDate() == null ? "" : deal.getCompletedDate().format(DEAL_TIME);
+        info.getChildren().add(muted((deal.getStatus() == DealStatus.AUTO_RETURNED ? "Auto-returned " : "Returned ")
+                + (date.isEmpty() ? "after the due date" : "on " + date)));
+        return actionRow(info, new HBox(8, openButton(deal.getListing())));
     }
 
     /** SRS UC-1.6 step 3.4.4: after completing, the buyer is invited to rate the seller. */
