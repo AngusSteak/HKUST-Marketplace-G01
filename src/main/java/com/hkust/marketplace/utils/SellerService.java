@@ -435,7 +435,11 @@ public final class SellerService {
         }
     }
 
-    /** Open requests grouped by listing, newest request group first (the Requests screen). */
+    /**
+     * Open requests grouped by listing, newest request group first (the Requests screen).
+     * Respondable listings include RESERVED ones, so a pending giveaway claim stays visible after
+     * {@link DealLifecycle#submitClaim} reserves the listing.
+     */
     public LinkedHashMap<Listing, List<DealRequest>> pendingRequestsByListing(User actor) {
         Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);
         List<DealRequest> all = data.deals().allRequests();
@@ -445,7 +449,7 @@ public final class SellerService {
         Map<String, List<DealRequest>> byListingId = new HashMap<>();
         for (DealRequest request : all) {
             Listing listing = request.getListing();
-            if (!isOpen(request) || !isAvailable(listing)
+            if (!isOpen(request) || !isRespondableListing(listing)
                     || !seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {
                 continue;
             }
