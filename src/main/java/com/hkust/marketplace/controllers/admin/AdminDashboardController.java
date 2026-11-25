@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.admin;
 
 import com.hkust.marketplace.controllers.common.ListingDetailDialog;
+import com.hkust.marketplace.controllers.common.PhotoGallery;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
@@ -850,6 +851,9 @@ public class AdminDashboardController {
         } else if (deal.getRequest() instanceof BorrowRequest borrow) {
             content.getChildren().add(label("Borrow: " + borrow.getStartDate().format(DATE)
                     + " to " + borrow.getEndDate().format(DATE), "-fx-text-fill: #5a5a7a;"));
+        }
+        if (!deal.getListing().getPhotoPaths().isEmpty()) {
+            content.getChildren().add(PhotoGallery.thumbnails(deal.getListing().getPhotoPaths()));
         }
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Deal details");
