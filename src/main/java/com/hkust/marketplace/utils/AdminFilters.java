@@ -13,6 +13,10 @@ import java.util.Locale;
  */
 public final class AdminFilters {
 
+    /** SRS UC-3.5 A1/A2: shown instead of an empty table when the range starts after it ends. */
+    public static final String INVALID_DEAL_DATE_RANGE =
+            "The date range is invalid: the start date is after the end date.";
+
     private AdminFilters() {
     }
 
@@ -98,6 +102,18 @@ public final class AdminFilters {
             return username;
         }
         return user.isDeleted() ? "deleted user" : user.getFullName() + " (@" + username + ")";
+    }
+
+    /**
+     * Whether a deal date range is usable (SRS UC-3.5 A1/A2). An open-ended range is always
+     * valid; a range is invalid only when both ends are given and the start is after the end.
+     *
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
+     * @return {@code true} when either end is missing or {@code from} is not after {@code to}
+     */
+    public static boolean isValidDealDateRange(LocalDate from, LocalDate to) {
+        return from == null || to == null || !from.isAfter(to);
     }
 
     static boolean inRange(LocalDate date, LocalDate from, LocalDate to) {

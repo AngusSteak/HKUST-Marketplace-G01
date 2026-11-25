@@ -88,6 +88,16 @@ class AdminFiltersTest {
     }
 
     @Test
+    void dealDateRangeIsValidUnlessTheStartIsAfterTheEnd() {
+        LocalDate day = LocalDate.of(2026, 1, 10);
+
+        assertTrue(AdminFilters.isValidDealDateRange(null, null));
+        assertTrue(AdminFilters.isValidDealDateRange(day, day.plusDays(1)));
+        assertTrue(AdminFilters.isValidDealDateRange(day, day));
+        assertFalse(AdminFilters.isValidDealDateRange(day.plusDays(1), day));
+    }
+
+    @Test
     void deletedAccountsReadAsDeletedUserInHistory() {
         User charlie = data.users().find("charlie");
         assertEquals("Charlie Lee (@charlie)", AdminFilters.partyLabel(charlie, "charlie"));

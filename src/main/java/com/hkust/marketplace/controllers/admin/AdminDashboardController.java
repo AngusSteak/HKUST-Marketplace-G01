@@ -767,12 +767,29 @@ public class AdminDashboardController {
         table.getColumns().add(dealColumn("Return / complete", d -> dealEnd(d), 120));
         table.getColumns().add(dealColumn("Status", d -> d.getStatus().name(), 100));
 
-        Runnable refresh = () -> table.setItems(FXCollections.observableArrayList(
-                DummyDataService.getInstance().deals().allDeals().stream()
-                        .filter(d -> AdminFilters.matchesDeal(d, search.getText(), type.getValue(),
-                                status.getValue(), from.getValue(), to.getValue()))
-                        .sorted(Comparator.comparing(Deal::getStartDate).reversed())
-                        .toList()));
+        Label message = label("", "-fx-text-fill: #b3261e; -fx-font-size: 12px;");
+        message.setVisible(false);
+        message.setManaged(false);
+
+        Runnable refresh = () -> {
+            if (!AdminFilters.isValidDealDateRange(from.getValue(), to.getValue())) {
+                table.setItems(FXCollections.observableArrayList());
+                showDealMessage(message, AdminFilters.INVALID_DEAL_DATE_RANGE);
+                return;
+            }
+            List<Deal> matches = DummyDataService.getInstance().deals().allDeals().stream()
+                    .filter(d -> AdminFilters.matchesDeal(d, search.getText(), type.getValue(),
+                            status.getValue(), from.getValue(), to.getValue()))
+                    .sorted(Comparator.comparing(Deal::getStartDate).reversed())
+                    .toList();
+            table.setItems(FXCollections.observableArrayList(matches));
+            if (matches.isEmpty()) {
+                showDealMessage(message, "No deals found.");
+            } else {
+                message.setVisible(false);
+                message.setManaged(false);
+            }
+        };
         search.textProperty().addListener((o, a, b) -> refresh.run());
         type.valueProperty().addListener((o, a, b) -> refresh.run());
         status.valueProperty().addListener((o, a, b) -> refresh.run());
@@ -784,8 +801,15 @@ public class AdminDashboardController {
         table.setFocusTraversable(false);
 
         root.getChildren().addAll(new HBox(10, search, type, status, from, to),
-                label("Click a title to view details.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"), table);
+                label("Click a title to view details.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"),
+                message, table);
         contentPane.getChildren().add(root);
+    }
+
+    private static void showDealMessage(Label message, String text) {
+        message.setText(text);
+        message.setVisible(true);
+        message.setManaged(true);
     }
 
     private static TableColumn<Deal, String> dealColumn(String title,
