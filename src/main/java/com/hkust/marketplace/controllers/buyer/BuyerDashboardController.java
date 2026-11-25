@@ -473,6 +473,11 @@ public class BuyerDashboardController {
      * buyer came from.
      */
     private void showSellerProfile(String username, String backTo, Runnable back) {
+        showSellerProfile(username, backTo, back, btnBrowse);
+    }
+
+    /** As above, keeping {@code section} highlighted in the sidebar (where the profile was opened). */
+    private void showSellerProfile(String username, String backTo, Runnable back, Button section) {
         SellerProfileService.SellerProfile profile;
         try {
             profile = new SellerProfileService(DummyDataService.getInstance()).profile(username);
@@ -481,7 +486,7 @@ public class BuyerDashboardController {
             return;
         }
         com.hkust.marketplace.models.Seller seller = profile.seller();
-        setActive(btnBrowse, "Seller: " + seller.getDisplayName());
+        setActive(section, "Seller: " + seller.getDisplayName());
         contentPane.getChildren().clear();
 
         Button backBtn = new Button("\u2190 Back to " + backTo);
@@ -490,7 +495,9 @@ public class BuyerDashboardController {
 
         Label name = new Label(seller.getDisplayName() + (profile.deleted() ? "" : "  (@" + seller.getUsername() + ")"));
         name.setStyle("-fx-font-weight: bold; -fx-font-size: 22px; -fx-text-fill: #1a1a2e;");
-        Label rating = new Label(ratingText(seller.getUsername()));
+        Label rating = new Label(profile.averageRating().isEmpty() ? "No ratings yet"
+                : String.format("\u2605 %.1f (%d review%s)", profile.averageRating().getAsDouble(),
+                        profile.reviews().size(), profile.reviews().size() == 1 ? "" : "s"));
         rating.setStyle("-fx-font-weight: bold; -fx-text-fill: #003974; -fx-font-size: 16px;");
         VBox header = new VBox(6, name, rating);
         if (profile.deleted()) {
@@ -515,20 +522,7 @@ public class BuyerDashboardController {
             root.getChildren().add(muted("No reviews yet."));
         }
         for (Review review : profile.reviews()) {
-            Label stars = new Label(stars(review.getRating()) + "  " + review.getListingTitle());
-            stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
-            Label comment = new Label(review.getComment() == null ? "" : review.getComment());
-            comment.setWrapText(true);
-            VBox item = new VBox(3, stars, comment, muted("by " + displayName(review.getBuyerUsername())
-                    + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)));
-            if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
-                Label reply = new Label("Seller replied: " + review.getSellerReply());
-                reply.setWrapText(true);
-                reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
-                item.getChildren().add(reply);
-            }
-            item.getStyleClass().add("notif-item");
-            root.getChildren().add(item);
+            root.getChildren().add(reviewCard(review, "by " + displayName(review.getBuyerUsername())));
         }
 
         if (!profile.deleted()) {
@@ -1164,22 +1158,10 @@ public class BuyerDashboardController {
             root.getChildren().add(muted("You haven't written any reviews yet."));
         }
         for (Review review : mine) {
-            Label stars = new Label(stars(review.getRating()) + "  " + review.getListingTitle());
-            stars.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
-            VBox item = new VBox(3, stars,
-                    muted("for " + displayName(review.getSellerUsername())
-                            + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)),
-                    new Label(review.getComment() == null ? "" : review.getComment()));
+            VBox item = reviewCard(review, "for " + displayName(review.getSellerUsername()));
             if (review.isHidden()) {
-                item.getChildren().add(muted("Hidden by the admin, so it no longer counts towards the rating."));
+                item.getChildren().add(2, muted("Hidden by the admin, so it no longer counts towards the rating."));
             }
-            if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
-                Label reply = new Label("Seller replied: " + review.getSellerReply());
-                reply.setWrapText(true);
-                reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
-                item.getChildren().add(reply);
-            }
-            item.getStyleClass().add("notif-item");
             root.getChildren().add(item);
         }
 
@@ -1258,6 +1240,27 @@ public class BuyerDashboardController {
         return user == null ? username : user.getDisplayName();
     }
 
+    /**
+     * One review as a card: stars and listing title, who and when, the text, and any seller reply.
+     * Shared by My Reviews and the seller profile so both show reviews the same way.
+     */
+    private static VBox reviewCard(Review review, String byLine) {
+        String listing = review.getListingTitle() == null ? "" : "  " + review.getListingTitle();
+        Label heading = new Label(stars(review.getRating()) + listing);
+        heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
+        Label comment = new Label(review.getComment() == null ? "" : review.getComment());
+        comment.setWrapText(true);
+        VBox item = new VBox(3, heading, muted(byLine + "  \u00b7  " + review.getCreatedAt().format(DEAL_TIME)), comment);
+        if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
+            Label reply = new Label("Seller replied: " + review.getSellerReply());
+            reply.setWrapText(true);
+            reply.setStyle("-fx-text-fill: #003974; -fx-font-style: italic;");
+            item.getChildren().add(reply);
+        }
+        item.getStyleClass().add("notif-item");
+        return item;
+    }
+
     private static String stars(int rating) {
         return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
     }
@@ -1326,7 +1329,7 @@ public class BuyerDashboardController {
             HBox.setHgrow(info, Priority.ALWAYS);
             Button profile = new Button("Profile");
             profile.getStyleClass().addAll("btn-primary", "btn-sm");
-            profile.setOnAction(e -> showSellerProfile(username, "Favourites", this::showFavourites));
+            profile.setOnAction(e -> showSellerProfile(username, "Favourites", this::showFavourites, btnFavourites));
             Button unfollow = new Button("Unfollow");
             unfollow.getStyleClass().addAll("btn-outline", "btn-sm");
             unfollow.setOnAction(e -> {

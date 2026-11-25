@@ -174,6 +174,8 @@ public class AdminDashboardController {
         // SRS UC-3.2 / brief 3.2: the submission's photos and status are part of what the admin reviews.
         Label status = new Label("Pending Review");
         status.getStyleClass().addAll("badge", "badge-pending");
+        status.setMinWidth(Region.USE_PREF_SIZE);   // a long title wraps instead of pushing the badge out
+        title.setWrapText(true);
         HBox titleRow = new HBox(10, title, status);
         titleRow.setAlignment(Pos.CENTER_LEFT);
         card.getChildren().addAll(titleRow, meta, submitted, ListingPhotos.gallery(l, 160, 110),

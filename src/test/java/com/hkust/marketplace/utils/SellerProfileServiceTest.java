@@ -44,12 +44,17 @@ class SellerProfileServiceTest {
 
     @Test
     void disabledSellersShowNoListingsAndDeletedOnesAreMarked() {
-        User charlie = data.users().find("charlie");
-        charlie.setActive(false);
+        User admin = data.users().find("admin");
+        AdminService adminService = new AdminService(data);
+        adminService.setActive(admin, data.users().find("charlie"), false);   // the real admin path
         assertTrue(profiles.profile("charlie").liveListings().isEmpty(), "their listings are hidden");
 
-        charlie.setDeleted(true);
-        assertTrue(profiles.profile("charlie").deleted());
+        adminService.setActive(admin, data.users().find("charlie"), true);
+        adminService.softDeleteAccount(admin, data.users().find("charlie"));
+        SellerProfileService.SellerProfile deleted = profiles.profile("charlie");
+        assertTrue(deleted.deleted());
+        assertTrue(deleted.liveListings().isEmpty());
+        assertEquals(1, deleted.reviews().size(), "past reviews are kept");
     }
 
     @Test

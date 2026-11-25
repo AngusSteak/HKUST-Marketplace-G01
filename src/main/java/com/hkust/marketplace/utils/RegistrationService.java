@@ -46,6 +46,8 @@ public final class RegistrationService {
         } catch (DatabaseException e) {
             // The account is saved and can log in; a missed admin notice must not make the new
             // user think registration failed and try again with a taken username.
+            System.err.println("[RegistrationService] admin notice for @" + account.getUsername()
+                    + " not saved: " + e.getMessage());
         }
         return true;
     }
