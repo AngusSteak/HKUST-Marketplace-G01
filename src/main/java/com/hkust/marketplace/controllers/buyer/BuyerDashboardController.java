@@ -1479,7 +1479,17 @@ public class BuyerDashboardController {
                     ListingDetailDialog.show(contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
                 }
             }
-            case REQUEST, DEAL -> showMyDeals();
+            case REQUEST, DEAL -> {
+                Deal deal = data.deals().allDeals().stream()
+                        .filter(d -> d.getId().equals(ref.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (deal == null) {
+                    showMyDeals();
+                } else {
+                    showDealNotification(deal);
+                }
+            }
             case THREAD -> {
                 // A thread is one buyer's chat on one listing; the id may be "buyer|L101" or just the listing id.
                 String id = ref.getId();
@@ -1490,7 +1500,17 @@ public class BuyerDashboardController {
                     openChat(listing, "Notifications", this::showNotifications);
                 }
             }
-            case REVIEW -> showReviews();
+            case REVIEW -> {
+                Review review = data.reviews().all().stream()
+                        .filter(r -> r.getId().equals(ref.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (review == null) {
+                    showReviews();
+                } else {
+                    showReviewNotification(review);
+                }
+            }
             case USER -> {
                 // A buyer is only ever told about their own account.
                 User me = SessionManager.getCurrentUser();
@@ -1499,6 +1519,84 @@ public class BuyerDashboardController {
                 }
             }
         }
+    }
+
+    /** Read-only details of the deal a notification points at (SRS UC-1.8 step 3.2). */
+    private void showDealNotification(Deal deal) {
+        LocalDateTime dueOrCompleted = deal.getStatus() == DealStatus.ACTIVE
+                ? deal.getDueDate() : deal.getCompletedDate();
+        String text = dealNotificationText(deal.getId(), deal.getDealType(), deal.getStatus(),
+                deal.getListing().getTitle(), deal.getBuyerDisplayName(), deal.getSellerDisplayName(),
+                deal.getStartDate(), dueOrCompleted);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Deal details");
+        alert.setHeaderText(deal.getListing().getTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    /** Read-only details of the review a notification points at (SRS UC-1.8 step 3.2). */
+    private void showReviewNotification(Review review) {
+        String text = reviewNotificationText(review.getRating(), review.getComment(),
+                displayName(review.getBuyerUsername()), review.getCreatedAt(), review.getSellerReply());
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Review details");
+        alert.setHeaderText(review.getListingTitle() == null ? "Your review" : review.getListingTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    private static VBox notificationBody(String text) {
+        Label body = new Label(text);
+        body.setWrapText(true);
+        VBox box = new VBox(body);
+        box.setPadding(new Insets(4));
+        box.setPrefWidth(360);
+        return box;
+    }
+
+    /**
+     * The facts shown when a REQUEST/DEAL notification is opened: the deal id, type, status,
+     * listing, parties, start and its due (while active) or completed date. Takes primitives so
+     * the text is testable without constructing a package-private {@link Deal}.
+     */
+    static String dealNotificationText(String dealId, DealType type, DealStatus status, String listingTitle,
+                                       String buyer, String seller, LocalDateTime start,
+                                       LocalDateTime dueOrCompleted) {
+        String dateLabel = status == DealStatus.ACTIVE ? "Due" : "Completed";
+        return "Deal " + orDash(dealId) + "\n"
+                + "Type: " + requestTypeLabel(type) + "\n"
+                + "Status: " + statusLabel(status) + "\n"
+                + "Listing: " + orDash(listingTitle) + "\n"
+                + "Buyer: " + orDash(buyer) + "\n"
+                + "Seller: " + orDash(seller) + "\n"
+                + "Started: " + whenText(start) + "\n"
+                + dateLabel + ": " + whenText(dueOrCompleted);
+    }
+
+    /**
+     * The facts shown when a REVIEW notification is opened: the stars and numeric rating, the
+     * comment, who wrote it, when, and the seller's reply when there is one. Takes primitives so
+     * the text is testable without the review store.
+     */
+    static String reviewNotificationText(int rating, String comment, String buyerLabel,
+                                         LocalDateTime created, String sellerReply) {
+        String text = "Rating: " + stars(rating) + " (" + rating + "/5)\n"
+                + "Comment: " + (comment == null || comment.isBlank() ? "No comment." : comment) + "\n"
+                + "Buyer: " + orDash(buyerLabel) + "\n"
+                + "Date: " + whenText(created);
+        if (sellerReply != null && !sellerReply.isBlank()) {
+            text += "\nSeller reply: " + sellerReply;
+        }
+        return text;
+    }
+
+    private static String orDash(String value) {
+        return value == null || value.isBlank() ? "\u2014" : value;
+    }
+
+    private static String whenText(LocalDateTime dateTime) {
+        return dateTime == null ? "\u2014" : dateTime.format(DEAL_TIME);
     }
 
     /** Manage Profile (SRS UC-1.7): full name and an optional password change. */
