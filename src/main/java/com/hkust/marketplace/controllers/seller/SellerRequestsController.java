@@ -47,6 +47,7 @@ public class SellerRequestsController {
     @FXML private VBox requestsBox;
     @FXML private Label feedbackLabel;
     @FXML private Button backButton;
+    @FXML private Button refreshButton;
 
     private Consumer<ChatThread> onOpenChat;
     private Runnable onBackToChat;
@@ -69,6 +70,12 @@ public class SellerRequestsController {
         if (onBackToChat != null) {
             onBackToChat.run();
         }
+    }
+
+    /** Re-queries and re-renders the requests, keeping the current filtered-vs-all mode. */
+    @FXML
+    private void handleRefresh() {
+        render();
     }
 
     static String backToChatLabel() {
