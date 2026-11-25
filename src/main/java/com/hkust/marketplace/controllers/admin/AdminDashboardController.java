@@ -3,6 +3,7 @@ package com.hkust.marketplace.controllers.admin;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.AdminFilters;
 import com.hkust.marketplace.utils.AdminService;
@@ -170,7 +171,13 @@ public class AdminDashboardController {
             });
         });
 
-        card.getChildren().addAll(title, meta, submitted, new HBox(10, approve, reject));
+        // SRS UC-3.2 / brief 3.2: the submission's photos and status are part of what the admin reviews.
+        Label status = new Label("Pending Review");
+        status.getStyleClass().addAll("badge", "badge-pending");
+        HBox titleRow = new HBox(10, title, status);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+        card.getChildren().addAll(titleRow, meta, submitted, ListingPhotos.gallery(l, 160, 110),
+                new HBox(10, approve, reject));
         return card;
     }
 
