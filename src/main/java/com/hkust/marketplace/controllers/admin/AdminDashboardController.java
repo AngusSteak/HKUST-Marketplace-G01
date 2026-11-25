@@ -576,10 +576,14 @@ public class AdminDashboardController {
 
         Button toggle = new Button(user.isActive() ? "Deactivate" : "Reactivate");
         toggle.getStyleClass().addAll(user.isActive() ? "btn-danger" : "btn-success", "btn-sm");
-        toggle.setOnAction(e -> {
-            run(() -> adminService.setActive(admin(), user, !user.isActive()));
-            showUsers();
-        });
+        // SRS UC-3.3 step 3.3.1: confirm before changing an account's active status.
+        toggle.setOnAction(e -> new Alert(Alert.AlertType.CONFIRMATION, accountStatusMessage(user.isActive()))
+                .showAndWait().ifPresent(r -> {
+                    if (r == ButtonType.OK) {
+                        run(() -> adminService.setActive(admin(), user, !user.isActive()));
+                        showUsers();
+                    }
+                }));
 
         Button delete = new Button("Delete");
         delete.getStyleClass().addAll("btn-danger", "btn-sm");
@@ -587,6 +591,19 @@ public class AdminDashboardController {
 
         row.getChildren().addAll(info, edit, toggle, delete);
         return row;
+    }
+
+    /**
+     * Confirmation wording for deactivating or reactivating an account (SRS UC-3.3 step 3.3.1).
+     * Deactivating blocks login until the account is reactivated, so the two prompts differ.
+     *
+     * @param currentlyActive whether the account is active now
+     * @return the question shown before the status change
+     */
+    static String accountStatusMessage(boolean currentlyActive) {
+        return currentlyActive
+                ? "Deactivate this account? The user will be logged out and blocked from logging in until it is reactivated."
+                : "Reactivate this account? The user will be allowed to log in again.";
     }
 
     private void showAddUser() {
