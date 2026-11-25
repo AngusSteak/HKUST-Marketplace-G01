@@ -90,9 +90,14 @@ public final class ReviewService {
         return review;
     }
 
-    /** Step 3.2: every review the buyer has submitted, newest first, with any seller reply. */
+    /**
+     * Step 3.2: every visible review the buyer has submitted, newest first, with any seller reply.
+     * Reviews the admin has hidden are omitted (SRS UC-3.8), as they are for sellers.
+     */
     public List<Review> myReviews(User actor) {
-        return data.reviews().byBuyer(requireBuyer(actor).getUsername());
+        return data.reviews().byBuyer(requireBuyer(actor).getUsername()).stream()
+                .filter(review -> !review.isHidden())
+                .toList();
     }
 
     /** The listing a review is about, resolved through its completed deal, or null if unknown. */
