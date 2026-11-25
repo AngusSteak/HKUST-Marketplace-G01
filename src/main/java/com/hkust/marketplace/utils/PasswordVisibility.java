@@ -44,6 +44,9 @@ public final class PasswordVisibility {
         reveal.getStyleClass().setAll(field.getStyleClass());
         HBox.setHgrow(reveal, Priority.ALWAYS);
         reveal.textProperty().bindBidirectional(field.textProperty());
+        // Keep Enter-to-submit working while the password is revealed: the visible
+        // TextField mirrors the field's onAction (e.g. the login handler from FXML).
+        reveal.setOnAction(field.getOnAction());
         reveal.setVisible(false);
         reveal.setManaged(false);
 
