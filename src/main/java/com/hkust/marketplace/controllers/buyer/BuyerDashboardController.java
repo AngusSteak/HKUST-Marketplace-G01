@@ -49,8 +49,12 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -62,6 +66,13 @@ import java.util.function.Supplier;
  * profile screens in one content pane. All writes go through the service classes.
  */
 public class BuyerDashboardController {
+
+    /** Borrow time display and input; seconds are optional so a 5-second borrow can be entered. */
+    private static final DateTimeFormatter BORROW_TIME_DISPLAY = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter BORROW_TIME_INPUT = new DateTimeFormatterBuilder()
+            .appendPattern("H:mm")
+            .optionalStart().appendPattern(":ss").optionalEnd()
+            .toFormatter();
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
@@ -781,21 +792,28 @@ public class BuyerDashboardController {
     }
 
     private static TextField timeField(LocalDateTime value) {
-        TextField field = new TextField(value.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
-        field.setPromptText("HH:mm");
-        field.setPrefWidth(80);
+        TextField field = new TextField(value.toLocalTime().format(BORROW_TIME_DISPLAY));
+        field.setPromptText("HH:mm:ss");
+        field.setPrefWidth(90);
         return field;
     }
 
     private static LocalDateTime dateTime(DatePicker date, TextField time, String which) {
-        if (date.getValue() == null) {
+        return borrowDateTime(date.getValue(), time.getText(), which);
+    }
+
+    /**
+     * Combines a date and an {@code H:mm} or {@code H:mm:ss} time, keeping the entered seconds so
+     * the shortest allowed borrow period (5 seconds) can be submitted.
+     */
+    static LocalDateTime borrowDateTime(LocalDate date, String timeText, String which) {
+        if (date == null) {
             throw new IllegalArgumentException("Please choose a " + which + " date.");
         }
         try {
-            return date.getValue().atTime(java.time.LocalTime.parse(time.getText().trim(),
-                    DateTimeFormatter.ofPattern("H:mm")));
-        } catch (java.time.format.DateTimeParseException e) {
-            throw new IllegalArgumentException("Enter the " + which + " time as HH:mm, e.g. 14:30.");
+            return date.atTime(LocalTime.parse(timeText.trim(), BORROW_TIME_INPUT));
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Enter the " + which + " time as HH:mm:ss, e.g. 14:30:00.");
         }
     }
 
