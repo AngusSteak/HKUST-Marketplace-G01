@@ -1,5 +1,6 @@
 package com.hkust.marketplace.controllers.admin;
 
+import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
@@ -170,7 +171,12 @@ public class AdminDashboardController {
             });
         });
 
-        card.getChildren().addAll(title, meta, submitted, new HBox(10, approve, reject));
+        Button view = new Button("View");
+        view.getStyleClass().addAll("btn-outline", "btn-sm");
+        view.setOnAction(e -> ListingDetailDialog.show(
+                contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), l));
+
+        card.getChildren().addAll(title, meta, submitted, new HBox(10, view, approve, reject));
         return card;
     }
 
@@ -247,14 +253,16 @@ public class AdminDashboardController {
 
     private TableColumn<Listing, Void> listingActions() {
         TableColumn<Listing, Void> column = new TableColumn<>("Actions");
-        column.setPrefWidth(280);
+        column.setPrefWidth(360);
         column.setCellFactory(c -> new TableCell<>() {
+            private final Button view = new Button("View");
             private final Button edit = new Button("Edit");
             private final Button reports = new Button("Reports");
             private final Button takeDown = new Button("Take down");
-            private final HBox box = new HBox(6, edit, reports, takeDown);
+            private final HBox box = new HBox(6, view, edit, reports, takeDown);
 
             {
+                view.getStyleClass().addAll("btn-outline", "btn-sm");
                 edit.getStyleClass().addAll("btn-outline", "btn-sm");
                 reports.getStyleClass().addAll("btn-outline", "btn-sm");
                 takeDown.getStyleClass().addAll("btn-danger", "btn-sm");
@@ -270,6 +278,8 @@ public class AdminDashboardController {
                 Listing listing = getTableView().getItems().get(getIndex());
                 int open = DummyDataService.getInstance().reports().openReports(listing).size();
                 reports.setText(open == 0 ? "Reports" : "Reports (" + open + ")");
+                view.setOnAction(e -> ListingDetailDialog.show(
+                        contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing));
                 edit.setOnAction(e -> showEditListing(listing));
                 reports.setOnAction(e -> showReports(listing));
                 takeDown.setOnAction(e -> promptTakeDown(listing, AdminDashboardController.this::showAllListings));
