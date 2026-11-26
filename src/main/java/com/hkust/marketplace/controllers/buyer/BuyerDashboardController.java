@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.common.DateTimeInput;
 import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
@@ -51,10 +52,7 @@ import javafx.scene.text.FontWeight;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -66,13 +64,6 @@ import java.util.function.Supplier;
  * profile screens in one content pane. All writes go through the service classes.
  */
 public class BuyerDashboardController {
-
-    /** Borrow time display and input; seconds are optional so a 5-second borrow can be entered. */
-    private static final DateTimeFormatter BORROW_TIME_DISPLAY = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final DateTimeFormatter BORROW_TIME_INPUT = new DateTimeFormatterBuilder()
-            .appendPattern("H:mm")
-            .optionalStart().appendPattern(":ss").optionalEnd()
-            .toFormatter();
 
     @FXML private StackPane contentPane;
     @FXML private Label pageTitle;
@@ -691,20 +682,18 @@ public class BuyerDashboardController {
         java.time.Duration suggested = longest.compareTo(java.time.Duration.ofDays(7)) < 0 ? longest
                 : java.time.Duration.ofDays(7);
         LocalDateTime defaultEnd = defaultStart.plus(suggested);
-        DatePicker startDate = new DatePicker(defaultStart.toLocalDate());
-        TextField startTime = timeField(defaultStart);
-        DatePicker endDate = new DatePicker(defaultEnd.toLocalDate());
-        TextField endTime = timeField(defaultEnd);
+        DateTimeInput start = new DateTimeInput(defaultStart);
+        DateTimeInput end = new DateTimeInput(defaultEnd);
         Label error = dialogError();
         VBox body = new VBox(8,
                 muted("You can borrow this for up to " + DurationText.format(longest) + "."),
-                new Label("Start"), new HBox(8, startDate, startTime),
-                new Label("End"), new HBox(8, endDate, endTime), error);
+                new Label("Start"), start.node(),
+                new Label("End"), end.node(), error);
 
         Dialog<ButtonType> dialog = requestDialog("Request to Borrow", "Borrow: " + listing.getTitle(), body,
                 "Send Request");
         onConfirm(dialog, error, () -> dealRequests.submitBorrow(SessionManager.getCurrentUser(), listing,
-                dateTime(startDate, startTime, "start"), dateTime(endDate, endTime, "end")));
+                start.value("start"), end.value("end")));
         dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
                 .ifPresent(b -> requestSent("Your borrow request was sent to " + listing.getSellerFullName() + "."));
     }
@@ -791,30 +780,9 @@ public class BuyerDashboardController {
         return error;
     }
 
-    private static TextField timeField(LocalDateTime value) {
-        TextField field = new TextField(value.toLocalTime().format(BORROW_TIME_DISPLAY));
-        field.setPromptText("HH:mm:ss");
-        field.setPrefWidth(90);
-        return field;
-    }
-
-    private static LocalDateTime dateTime(DatePicker date, TextField time, String which) {
-        return borrowDateTime(date.getValue(), time.getText(), which);
-    }
-
-    /**
-     * Combines a date and an {@code H:mm} or {@code H:mm:ss} time, keeping the entered seconds so
-     * the shortest allowed borrow period (5 seconds) can be submitted.
-     */
+    /** Combines a date and an {@code H:mm} or {@code H:mm:ss} time; see {@link DateTimeInput#parse}. */
     static LocalDateTime borrowDateTime(LocalDate date, String timeText, String which) {
-        if (date == null) {
-            throw new IllegalArgumentException("Please choose a " + which + " date.");
-        }
-        try {
-            return date.atTime(LocalTime.parse(timeText.trim(), BORROW_TIME_INPUT));
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Enter the " + which + " time as HH:mm:ss, e.g. 14:30:00.");
-        }
+        return DateTimeInput.parse(date, timeText, which);
     }
 
     private final MyDealsService myDeals = new MyDealsService(DummyDataService.getInstance());

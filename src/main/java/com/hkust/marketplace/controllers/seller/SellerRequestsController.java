@@ -1,5 +1,6 @@
 package com.hkust.marketplace.controllers.seller;
 
+import com.hkust.marketplace.controllers.common.DateTimeInput;
 import com.hkust.marketplace.models.BorrowRequest;
 import com.hkust.marketplace.models.ChatThread;
 import com.hkust.marketplace.models.DealRequest;
@@ -26,9 +27,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +37,6 @@ import java.util.function.Consumer;
 /** Handles the standalone seller requests screen (offers and borrow requests per listing). */
 public class SellerRequestsController {
 
-    private static final DateTimeFormatter PERIOD_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("dd MMM HH:mm");
 
     private final SellerService sellerService = new SellerService(DummyDataService.getInstance());
@@ -257,25 +255,27 @@ public class SellerRequestsController {
         validation.setVisible(false);
         validation.setManaged(false);
 
-        HBox fields = new HBox(8);
-        fields.setAlignment(Pos.CENTER_LEFT);
-        TextField first = new TextField();
-        final TextField second;
+        final TextField price;
+        final DateTimeInput start;
+        final DateTimeInput end;
         if (request instanceof PriceOffer offer) {
-            second = null;
-            first.setPromptText("e.g. " + offer.agreedPrice().toPlainString());
-            first.setPrefWidth(160);
-            fields.getChildren().addAll(new Label("Price (HK$)"), first);
+            price = new TextField();
+            price.setPromptText("e.g. " + offer.agreedPrice().toPlainString());
+            price.setPrefWidth(160);
+            start = null;
+            end = null;
+            HBox fields = new HBox(8, new Label("Price (HK$)"), price);
+            fields.setAlignment(Pos.CENTER_LEFT);
+            editor.getChildren().addAll(heading, fields, validation);
         } else {
+            // The same date picker and HH:mm:ss time box as the buyer's borrow request,
+            // filled in with the current terms so the seller only changes what differs.
             BorrowRequest borrow = (BorrowRequest) request;
-            first.setPromptText(borrow.agreedStart().format(PERIOD_FORMAT));
-            second = new TextField();
-            second.setPromptText(borrow.agreedEnd().format(PERIOD_FORMAT));
-            first.setPrefWidth(170);
-            second.setPrefWidth(170);
-            fields.getChildren().addAll(new Label("Start"), first, new Label("End"), second);
+            price = null;
+            start = new DateTimeInput(borrow.agreedStart());
+            end = new DateTimeInput(borrow.agreedEnd());
+            editor.getChildren().addAll(heading, periodRow("Start", start), periodRow("End", end), validation);
         }
-        editor.getChildren().addAll(heading, fields, validation);
 
         Button confirm = new Button("Confirm");
         confirm.getStyleClass().addAll("btn-primary", "btn-sm");
@@ -285,38 +285,40 @@ public class SellerRequestsController {
         HBox buttons = new HBox(8, confirm, cancel);
         editor.getChildren().add(buttons);
 
-        confirm.setOnAction(e -> submitCounter(request, user, first, second, validation));
+        confirm.setOnAction(e -> submitCounter(request, user, price, start, end, validation));
         return editor;
     }
 
-    private void submitCounter(DealRequest request, User user, TextField first,
-                               TextField second, Label validation) {
+    private static HBox periodRow(String name, DateTimeInput input) {
+        Label label = new Label(name);
+        label.setMinWidth(40);
+        HBox row = new HBox(8, label, input.node());
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private void submitCounter(DealRequest request, User user, TextField price,
+                               DateTimeInput start, DateTimeInput end, Label validation) {
         validation.setVisible(false);
         validation.setManaged(false);
-        first.getStyleClass().remove("input-error");
-        if (second != null) {
-            second.getStyleClass().remove("input-error");
+        if (price != null) {
+            price.getStyleClass().remove("input-error");
         }
         try {
             if (request instanceof PriceOffer offer) {
-                sellerService.counterPriceOffer(user, offer, first.getText());
+                sellerService.counterPriceOffer(user, offer, price.getText());
             } else {
                 BorrowRequest borrow = (BorrowRequest) request;
-                LocalDateTime start = LocalDateTime.parse(first.getText().trim(), PERIOD_FORMAT);
-                LocalDateTime end = LocalDateTime.parse(second.getText().trim(), PERIOD_FORMAT);
-                sellerService.counterBorrowRequest(user, borrow, start, end);
+                sellerService.counterBorrowRequest(user, borrow, start.value("start"), end.value("end"));
             }
             render();
             showFeedback("Counter sent to " + request.getBuyerDisplayName() + " — awaiting buyer.");
-        } catch (DateTimeParseException ex) {
-            showInlineError(validation, first,
-                    "Enter dates as yyyy-MM-dd HH:mm (e.g. 2026-12-01 09:00).");
         } catch (NumberFormatException ex) {
-            showInlineError(validation, first, "Enter a valid counter price (e.g. 120 or 99.50).");
+            showInlineError(validation, price, "Enter a valid counter price (e.g. 120 or 99.50).");
         } catch (IllegalArgumentException ex) {
-            showInlineError(validation, first, readable(ex));
+            showInlineError(validation, price, readable(ex));
         } catch (IllegalStateException | SecurityException ex) {
-            showInlineError(validation, first, readable(ex));
+            showInlineError(validation, price, readable(ex));
         } catch (RuntimeException ex) {
             showFeedback("Could not complete the action: " + readable(ex));
         }
@@ -422,7 +424,7 @@ public class SellerRequestsController {
         validation.setText(message);
         validation.setVisible(true);
         validation.setManaged(true);
-        if (!field.getStyleClass().contains("input-error")) {
+        if (field != null && !field.getStyleClass().contains("input-error")) {
             field.getStyleClass().add("input-error");
         }
     }
