@@ -38,8 +38,10 @@ public record SellerStats(Totals totals, List<ListingStat> listings, Map<DealTyp
      * @param views views of this listing
      * @param offers offers received on this listing
      * @param completed completed deals for this listing
+     * @param outcome the type of the completed deal (SOLD, LENT or GIVEN), or {@code null} when
+     *                this listing has no completed deal
      */
     public record ListingStat(String listingId, String title, ListingStatus status,
-                              int views, int offers, int completed) {
+                              int views, int offers, int completed, DealType outcome) {
     }
 }

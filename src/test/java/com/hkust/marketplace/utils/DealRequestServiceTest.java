@@ -95,7 +95,7 @@ class DealRequestServiceTest {
         assertEquals("Bob Wong claimed your giveaway 'IKEA Desk Lamp'.",
                 data.notifications().forUser("diana").get(0).getMessage());
         IllegalStateException second = assertThrows(IllegalStateException.class, () -> requests.claim(alice, lamp));
-        assertEquals(DealRequestService.NOT_AVAILABLE, second.getMessage(), "already reserved when alice looks");
+        assertEquals(DealRequestService.ALREADY_CLAIMED, second.getMessage(), "already reserved when alice looks");
         assertEquals(List.of(claim), data.deals().requestsByBuyer("bob").stream()
                 .filter(r -> r.getListing() == lamp).toList());
     }
@@ -129,6 +129,42 @@ class DealRequestServiceTest {
                 o.equals(DealRequestService.ALREADY_CLAIMED) || o.equals(DealRequestService.NOT_AVAILABLE)));
         assertEquals(1, data.deals().allRequests().stream()
                 .filter(r -> r.getListing() == lamp && r.getStatus() == RequestStatus.PENDING).count());
+    }
+
+    @Test
+    void aReservedGiveawayIsAlreadyClaimedButOtherUnavailableStatesAreNot() {
+        Listing lamp = data.listings().find("L102");   // seeded: reserved by alice's pending claim
+
+        assertEquals(DealRequestService.ALREADY_CLAIMED, assertThrows(IllegalStateException.class,
+                () -> requests.claim(bob, lamp)).getMessage(), "someone else holds the reservation");
+
+        for (ListingStatus status : List.of(ListingStatus.SOLD, ListingStatus.GIVEN,
+                ListingStatus.TAKEN_DOWN, ListingStatus.PENDING_REVIEW)) {
+            lamp.setStatus(status);
+            assertEquals(DealRequestService.NOT_AVAILABLE, assertThrows(IllegalStateException.class,
+                    () -> requests.claim(bob, lamp)).getMessage(), status.name());
+        }
+
+        lamp.setStatus(ListingStatus.RESERVED);
+        lamp.setDeleted(true);
+        assertEquals(DealRequestService.NOT_AVAILABLE, assertThrows(IllegalStateException.class,
+                () -> requests.claim(bob, lamp)).getMessage(), "a deleted giveaway hides its reservation");
+    }
+
+    @Test
+    void aGiveawayFromAnInactiveOrDeletedSellerIsUnavailable() {
+        Listing lamp = data.listings().find("L102");
+        lamp.setStatus(ListingStatus.LIVE);
+        User seller = lamp.getSeller();
+
+        seller.setActive(false);
+        assertEquals(DealRequestService.NOT_AVAILABLE, assertThrows(IllegalStateException.class,
+                () -> requests.claim(bob, lamp)).getMessage(), "inactive seller");
+
+        seller.setActive(true);
+        seller.setDeleted(true);
+        assertEquals(DealRequestService.NOT_AVAILABLE, assertThrows(IllegalStateException.class,
+                () -> requests.claim(bob, lamp)).getMessage(), "deleted seller");
     }
 
     @Test

@@ -232,6 +232,34 @@ public final class ChatService {
         return List.copyOf(matches);
     }
 
+    /**
+     * Searches one thread (SRS UC-1.5 step 3.3): the messages in {@code thread} that contain
+     * {@code keyword}, ignoring case, in the order they were sent. A blank keyword keeps every
+     * message of the chosen kind, so {@code OFFERS_ONLY} lists the thread's offers.
+     *
+     * @throws SecurityException if {@code user} is not the thread's buyer or seller
+     * @throws NullPointerException if {@code user}, {@code thread} or {@code filter} is {@code null}
+     */
+    public List<Message> searchThread(User user, ChatThread thread, String keyword, MessageSearchFilter filter) {
+        Objects.requireNonNull(user, "user");
+        Objects.requireNonNull(thread, "thread");
+        Objects.requireNonNull(filter, "filter");
+        boolean participant = user.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername())
+                || user.getUsername().equalsIgnoreCase(thread.getSeller().getUsername());
+        if (!participant) {
+            throw new SecurityException("@" + user.getUsername() + " is not part of this chat");
+        }
+        String needle = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+        List<Message> matches = new ArrayList<>();
+        for (Message message : data.chats().history(thread)) {
+            if (matchesKind(message, filter)
+                    && (needle.isEmpty() || message.getContent().toLowerCase(Locale.ROOT).contains(needle))) {
+                matches.add(message);
+            }
+        }
+        return List.copyOf(matches);
+    }
+
     private List<ChatThread> participatingThreads(User user) {
         if (user instanceof Buyer buyer) {
             return threadsForBuyer(buyer);

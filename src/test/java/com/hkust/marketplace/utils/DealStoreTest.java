@@ -1,15 +1,20 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Claim;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.DealStatus;
 import com.hkust.marketplace.models.DealType;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,6 +55,25 @@ class DealStoreTest {
     }
 
     @Test
+    void counteredRequestsComeBeforePendingOnes() {
+        DummyDataService data = seeded();
+        DealStore store = data.deals();
+        // alice's seeded claim is older and still Pending; her new offer is countered by the seller
+        Listing sale = data.listings().all().stream()
+                .filter(l -> l.getType() == ListingType.SELL && ListingSearch.isBrowsable(l))
+                .findFirst().orElseThrow();
+        PriceOffer offer = store.lifecycle().submitOffer(
+                (Buyer) data.users().find("alice"), sale, new BigDecimal("100"));
+        store.lifecycle().counterOffer(offer, new BigDecimal("120"));
+
+        List<DealRequest> open = store.openRequestsByBuyer("alice");
+
+        assertEquals(2, open.size());
+        assertEquals(RequestStatus.COUNTERED, open.get(0).getStatus());
+        assertEquals(RequestStatus.PENDING, open.get(1).getStatus());
+    }
+
+    @Test
     void sellerQueriesFollowTheListingsSeller() {
         assertEquals(1, deals.dealsForSeller("charlie").size());
         assertEquals(1, deals.dealsForSeller("diana").size());
@@ -74,6 +98,30 @@ class DealStoreTest {
         assertEquals(2, past.size());
         assertEquals(second, past.get(0));
         assertTrue(!past.get(0).getCompletedDate().isBefore(past.get(1).getCompletedDate()));
+    }
+
+    @Test
+    void returnedDealsIncludeReturnedAndAutoReturnedButNotCompleted() {
+        DummyDataService data = seeded();
+        DealStore store = data.deals();
+
+        Deal returned = store.lifecycle().accept(store.openRequestsByBuyer("bob").get(0));
+        store.lifecycle().returnItem(returned);
+
+        LocalDateTime now = LocalDateTime.now();
+        Deal auto = store.lifecycle().accept(store.lifecycle().submitBorrow(
+                returned.getBuyer(), returned.getListing(), now.plusMinutes(1), now.plusDays(7)));
+        store.lifecycle().autoReturn(auto);
+
+        List<Deal> recentlyReturned = store.returnedDealsForBuyer("bob");
+
+        assertEquals(2, recentlyReturned.size());
+        assertEquals(auto, recentlyReturned.get(0));
+        assertEquals(returned, recentlyReturned.get(1));
+        assertTrue(recentlyReturned.stream().anyMatch(d -> d.getStatus() == DealStatus.RETURNED));
+        assertTrue(recentlyReturned.stream().anyMatch(d -> d.getStatus() == DealStatus.AUTO_RETURNED));
+        assertTrue(recentlyReturned.stream().noneMatch(d -> d.getStatus() == DealStatus.COMPLETED));
+        assertTrue(store.returnedDealsForBuyer("alice").isEmpty());
     }
 
     private static DummyDataService seeded() {

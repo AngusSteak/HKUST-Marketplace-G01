@@ -1,6 +1,7 @@
 package com.hkust.marketplace.controllers.buyer;
 
 import com.hkust.marketplace.controllers.chat.ChatViewBuilder;
+import com.hkust.marketplace.controllers.common.DateTimeInput;
 import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
@@ -49,6 +50,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -141,11 +143,16 @@ public class BuyerDashboardController {
         ComboBox<ListingSearch.SortOrder> sortBox =
                 new ComboBox<>(FXCollections.observableArrayList(ListingSearch.SortOrder.values()));
         sortBox.getSelectionModel().select(ListingSearch.SortOrder.NEWEST);
-        HBox filterBar = new HBox(10,
-                categoryFilter, typeFilter, conditionFilter,
-                new Label("Price:"), minPrice, new Label("\u2013"), maxPrice,
-                new Label("Sort:"), sortBox);
+        // Wraps onto a second line in a narrow window instead of squeezing the controls to "...".
+        // The price range and the sort each stay together as one group.
+        HBox priceGroup = filterGroup(new Label("Price:"), minPrice, new Label("\u2013"), maxPrice);
+        HBox sortGroup = filterGroup(new Label("Sort:"), sortBox);
+        FlowPane filterBar = new FlowPane(10, 8, categoryFilter, typeFilter, conditionFilter, priceGroup, sortGroup);
         filterBar.setAlignment(Pos.CENTER_LEFT);
+        filterBar.prefWrapLengthProperty().bind(contentPane.widthProperty().subtract(40));
+        for (javafx.scene.Node n : List.of(categoryFilter, typeFilter, conditionFilter, sortBox)) {
+            ((Region) n).setMinWidth(Region.USE_PREF_SIZE);
+        }
 
         Label error = new Label();
         error.setStyle("-fx-text-fill: #c0392b; -fx-font-size: 13px;");
@@ -205,6 +212,18 @@ public class BuyerDashboardController {
         scroll.setFitToWidth(true);
         scroll.setStyle("-fx-background-color: transparent;");
         contentPane.getChildren().add(scroll);
+    }
+
+    /** Controls kept on one line at their natural width, so none of them is cut short. */
+    private static HBox filterGroup(javafx.scene.Node... nodes) {
+        HBox group = new HBox(8, nodes);
+        group.setAlignment(Pos.CENTER_LEFT);
+        for (javafx.scene.Node n : nodes) {
+            if (n instanceof Region r) {
+                r.setMinWidth(Region.USE_PREF_SIZE);
+            }
+        }
+        return group;
     }
 
     private static TextField priceField(String prompt) {
@@ -615,7 +634,7 @@ public class BuyerDashboardController {
             String preview = last == null ? "No messages yet"
                     : (last.getSenderUsername().equalsIgnoreCase(buyer.getUsername()) ? "You: " : "")
                     + last.getContent();
-            Label detail = muted("with " + thread.getSeller().getDisplayName() + "  \u00b7  " + preview);
+            Label detail = muted("with " + thread.getSeller().getNameWithUsername() + "  \u00b7  " + preview);
             detail.setMaxWidth(700);
             detail.setWrapText(false);
             Label time = new Label(last == null ? "" : last.getSentTime().format(when));
@@ -680,20 +699,18 @@ public class BuyerDashboardController {
         java.time.Duration suggested = longest.compareTo(java.time.Duration.ofDays(7)) < 0 ? longest
                 : java.time.Duration.ofDays(7);
         LocalDateTime defaultEnd = defaultStart.plus(suggested);
-        DatePicker startDate = new DatePicker(defaultStart.toLocalDate());
-        TextField startTime = timeField(defaultStart);
-        DatePicker endDate = new DatePicker(defaultEnd.toLocalDate());
-        TextField endTime = timeField(defaultEnd);
+        DateTimeInput start = new DateTimeInput(defaultStart);
+        DateTimeInput end = new DateTimeInput(defaultEnd);
         Label error = dialogError();
         VBox body = new VBox(8,
                 muted("You can borrow this for up to " + DurationText.format(longest) + "."),
-                new Label("Start"), new HBox(8, startDate, startTime),
-                new Label("End"), new HBox(8, endDate, endTime), error);
+                new Label("Start"), start.node(),
+                new Label("End"), end.node(), error);
 
         Dialog<ButtonType> dialog = requestDialog("Request to Borrow", "Borrow: " + listing.getTitle(), body,
                 "Send Request");
         onConfirm(dialog, error, () -> dealRequests.submitBorrow(SessionManager.getCurrentUser(), listing,
-                dateTime(startDate, startTime, "start"), dateTime(endDate, endTime, "end")));
+                start.value("start"), end.value("end")));
         dialog.showAndWait().filter(b -> b.getButtonData() == ButtonBar.ButtonData.OK_DONE)
                 .ifPresent(b -> requestSent("Your borrow request was sent to " + listing.getSellerFullName() + "."));
     }
@@ -780,23 +797,9 @@ public class BuyerDashboardController {
         return error;
     }
 
-    private static TextField timeField(LocalDateTime value) {
-        TextField field = new TextField(value.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
-        field.setPromptText("HH:mm");
-        field.setPrefWidth(80);
-        return field;
-    }
-
-    private static LocalDateTime dateTime(DatePicker date, TextField time, String which) {
-        if (date.getValue() == null) {
-            throw new IllegalArgumentException("Please choose a " + which + " date.");
-        }
-        try {
-            return date.getValue().atTime(java.time.LocalTime.parse(time.getText().trim(),
-                    DateTimeFormatter.ofPattern("H:mm")));
-        } catch (java.time.format.DateTimeParseException e) {
-            throw new IllegalArgumentException("Enter the " + which + " time as HH:mm, e.g. 14:30.");
-        }
+    /** Combines a date and an {@code H:mm} or {@code H:mm:ss} time; see {@link DateTimeInput#parse}. */
+    static LocalDateTime borrowDateTime(LocalDate date, String timeText, String which) {
+        return DateTimeInput.parse(date, timeText, which);
     }
 
     private final MyDealsService myDeals = new MyDealsService(DummyDataService.getInstance());
@@ -817,8 +820,9 @@ public class BuyerDashboardController {
         DealStore deals = DummyDataService.getInstance().deals();
         List<DealRequest> open = deals.openRequestsByBuyer(buyer);
         List<Deal> active = deals.activeDealsForBuyer(buyer);
+        List<Deal> returned = deals.returnedDealsForBuyer(buyer);
 
-        if (open.isEmpty() && active.isEmpty()) {
+        if (open.isEmpty() && active.isEmpty() && returned.isEmpty()) {
             // SRS UC-1.6 A1: only View History remains.
             Button history = new Button("View Deal History");
             history.getStyleClass().addAll("btn-outline", "btn-sm");
@@ -838,6 +842,12 @@ public class BuyerDashboardController {
             root.getChildren().add(sectionTitle("Waiting for a response"));
             for (DealRequest request : open) {
                 root.getChildren().add(requestRow(request));
+            }
+        }
+        if (!returned.isEmpty()) {
+            root.getChildren().add(sectionTitle("Recently returned"));
+            for (Deal deal : returned) {
+                root.getChildren().add(returnedRow(deal));
             }
         }
 
@@ -908,6 +918,17 @@ public class BuyerDashboardController {
             buttons.getChildren().add(complete);
         }
         return actionRow(info, buttons);
+    }
+
+    /** A read-only recently returned loan: outcome, listing, seller and return date, no actions. */
+    private HBox returnedRow(Deal deal) {
+        Label status = new Label(statusLabel(deal.getStatus()));
+        status.getStyleClass().addAll("badge", "badge-sold");
+        VBox info = rowInfo(deal.getListing(), requestTypeLabel(deal.getDealType()), status);
+        String date = deal.getCompletedDate() == null ? "" : deal.getCompletedDate().format(DEAL_TIME);
+        info.getChildren().add(muted((deal.getStatus() == DealStatus.AUTO_RETURNED ? "Auto-returned " : "Returned ")
+                + (date.isEmpty() ? "after the due date" : "on " + date)));
+        return actionRow(info, new HBox(8, openButton(deal.getListing())));
     }
 
     /** SRS UC-1.6 step 3.4.4: after completing, the buyer is invited to rate the seller. */
@@ -1257,12 +1278,9 @@ public class BuyerDashboardController {
                 .ifPresent(b -> info("Thank you. Your report has been sent to the admin."));
     }
 
-    /** The seller's latest visible reviews, shown on the listing details (SRS UC-1.9 postconditions). */
+    /** Every visible seller review, newest first, shown on the listing details (SRS UC-1.9 postconditions). */
     private VBox sellerReviews(String sellerUsername, String sellerName) {
-        List<Review> visible = DummyDataService.getInstance().reviews().forSeller(sellerUsername).stream()
-                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())
-                .limit(3)
-                .toList();
+        List<Review> visible = ListingDetailDialog.visibleSellerReviews(sellerUsername);
         VBox box = new VBox(4);
         Label heading = new Label("Reviews of " + sellerName);
         heading.setStyle("-fx-font-weight: bold; -fx-text-fill: #1a1a2e;");
@@ -1464,7 +1482,17 @@ public class BuyerDashboardController {
                     ListingDetailDialog.show(contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
                 }
             }
-            case REQUEST, DEAL -> showMyDeals();
+            case REQUEST, DEAL -> {
+                Deal deal = data.deals().allDeals().stream()
+                        .filter(d -> d.getId().equals(ref.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (deal == null) {
+                    showMyDeals();
+                } else {
+                    showDealNotification(deal);
+                }
+            }
             case THREAD -> {
                 // A thread is one buyer's chat on one listing; the id may be "buyer|L101" or just the listing id.
                 String id = ref.getId();
@@ -1475,7 +1503,17 @@ public class BuyerDashboardController {
                     openChat(listing, "Notifications", this::showNotifications);
                 }
             }
-            case REVIEW -> showReviews();
+            case REVIEW -> {
+                Review review = data.reviews().all().stream()
+                        .filter(r -> r.getId().equals(ref.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (review == null) {
+                    showReviews();
+                } else {
+                    showReviewNotification(review);
+                }
+            }
             case USER -> {
                 // A buyer is only ever told about their own account.
                 User me = SessionManager.getCurrentUser();
@@ -1484,6 +1522,84 @@ public class BuyerDashboardController {
                 }
             }
         }
+    }
+
+    /** Read-only details of the deal a notification points at (SRS UC-1.8 step 3.2). */
+    private void showDealNotification(Deal deal) {
+        LocalDateTime dueOrCompleted = deal.getStatus() == DealStatus.ACTIVE
+                ? deal.getDueDate() : deal.getCompletedDate();
+        String text = dealNotificationText(deal.getId(), deal.getDealType(), deal.getStatus(),
+                deal.getListing().getTitle(), deal.getBuyerDisplayName(), deal.getSellerDisplayName(),
+                deal.getStartDate(), dueOrCompleted);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Deal details");
+        alert.setHeaderText(deal.getListing().getTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    /** Read-only details of the review a notification points at (SRS UC-1.8 step 3.2). */
+    private void showReviewNotification(Review review) {
+        String text = reviewNotificationText(review.getRating(), review.getComment(),
+                displayName(review.getBuyerUsername()), review.getCreatedAt(), review.getSellerReply());
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Review details");
+        alert.setHeaderText(review.getListingTitle() == null ? "Your review" : review.getListingTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    private static VBox notificationBody(String text) {
+        Label body = new Label(text);
+        body.setWrapText(true);
+        VBox box = new VBox(body);
+        box.setPadding(new Insets(4));
+        box.setPrefWidth(360);
+        return box;
+    }
+
+    /**
+     * The facts shown when a REQUEST/DEAL notification is opened: the deal id, type, status,
+     * listing, parties, start and its due (while active) or completed date. Takes primitives so
+     * the text is testable without constructing a package-private {@link Deal}.
+     */
+    static String dealNotificationText(String dealId, DealType type, DealStatus status, String listingTitle,
+                                       String buyer, String seller, LocalDateTime start,
+                                       LocalDateTime dueOrCompleted) {
+        String dateLabel = status == DealStatus.ACTIVE ? "Due" : "Completed";
+        return "Deal " + orDash(dealId) + "\n"
+                + "Type: " + requestTypeLabel(type) + "\n"
+                + "Status: " + statusLabel(status) + "\n"
+                + "Listing: " + orDash(listingTitle) + "\n"
+                + "Buyer: " + orDash(buyer) + "\n"
+                + "Seller: " + orDash(seller) + "\n"
+                + "Started: " + whenText(start) + "\n"
+                + dateLabel + ": " + whenText(dueOrCompleted);
+    }
+
+    /**
+     * The facts shown when a REVIEW notification is opened: the stars and numeric rating, the
+     * comment, who wrote it, when, and the seller's reply when there is one. Takes primitives so
+     * the text is testable without the review store.
+     */
+    static String reviewNotificationText(int rating, String comment, String buyerLabel,
+                                         LocalDateTime created, String sellerReply) {
+        String text = "Rating: " + stars(rating) + " (" + rating + "/5)\n"
+                + "Comment: " + (comment == null || comment.isBlank() ? "No comment." : comment) + "\n"
+                + "Buyer: " + orDash(buyerLabel) + "\n"
+                + "Date: " + whenText(created);
+        if (sellerReply != null && !sellerReply.isBlank()) {
+            text += "\nSeller reply: " + sellerReply;
+        }
+        return text;
+    }
+
+    private static String orDash(String value) {
+        return value == null || value.isBlank() ? "\u2014" : value;
+    }
+
+    private static String whenText(LocalDateTime dateTime) {
+        return dateTime == null ? "\u2014" : dateTime.format(DEAL_TIME);
     }
 
     /** Manage Profile (SRS UC-1.7): full name and an optional password change. */

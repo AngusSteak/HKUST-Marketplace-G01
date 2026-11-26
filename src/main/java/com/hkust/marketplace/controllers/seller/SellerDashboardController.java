@@ -35,6 +35,8 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -54,6 +56,8 @@ public class SellerDashboardController {
     private static final String BACK_TO_CHATS = "\u2190 Back to Chats";
     private static final String BACK_TO_REQUESTS = "\u2190 Back to Requests";
     private static final String BACK_TO_NOTIFICATIONS = "\u2190 Back to Notifications";
+    private static final DateTimeFormatter REVIEW_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     static final List<NotificationCategory> SELLER_CATEGORIES = List.of(
             NotificationCategory.LISTING_APPROVED, NotificationCategory.LISTING_REJECTED,
@@ -242,13 +246,15 @@ public class SellerDashboardController {
             });
         });
 
-        boolean markSoldAllowed = !l.isDeleted()
-                && l.getStatus() == ListingStatus.LIVE
-                && l instanceof SaleListing;
+        String markSoldReason = markSoldUnavailableReason(l);
         Button soldBtn = new Button("Mark sold");
         soldBtn.getStyleClass().addAll("btn-primary", "btn-sm");
-        soldBtn.setDisable(!markSoldAllowed);
         soldBtn.setOnAction(e -> {
+            // SRS UC-2.4 A2/A3: tell the seller why, instead of a disabled button with no message.
+            if (markSoldReason != null) {
+                new Alert(Alert.AlertType.WARNING, markSoldReason).showAndWait();
+                return;
+            }
             int affected = openRequests.size();
             String message = affected == 0
                     ? "Mark this listing as sold?\n\nAny open offers will be closed and their buyers notified."
@@ -276,6 +282,22 @@ public class SellerDashboardController {
 
         row.getChildren().addAll(info, status, editBtn, delBtn, soldBtn);
         return row;
+    }
+
+    /**
+     * Why the seller cannot mark {@code listing} as sold (SRS UC-2.4 A2/A3), or {@code null}
+     * when the action is available. The dashboard shows this text so the seller is told the
+     * reason instead of only seeing a disabled button.
+     */
+    static String markSoldUnavailableReason(Listing listing) {
+        if (listing == null || listing.isDeleted()) {
+            return SellerService.NOT_CHANGEABLE;
+        }
+        return switch (listing.getStatus()) {
+            case RESERVED, SOLD, LENT, GIVEN, TAKEN_DOWN -> SellerService.NOT_CHANGEABLE;
+            case PENDING_REVIEW, REJECTED -> SellerService.NOT_LIVE;
+            case LIVE -> listing instanceof SaleListing ? null : SellerService.NOT_SALE_LISTING;
+        };
     }
 
     @FXML
@@ -317,7 +339,7 @@ public class SellerDashboardController {
         HBox.setHgrow(info, Priority.ALWAYS);
         Label title = new Label(thread.getListing().getTitle());
         title.setStyle("-fx-font-weight: bold; -fx-font-size: 15px;");
-        Label buyer = new Label("Buyer: " + thread.getBuyer().getFullName());
+        Label buyer = new Label("Buyer: " + thread.getBuyer().getNameWithUsername());
         buyer.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
         List<Message> history = chatService.history(thread);
         String preview = history.isEmpty()
@@ -447,6 +469,7 @@ public class SellerDashboardController {
 
         listingForm = new ListingFormComponent(() -> seller, state -> submitEdit(target, state));
         listingForm.setOnCancel(this::showMyListings);
+        listingForm.prefillFrom(target);
 
         ScrollPane scroll = new ScrollPane(listingForm.getView());
         scroll.setFitToWidth(true);
@@ -651,9 +674,12 @@ public class SellerDashboardController {
         TableView<SellerStats.ListingStat> table = new TableView<>();
         table.setEditable(false);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
         table.getColumns().addAll(List.of(
-                statColumn("Listing", SellerStats.ListingStat::title),
+                listingTitleColumn(),
                 statColumn("Status", row -> row.status().name().replace('_', ' ')),
+                statColumn("Outcome", row -> outcomeLabel(row.outcome())),
                 statColumn("Views", row -> String.valueOf(row.views())),
                 statColumn("Offers", row -> String.valueOf(row.offers())),
                 statColumn("Completed", row -> String.valueOf(row.completed()))));
@@ -667,6 +693,40 @@ public class SellerDashboardController {
         TableColumn<SellerStats.ListingStat, String> column = new TableColumn<>(title);
         column.setSortable(false);
         column.setCellValueFactory(cell -> new SimpleStringProperty(value.apply(cell.getValue())));
+        return column;
+    }
+
+    private TableColumn<SellerStats.ListingStat, String> listingTitleColumn() {
+        TableColumn<SellerStats.ListingStat, String> column = statColumn("Listing", SellerStats.ListingStat::title);
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    SellerStats.ListingStat row = getTableRow() == null ? null : getTableRow().getItem();
+                    Listing listing = row == null ? null
+                            : DummyDataService.getInstance().listings().find(row.listingId());
+                    if (listing != null) {
+                        ListingDetailDialog.show(
+                                contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
         return column;
     }
 
@@ -732,8 +792,7 @@ public class SellerDashboardController {
         stars.setStyle("-fx-text-fill: #A68137; -fx-font-size: 16px;");
         Label comment = new Label(review.getComment());
         comment.setWrapText(true);
-        Label meta = new Label("by " + users.historicalLabel(review.getBuyerUsername())
-                + " · " + review.getListingTitle());
+        Label meta = new Label(reviewMeta(review, users.historicalLabel(review.getBuyerUsername())));
         meta.setStyle("-fx-text-fill: #9aa0b0; -fx-font-size: 12px;");
         item.getChildren().addAll(stars, comment, meta);
         Listing resolvedListing = reviewService.listingOf(review);
@@ -787,6 +846,10 @@ public class SellerDashboardController {
         Button flag = new Button(flagButtonLabel(review.isFlagged()));
         flag.getStyleClass().addAll("btn-outline", "btn-sm");
         flag.setDisable(review.isFlagged());
+        String tooltip = flagTooltip(review.isFlagged());
+        if (tooltip != null) {
+            flag.setTooltip(new Tooltip(tooltip));
+        }
         Label message = new Label();
         message.setStyle("-fx-text-fill: #c62828; -fx-font-size: 12px;");
         flag.setOnAction(e -> {
@@ -830,8 +893,25 @@ public class SellerDashboardController {
         return String.format("Average rating: %.1f · %d %s", average.getAsDouble(), count, noun);
     }
 
+    /** Meta line for a seller review: buyer, listing title and the review date (UC-2.9). */
+    static String reviewMeta(Review review, String buyerLabel) {
+        String base = "by " + buyerLabel + " · " + review.getListingTitle();
+        return review.getCreatedAt() == null
+                ? base
+                : base + " · " + REVIEW_DATE_FORMAT.format(review.getCreatedAt());
+    }
+
+    /**
+     * Label for the flag button: an already flagged review is awaiting admin moderation
+     * (SRS UC-2.9 A3), so the button says so instead of just reporting it was flagged.
+     */
     static String flagButtonLabel(boolean flagged) {
-        return flagged ? "Already flagged" : "Flag";
+        return flagged ? "Awaiting moderation" : "Flag";
+    }
+
+    /** Tooltip explaining the flag button's state, or {@code null} when no hint is needed. */
+    static String flagTooltip(boolean flagged) {
+        return flagged ? "This review is already awaiting admin moderation." : null;
     }
 
     static String reviewActionError(String action, RuntimeException ex) {
@@ -880,9 +960,9 @@ public class SellerDashboardController {
     }
 
     /**
-     * Opens a notification (SRS UC-2.7 step 3.2): marks it read, then navigates to the related
-     * listing, request, deal, chat thread, review or own profile. A missing target is explained
-     * instead of throwing.
+     * Opens a notification (SRS UC-2.7 step 3.2): marks it read, then shows the related request,
+     * deal or review details, opens a listing, chat thread or own profile, and falls back to the
+     * matching list when that item is gone. A missing target is explained instead of throwing.
      */
     private void openNotification(Notification n) {
         DummyDataService data = DummyDataService.getInstance();
@@ -915,16 +995,21 @@ public class SellerDashboardController {
                 if (request == null) {
                     new Alert(Alert.AlertType.INFORMATION, "This request no longer exists.").showAndWait();
                     showRequests();
-                } else if (request.getStatus() == RequestStatus.PENDING
-                        || request.getStatus() == RequestStatus.COUNTERED) {
-                    showRequestsFiltered(request.getListing());
                 } else {
-                    ListingDetailDialog.show(
-                            contentPane.getScene() == null ? null : contentPane.getScene().getWindow(),
-                            request.getListing());
+                    showRequestNotification(request);
                 }
             }
-            case DEAL -> showRequests();
+            case DEAL -> {
+                Deal deal = data.deals().allDeals().stream()
+                        .filter(d -> d.getId().equals(ref.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (deal == null) {
+                    showRequests();
+                } else {
+                    showDealNotification(deal);
+                }
+            }
             case THREAD -> {
                 User user = SessionManager.getCurrentUser();
                 if (!(user instanceof Seller seller)) {
@@ -947,7 +1032,17 @@ public class SellerDashboardController {
                     renderThread(target, BACK_TO_NOTIFICATIONS, this::showNotifications);
                 }
             }
-            case REVIEW -> showReviews();
+            case REVIEW -> {
+                Review review = data.reviews().all().stream()
+                        .filter(r -> r.getId().equals(ref.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (review == null) {
+                    showReviews();
+                } else {
+                    showReviewNotification(review);
+                }
+            }
             case USER -> {
                 User user = SessionManager.getCurrentUser();
                 if (user != null && user.getUsername().equalsIgnoreCase(ref.getId())) {
@@ -955,6 +1050,172 @@ public class SellerDashboardController {
                 }
             }
         }
+    }
+
+    /** Read-only details of the request a notification points at (SRS UC-2.7 step 3.2.1). */
+    private void showRequestNotification(DealRequest request) {
+        String text = requestNotificationText(request.getId(), request.dealType(), request.getStatus(),
+                request.getListing().getTitle(), request.getBuyerDisplayName(),
+                requestTermsText(request), request.getSubmittedTime());
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Request details");
+        alert.setHeaderText(request.getListing().getTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    /** Read-only details of the deal a notification points at (SRS UC-2.7 step 3.2.1). */
+    private void showDealNotification(Deal deal) {
+        LocalDateTime dueOrCompleted = deal.getStatus() == DealStatus.ACTIVE
+                ? deal.getDueDate() : deal.getCompletedDate();
+        String text = dealNotificationText(deal.getId(), deal.getDealType(), deal.getStatus(),
+                deal.getListing().getTitle(), deal.getBuyerDisplayName(), deal.getStartDate(),
+                dueOrCompleted);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Deal details");
+        alert.setHeaderText(deal.getListing().getTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    /** Read-only details of the review a notification points at (SRS UC-2.7 step 3.2.1). */
+    private void showReviewNotification(Review review) {
+        String buyerLabel = DummyDataService.getInstance().users()
+                .historicalLabel(review.getBuyerUsername());
+        String text = reviewNotificationText(review.getRating(), review.getComment(), buyerLabel,
+                review.getCreatedAt(), review.getSellerReply());
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Review details");
+        alert.setHeaderText(review.getListingTitle() == null ? "Review" : review.getListingTitle());
+        alert.getDialogPane().setContent(notificationBody(text));
+        alert.showAndWait();
+    }
+
+    private static VBox notificationBody(String text) {
+        Label body = new Label(text);
+        body.setWrapText(true);
+        VBox box = new VBox(body);
+        box.setPadding(new Insets(4));
+        box.setPrefWidth(360);
+        return box;
+    }
+
+    /** The terms a request would grant: the counter if there is one, otherwise what was asked. */
+    private static String requestTermsText(DealRequest request) {
+        if (request instanceof PriceOffer offer) {
+            return "HK$ " + offer.agreedPrice().toPlainString();
+        }
+        if (request instanceof BorrowRequest borrow) {
+            return whenText(borrow.agreedStart()) + " to " + whenText(borrow.agreedEnd());
+        }
+        return "Giveaway claim";
+    }
+
+    /**
+     * The facts shown when a REQUEST notification is opened: the request id, type, status,
+     * listing, buyer, terms and when it was submitted. Takes primitives so the text is testable
+     * without constructing a package-private {@link DealRequest}.
+     */
+    static String requestNotificationText(String requestId, DealType type, RequestStatus status,
+                                          String listingTitle, String buyer, String terms,
+                                          LocalDateTime submitted) {
+        return "Request " + orDash(requestId) + "\n"
+                + "Type: " + dealTypeLabel(type) + "\n"
+                + "Status: " + requestStatusLabel(status) + "\n"
+                + "Listing: " + orDash(listingTitle) + "\n"
+                + "Buyer: " + orDash(buyer) + "\n"
+                + "Terms: " + orDash(terms) + "\n"
+                + "Submitted: " + whenText(submitted);
+    }
+
+    /**
+     * The facts shown when a DEAL notification is opened: the deal id, type, status, listing,
+     * buyer, start and its due (while active) or completed date. Takes primitives so the text is
+     * testable without constructing a package-private {@link Deal}.
+     */
+    static String dealNotificationText(String dealId, DealType type, DealStatus status, String listingTitle,
+                                       String buyer, LocalDateTime start, LocalDateTime dueOrCompleted) {
+        String dateLabel = status == DealStatus.ACTIVE ? "Due" : "Completed";
+        return "Deal " + orDash(dealId) + "\n"
+                + "Type: " + dealTypeLabel(type) + "\n"
+                + "Status: " + dealStatusLabel(status) + "\n"
+                + "Listing: " + orDash(listingTitle) + "\n"
+                + "Buyer: " + orDash(buyer) + "\n"
+                + "Started: " + whenText(start) + "\n"
+                + dateLabel + ": " + whenText(dueOrCompleted);
+    }
+
+    /**
+     * The facts shown when a REVIEW notification is opened: the stars and numeric rating, the
+     * comment, who wrote it, when, and the seller's reply when there is one. Takes primitives so
+     * the text is testable without the review store.
+     */
+    static String reviewNotificationText(int rating, String comment, String buyerLabel,
+                                         LocalDateTime created, String sellerReply) {
+        String text = "Rating: " + stars(rating) + " (" + rating + "/5)\n"
+                + "Comment: " + (comment == null || comment.isBlank() ? "No comment." : comment) + "\n"
+                + "Buyer: " + orDash(buyerLabel) + "\n"
+                + "Date: " + whenText(created);
+        if (sellerReply != null && !sellerReply.isBlank()) {
+            text += "\nSeller reply: " + sellerReply;
+        }
+        return text;
+    }
+
+    /**
+     * The listing's deal outcome as shown on the stats drill-down (SRS UC-2.8 step 5).
+     *
+     * @param type the completed deal's type, or {@code null} when the listing has no completed deal
+     * @return "Sold", "Lent" or "Given", or an em dash when there is no completed deal
+     */
+    static String outcomeLabel(DealType type) {
+        if (type == null) {
+            return "\u2014";
+        }
+        return switch (type) {
+            case SOLD -> "Sold";
+            case LENT -> "Lent";
+            case GIVEN -> "Given";
+        };
+    }
+
+    private static String dealTypeLabel(DealType type) {
+        return switch (type) {
+            case SOLD -> "Buy";
+            case LENT -> "Borrow";
+            case GIVEN -> "Claim";
+        };
+    }
+
+    private static String requestStatusLabel(RequestStatus status) {
+        return switch (status) {
+            case PENDING -> "Pending";
+            case COUNTERED -> "Countered";
+            case ACCEPTED -> "Accepted";
+            case DECLINED -> "Declined";
+        };
+    }
+
+    private static String dealStatusLabel(DealStatus status) {
+        return switch (status) {
+            case ACTIVE -> "Active";
+            case RETURNED -> "Returned";
+            case AUTO_RETURNED -> "Auto-returned";
+            case COMPLETED -> "Completed";
+            case CANCELLED -> "Cancelled";
+        };
+    }
+
+    private static String stars(int rating) {
+        return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
+    }
+
+    private static String orDash(String value) {
+        return value == null || value.isBlank() ? "\u2014" : value;
+    }
+
+    private static String whenText(LocalDateTime dateTime) {
+        return dateTime == null ? "\u2014" : dateTime.format(REVIEW_DATE_FORMAT);
     }
 
     /** Manage Profile (SRS UC-2.6): name, bio, preferred meet-ups and an optional password change. */

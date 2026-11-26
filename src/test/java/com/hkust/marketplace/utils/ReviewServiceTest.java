@@ -118,6 +118,32 @@ class ReviewServiceTest {
     }
 
     @Test
+    void myReviewsOmitReviewsTheAdminHid() {
+        Deal textbook = completeAlicesTextbook();
+        Review visible = reviews.submitReview(alice, textbook, 5, "Perfect");
+        visible.setSellerReply("Thanks Alice!");
+        data.reviews().save(visible);
+        Review hidden = reviews.submitReview(bob, reviews.reviewableDeals(bob).get(0), 2, "Never arrived");
+        hidden.setHidden(true);
+        data.reviews().save(hidden);
+
+        List<Review> mine = reviews.myReviews(alice);
+        assertEquals(1, mine.size());
+        assertEquals(visible.getId(), mine.get(0).getId());
+        assertEquals("Perfect", mine.get(0).getComment());
+        assertEquals(5, mine.get(0).getRating());
+        assertEquals("Thanks Alice!", mine.get(0).getSellerReply());
+
+        List<Review> afterRestart = new ReviewService(DummyDataService.open(db)).myReviews(alice);
+        assertEquals(1, afterRestart.size());
+        assertEquals(visible.getId(), afterRestart.get(0).getId());
+
+        List<Review> bobs = reviews.myReviews(bob);
+        assertTrue(bobs.stream().noneMatch(r -> r.getId().equals(hidden.getId())), "the hidden review is gone");
+        assertTrue(bobs.stream().anyMatch(r -> r.getComment().equals("Very smooth transaction, book in excellent condition!")));
+    }
+
+    @Test
     void theReviewedListingIsFoundThroughItsDeal() {
         Deal textbook = completeAlicesTextbook();
         Review review = reviews.submitReview(alice, textbook, 5, "Great");
