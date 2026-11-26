@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ProfileService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ProfileService.java</span></div><h1>ProfileService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ProfileService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ProfileService.java</span></div><h1>ProfileService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Location;
 import com.hkust.marketplace.models.NotificationCategory;
@@ -50,7 +50,7 @@ public final class ProfileService {
     public List&lt;String&gt; updateProfile(User actor, String fullName, String currentPassword,
                                       String newPassword, String confirmPassword) {
 <span class="fc" id="L52">        AccessControl.require(actor, UserRole.BUYER, UserRole.SELLER);</span>
-<span class="pc bpc" id="L53" title="1 of 2 branches missed.">        String name = fullName == null ? &quot;&quot; : fullName.trim();</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        String name = fullName == null ? &quot;&quot; : fullName.trim();</span>
 <span class="fc bfc" id="L54" title="All 2 branches covered.">        if (name.isEmpty()) {</span>
 <span class="fc" id="L55">            throw new IllegalArgumentException(NAME_REQUIRED);</span>
         }
@@ -107,96 +107,98 @@ public final class ProfileService {
 <span class="nc" id="L107">            throw new SecurityException(&quot;@&quot; + actor.getUsername() + &quot; is not a seller&quot;);</span>
         }
 
-<span class="pc bpc" id="L110" title="1 of 2 branches missed.">        String name = fullName == null ? &quot;&quot; : fullName.trim();</span>
-<span class="pc bpc" id="L111" title="1 of 2 branches missed.">        if (name.isEmpty()) {</span>
-<span class="nc" id="L112">            throw new IllegalArgumentException(NAME_REQUIRED);</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        String name = fullName == null ? &quot;&quot; : fullName.trim();</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (name.isEmpty()) {</span>
+<span class="fc" id="L112">            throw new IllegalArgumentException(NAME_REQUIRED);</span>
         }
-<span class="pc bpc" id="L114" title="1 of 2 branches missed.">        String trimmedBio = bio == null ? &quot;&quot; : bio.trim();</span>
+<span class="fc bfc" id="L114" title="All 2 branches covered.">        String trimmedBio = bio == null ? &quot;&quot; : bio.trim();</span>
 <span class="fc bfc" id="L115" title="All 2 branches covered.">        if (trimmedBio.isBlank()) {</span>
 <span class="fc" id="L116">            trimmedBio = null;</span>
 <span class="fc bfc" id="L117" title="All 2 branches covered.">        } else if (trimmedBio.length() &gt; BIO_MAX_LENGTH) {</span>
 <span class="fc" id="L118">            throw new IllegalArgumentException(BIO_TOO_LONG);</span>
         }
 <span class="fc" id="L120">        final String normalizedBio = trimmedBio;</span>
-<span class="fc bfc" id="L121" title="All 2 branches covered.">        Set&lt;Location&gt; meetups = meetup == null ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(meetup);</span>
+        // EnumSet.copyOf throws on an empty set that is not already an EnumSet (e.g. Set.of()).
+<span class="fc bfc" id="L122" title="All 4 branches covered.">        Set&lt;Location&gt; meetups = meetup == null || meetup.isEmpty()</span>
+<span class="fc" id="L123">                ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(meetup);</span>
 
-<span class="pc bpc" id="L123" title="2 of 6 branches missed.">        boolean changePassword = !isBlank(currentPassword) || !isBlank(newPassword) || !isBlank(confirmPassword);</span>
-<span class="fc bfc" id="L124" title="All 2 branches covered.">        if (changePassword) {</span>
-<span class="fc" id="L125">            checkPasswordChange(actor, currentPassword, newPassword, confirmPassword);</span>
-        }
-
-<span class="fc" id="L128">        List&lt;String&gt; changed = new ArrayList&lt;&gt;();</span>
-<span class="fc bfc" id="L129" title="All 2 branches covered.">        if (!Objects.equals(name, actor.getFullName())) {</span>
-<span class="fc" id="L130">            changed.add(&quot;full name&quot;);</span>
-        }
-<span class="fc" id="L132">        String currentBio = seller.getBio();</span>
-<span class="pc bpc" id="L133" title="2 of 4 branches missed.">        String normalizedCurrentBio = currentBio == null || currentBio.isBlank() ? null : currentBio.trim();</span>
-<span class="fc bfc" id="L134" title="All 2 branches covered.">        if (!Objects.equals(normalizedBio, normalizedCurrentBio)) {</span>
-<span class="fc" id="L135">            changed.add(&quot;bio&quot;);</span>
-        }
-<span class="fc bfc" id="L137" title="All 2 branches covered.">        if (!Objects.equals(meetups, seller.getPreferredMeetup())) {</span>
-<span class="fc" id="L138">            changed.add(&quot;preferred meet-up locations&quot;);</span>
-        }
-<span class="fc bfc" id="L140" title="All 2 branches covered.">        if (changePassword) {</span>
-<span class="fc" id="L141">            changed.add(&quot;password&quot;);</span>
-        }
-<span class="fc bfc" id="L143" title="All 2 branches covered.">        if (changed.isEmpty()) {</span>
-<span class="fc" id="L144">            return List.of();</span>
+<span class="fc bfc" id="L125" title="All 6 branches covered.">        boolean changePassword = !isBlank(currentPassword) || !isBlank(newPassword) || !isBlank(confirmPassword);</span>
+<span class="fc bfc" id="L126" title="All 2 branches covered.">        if (changePassword) {</span>
+<span class="fc" id="L127">            checkPasswordChange(actor, currentPassword, newPassword, confirmPassword);</span>
         }
 
-<span class="fc" id="L147">        String oldName = actor.getFullName();</span>
-<span class="fc" id="L148">        String oldHash = actor.getPasswordHash();</span>
-<span class="fc" id="L149">        String oldBio = seller.getBio();</span>
-<span class="pc bpc" id="L150" title="1 of 2 branches missed.">        Set&lt;Location&gt; oldMeetup = seller.getPreferredMeetup().isEmpty()</span>
-<span class="pc" id="L151">                ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(seller.getPreferredMeetup());</span>
+<span class="fc" id="L130">        List&lt;String&gt; changed = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L131" title="All 2 branches covered.">        if (!Objects.equals(name, actor.getFullName())) {</span>
+<span class="fc" id="L132">            changed.add(&quot;full name&quot;);</span>
+        }
+<span class="fc" id="L134">        String currentBio = seller.getBio();</span>
+<span class="pc bpc" id="L135" title="1 of 4 branches missed.">        String normalizedCurrentBio = currentBio == null || currentBio.isBlank() ? null : currentBio.trim();</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">        if (!Objects.equals(normalizedBio, normalizedCurrentBio)) {</span>
+<span class="fc" id="L137">            changed.add(&quot;bio&quot;);</span>
+        }
+<span class="fc bfc" id="L139" title="All 2 branches covered.">        if (!Objects.equals(meetups, seller.getPreferredMeetup())) {</span>
+<span class="fc" id="L140">            changed.add(&quot;preferred meet-up locations&quot;);</span>
+        }
+<span class="fc bfc" id="L142" title="All 2 branches covered.">        if (changePassword) {</span>
+<span class="fc" id="L143">            changed.add(&quot;password&quot;);</span>
+        }
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (changed.isEmpty()) {</span>
+<span class="fc" id="L146">            return List.of();</span>
+        }
+
+<span class="fc" id="L149">        String oldName = actor.getFullName();</span>
+<span class="fc" id="L150">        String oldHash = actor.getPasswordHash();</span>
+<span class="fc" id="L151">        String oldBio = seller.getBio();</span>
+<span class="pc bpc" id="L152" title="1 of 2 branches missed.">        Set&lt;Location&gt; oldMeetup = seller.getPreferredMeetup().isEmpty()</span>
+<span class="pc" id="L153">                ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(seller.getPreferredMeetup());</span>
         try {
-<span class="fc" id="L153">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L154">                actor.setFullName(name);</span>
-<span class="fc" id="L155">                seller.setBio(normalizedBio);</span>
-<span class="fc" id="L156">                seller.setPreferredMeetup(meetups);</span>
-<span class="fc bfc" id="L157" title="All 2 branches covered.">                if (changePassword) {</span>
-<span class="fc" id="L158">                    actor.setPasswordHash(PasswordHasher.hash(newPassword));</span>
+<span class="fc" id="L155">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L156">                actor.setFullName(name);</span>
+<span class="fc" id="L157">                seller.setBio(normalizedBio);</span>
+<span class="fc" id="L158">                seller.setPreferredMeetup(meetups);</span>
+<span class="fc bfc" id="L159" title="All 2 branches covered.">                if (changePassword) {</span>
+<span class="fc" id="L160">                    actor.setPasswordHash(PasswordHasher.hash(newPassword));</span>
                 }
-<span class="fc" id="L160">                data.users().save(actor);</span>
-<span class="fc" id="L161">                notifyAdmins(actor, changed);</span>
-<span class="fc" id="L162">            });</span>
-<span class="fc" id="L163">        } catch (RuntimeException e) {</span>
+<span class="fc" id="L162">                data.users().save(actor);</span>
+<span class="fc" id="L163">                notifyAdmins(actor, changed);</span>
+<span class="fc" id="L164">            });</span>
+<span class="fc" id="L165">        } catch (RuntimeException e) {</span>
             // The database rolled back; put the account object back the way it was too.
-<span class="fc" id="L165">            actor.setFullName(oldName);</span>
-<span class="fc" id="L166">            actor.setPasswordHash(oldHash);</span>
-<span class="fc" id="L167">            seller.setBio(oldBio);</span>
-<span class="fc" id="L168">            seller.setPreferredMeetup(oldMeetup);</span>
-<span class="fc" id="L169">            throw e;</span>
-<span class="fc" id="L170">        }</span>
-<span class="fc" id="L171">        return List.copyOf(changed);</span>
+<span class="fc" id="L167">            actor.setFullName(oldName);</span>
+<span class="fc" id="L168">            actor.setPasswordHash(oldHash);</span>
+<span class="fc" id="L169">            seller.setBio(oldBio);</span>
+<span class="fc" id="L170">            seller.setPreferredMeetup(oldMeetup);</span>
+<span class="fc" id="L171">            throw e;</span>
+<span class="fc" id="L172">        }</span>
+<span class="fc" id="L173">        return List.copyOf(changed);</span>
     }
 
     private static void checkPasswordChange(User actor, String current, String newPassword, String confirm) {
-<span class="fc bfc" id="L175" title="All 4 branches covered.">        if (isBlank(current) || !PasswordHasher.verify(current, actor.getPasswordHash())) {</span>
-<span class="fc" id="L176">            throw new IllegalArgumentException(CURRENT_PASSWORD_WRONG);</span>
+<span class="fc bfc" id="L177" title="All 4 branches covered.">        if (isBlank(current) || !PasswordHasher.verify(current, actor.getPasswordHash())) {</span>
+<span class="fc" id="L178">            throw new IllegalArgumentException(CURRENT_PASSWORD_WRONG);</span>
         }
-<span class="fc" id="L178">        Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(newPassword, actor.getUsername());</span>
-<span class="fc bfc" id="L179" title="All 2 branches covered.">        if (!failed.isEmpty()) {</span>
-<span class="fc" id="L180">            throw new IllegalArgumentException(UserStore.formatPasswordErrors(failed));</span>
+<span class="fc" id="L180">        Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(newPassword, actor.getUsername());</span>
+<span class="fc bfc" id="L181" title="All 2 branches covered.">        if (!failed.isEmpty()) {</span>
+<span class="fc" id="L182">            throw new IllegalArgumentException(UserStore.formatPasswordErrors(failed));</span>
         }
-<span class="fc bfc" id="L182" title="All 2 branches covered.">        if (!Objects.equals(newPassword, confirm)) {</span>
-<span class="fc" id="L183">            throw new IllegalArgumentException(CONFIRMATION_MISMATCH);</span>
+<span class="fc bfc" id="L184" title="All 2 branches covered.">        if (!Objects.equals(newPassword, confirm)) {</span>
+<span class="fc" id="L185">            throw new IllegalArgumentException(CONFIRMATION_MISMATCH);</span>
         }
-<span class="fc" id="L185">    }</span>
+<span class="fc" id="L187">    }</span>
 
     /** SRS UC-1.7 step 8: which fields changed, never the password itself. */
     private void notifyAdmins(User actor, List&lt;String&gt; changed) {
-<span class="fc bfc" id="L189" title="All 2 branches covered.">        String role = actor.getRole() == UserRole.SELLER ? &quot;Seller&quot; : &quot;Buyer&quot;;</span>
-<span class="fc" id="L190">        String message = role + &quot; @&quot; + actor.getUsername() + &quot; updated their profile: &quot;</span>
-<span class="fc" id="L191">                + String.join(&quot; and &quot;, changed) + &quot;.&quot;;</span>
-<span class="fc" id="L192">        NotificationRef ref = new NotificationRef(NotificationRef.Target.USER, actor.getUsername());</span>
-<span class="fc bfc" id="L193" title="All 2 branches covered.">        for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
-<span class="fc" id="L194">            data.notifications().notify(admin.getUsername(), NotificationCategory.ACCOUNT_CHANGE, message, ref);</span>
-<span class="fc" id="L195">        }</span>
-<span class="fc" id="L196">    }</span>
+<span class="fc bfc" id="L191" title="All 2 branches covered.">        String role = actor.getRole() == UserRole.SELLER ? &quot;Seller&quot; : &quot;Buyer&quot;;</span>
+<span class="fc" id="L192">        String message = role + &quot; @&quot; + actor.getUsername() + &quot; updated their profile: &quot;</span>
+<span class="fc" id="L193">                + String.join(&quot; and &quot;, changed) + &quot;.&quot;;</span>
+<span class="fc" id="L194">        NotificationRef ref = new NotificationRef(NotificationRef.Target.USER, actor.getUsername());</span>
+<span class="fc bfc" id="L195" title="All 2 branches covered.">        for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
+<span class="fc" id="L196">            data.notifications().notify(admin.getUsername(), NotificationCategory.ACCOUNT_CHANGE, message, ref);</span>
+<span class="fc" id="L197">        }</span>
+<span class="fc" id="L198">    }</span>
 
     private static boolean isBlank(String text) {
-<span class="pc bpc" id="L199" title="1 of 4 branches missed.">        return text == null || text.isBlank();</span>
+<span class="fc bfc" id="L201" title="All 4 branches covered.">        return text == null || text.isBlank();</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

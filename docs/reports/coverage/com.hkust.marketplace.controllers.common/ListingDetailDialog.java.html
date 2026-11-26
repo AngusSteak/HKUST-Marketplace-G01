@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ListingDetailDialog.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.common</a> &gt; <span class="el_source">ListingDetailDialog.java</span></div><h1>ListingDetailDialog.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.common;
+
+import com.hkust.marketplace.models.LendListing;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.Review;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DurationText;
+import com.hkust.marketplace.utils.ReviewStore;
+
+import javafx.geometry.Insets;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.stage.Window;
+
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * A small read-only preview of one listing. It is used from screens that only link to a listing
+ * (deal history, reviews, notifications) and do not render the full listing details themselves,
+ * so a link can show the item without navigating away from the current screen.
+ */
+public final class ListingDetailDialog {
+
+    private ListingDetailDialog() {
+    }
+
+    /**
+     * Shows a read-only dialog with the key fields of {@code listing}.
+     *
+     * @param owner the window the dialog belongs to, or {@code null} for no owner
+     * @param listing the listing to show; nothing happens when it is {@code null}
+     */
+    public static void show(Window owner, Listing listing) {
+<span class="pc bpc" id="L42" title="1 of 2 branches missed.">        if (listing == null) {</span>
+<span class="nc" id="L43">            return;</span>
+        }
+<span class="fc" id="L45">        Dialog&lt;Void&gt; dialog = new Dialog&lt;&gt;();</span>
+<span class="fc" id="L46">        dialog.setTitle(&quot;Listing details&quot;);</span>
+<span class="pc bpc" id="L47" title="1 of 2 branches missed.">        if (owner != null) {</span>
+<span class="fc" id="L48">            dialog.initOwner(owner);</span>
+        }
+<span class="fc" id="L50">        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);</span>
+<span class="fc" id="L51">        dialog.getDialogPane().setPrefWidth(560);</span>
+<span class="fc" id="L52">        dialog.setResizable(true);</span>
+
+<span class="fc" id="L54">        VBox content = new VBox(10);</span>
+<span class="fc" id="L55">        content.setPadding(new Insets(16));</span>
+
+<span class="fc" id="L57">        Label title = new Label(listing.getTitle());</span>
+<span class="fc" id="L58">        title.setWrapText(true);</span>
+<span class="fc" id="L59">        title.setStyle(&quot;-fx-font-weight: bold; -fx-font-size: 20px; -fx-text-fill: #1a1a2e;&quot;);</span>
+
+<span class="fc" id="L61">        Label typeBadge = new Label(listing.getTypeDisplay());</span>
+<span class="fc" id="L62">        typeBadge.getStyleClass().addAll(&quot;badge&quot;, typeBadgeClass(listing));</span>
+<span class="fc" id="L63">        Label statusBadge = new Label(statusText(listing));</span>
+<span class="fc" id="L64">        statusBadge.getStyleClass().addAll(&quot;badge&quot;, statusBadgeClass(listing));</span>
+<span class="fc" id="L65">        HBox badges = new HBox(6, typeBadge, statusBadge);</span>
+
+<span class="fc" id="L67">        String priceText = listing.getPriceDisplay();</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">        if (listing instanceof LendListing lend) {</span>
+<span class="nc" id="L69">            priceText = priceText + &quot; · &quot; + DurationText.format(lend.getLendingDuration());</span>
+        }
+<span class="fc" id="L71">        Label price = new Label(priceText);</span>
+<span class="fc" id="L72">        price.setStyle(&quot;-fx-font-weight: bold; -fx-text-fill: #003974;&quot;);</span>
+
+<span class="fc" id="L74">        GridPane fields = new GridPane();</span>
+<span class="fc" id="L75">        fields.setHgap(12);</span>
+<span class="fc" id="L76">        fields.setVgap(6);</span>
+<span class="fc" id="L77">        addField(fields, 0, &quot;Category&quot;, listing.getCategory().getLabel());</span>
+<span class="fc" id="L78">        addField(fields, 1, &quot;Condition&quot;, listing.getCondition().getLabel());</span>
+<span class="fc" id="L79">        addField(fields, 2, &quot;Meet-up&quot;, listing.getMeetupLocation().getLabel());</span>
+<span class="fc" id="L80">        addField(fields, 3, &quot;Seller&quot;, listing.getSellerFullName());</span>
+
+<span class="pc bpc" id="L82" title="2 of 4 branches missed.">        Label description = new Label(listing.getDescription() == null || listing.getDescription().isBlank()</span>
+<span class="pc" id="L83">                ? &quot;No description.&quot; : listing.getDescription());</span>
+<span class="fc" id="L84">        description.setWrapText(true);</span>
+
+<span class="fc" id="L86">        content.getChildren().addAll(title, badges, price, fields, description);</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">        if (!listing.getPhotoPaths().isEmpty()) {</span>
+<span class="nc" id="L88">            content.getChildren().add(ListingPhotos.gallery(listing, 150, 110));</span>
+        }
+<span class="fc" id="L90">        content.getChildren().add(reviewsSection(listing));</span>
+
+<span class="fc" id="L92">        ScrollPane scroll = new ScrollPane(content);</span>
+<span class="fc" id="L93">        scroll.setFitToWidth(true);</span>
+<span class="fc" id="L94">        scroll.setPrefViewportHeight(540);</span>
+<span class="fc" id="L95">        dialog.getDialogPane().setContent(scroll);</span>
+<span class="fc" id="L96">        dialog.showAndWait();</span>
+<span class="fc" id="L97">    }</span>
+
+    /**
+     * Every visible (non-hidden) review of a seller, newest first.
+     *
+     * @param sellerUsername the seller's username
+     * @return the seller's reviews that are not hidden, most recent first; never {@code null}
+     */
+    public static List&lt;Review&gt; visibleSellerReviews(String sellerUsername) {
+<span class="fc" id="L106">        return visibleSellerReviews(DummyDataService.getInstance().reviews(), sellerUsername);</span>
+    }
+
+    /**
+     * As above, reading from {@code reviews}. Visible so it can be tested with an in-memory store.
+     *
+     * @param reviews the review store to read
+     * @param sellerUsername the seller's username
+     * @return the seller's reviews that are not hidden, most recent first; never {@code null}
+     */
+    public static List&lt;Review&gt; visibleSellerReviews(ReviewStore reviews, String sellerUsername) {
+<span class="fc" id="L117">        return reviews.forSeller(sellerUsername).stream()</span>
+<span class="fc" id="L118">                .sorted(Comparator.comparing(Review::getCreatedAt).reversed())</span>
+<span class="fc" id="L119">                .toList();</span>
+    }
+
+    private static VBox reviewsSection(Listing listing) {
+<span class="fc" id="L123">        VBox section = new VBox(6);</span>
+<span class="fc" id="L124">        Label heading = new Label(&quot;Reviews of &quot; + listing.getSellerFullName());</span>
+<span class="fc" id="L125">        heading.setStyle(&quot;-fx-font-weight: bold; -fx-text-fill: #1a1a2e;&quot;);</span>
+<span class="fc" id="L126">        section.getChildren().add(heading);</span>
+<span class="fc" id="L127">        List&lt;Review&gt; reviews = visibleSellerReviews(listing.getSellerUsername());</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        if (reviews.isEmpty()) {</span>
+<span class="fc" id="L129">            Label none = new Label(&quot;No reviews yet.&quot;);</span>
+<span class="fc" id="L130">            none.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 13px;&quot;);</span>
+<span class="fc" id="L131">            section.getChildren().add(none);</span>
+<span class="fc" id="L132">            return section;</span>
+        }
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        for (Review review : reviews) {</span>
+<span class="nc" id="L135">            section.getChildren().add(reviewItem(review));</span>
+<span class="nc" id="L136">        }</span>
+<span class="nc" id="L137">        return section;</span>
+    }
+
+    private static VBox reviewItem(Review review) {
+<span class="nc" id="L141">        Label stars = new Label(stars(review.getRating()));</span>
+<span class="nc" id="L142">        stars.setStyle(&quot;-fx-text-fill: #A68137; -fx-font-weight: bold;&quot;);</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        Label comment = new Label(review.getComment() == null ? &quot;&quot; : &quot;\u201c&quot; + review.getComment() + &quot;\u201d&quot;);</span>
+<span class="nc" id="L144">        comment.setWrapText(true);</span>
+<span class="nc" id="L145">        Label by = new Label(&quot;\u2014 &quot; + displayName(review.getBuyerUsername()));</span>
+<span class="nc" id="L146">        by.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 12px;&quot;);</span>
+<span class="nc" id="L147">        VBox item = new VBox(2, stars, comment, by);</span>
+<span class="nc" id="L148">        item.getStyleClass().add(&quot;notif-item&quot;);</span>
+<span class="nc" id="L149">        return item;</span>
+    }
+
+    private static String stars(int rating) {
+<span class="nc" id="L153">        return &quot;\u2605&quot;.repeat(rating) + &quot;\u2606&quot;.repeat(5 - rating);</span>
+    }
+
+    private static String displayName(String username) {
+<span class="nc" id="L157">        User user = DummyDataService.getInstance().users().find(username);</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        return user == null ? username : user.getDisplayName();</span>
+    }
+
+    private static void addField(GridPane grid, int row, String name, String value) {
+<span class="fc" id="L162">        Label nameLabel = new Label(name);</span>
+<span class="fc" id="L163">        nameLabel.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 13px;&quot;);</span>
+<span class="fc" id="L164">        Label valueLabel = new Label(value);</span>
+<span class="fc" id="L165">        valueLabel.setStyle(&quot;-fx-text-fill: #1a1a2e; -fx-font-size: 13px;&quot;);</span>
+<span class="fc" id="L166">        grid.addRow(row, nameLabel, valueLabel);</span>
+<span class="fc" id="L167">    }</span>
+
+    private static String statusText(Listing listing) {
+<span class="pc bpc" id="L170" title="1 of 2 branches missed.">        if (listing.isDeleted()) {</span>
+<span class="nc" id="L171">            return &quot;Withdrawn&quot;;</span>
+        }
+<span class="pc bpc" id="L173" title="7 of 8 branches missed.">        return switch (listing.getStatus()) {</span>
+<span class="fc" id="L174">            case PENDING_REVIEW -&gt; &quot;Pending Review&quot;;</span>
+<span class="nc" id="L175">            case LIVE -&gt; &quot;Live&quot;;</span>
+<span class="nc" id="L176">            case REJECTED -&gt; &quot;Rejected&quot;;</span>
+<span class="nc" id="L177">            case RESERVED -&gt; &quot;Reserved&quot;;</span>
+<span class="nc" id="L178">            case SOLD -&gt; &quot;Sold&quot;;</span>
+<span class="nc" id="L179">            case LENT -&gt; &quot;Lent&quot;;</span>
+<span class="nc" id="L180">            case GIVEN -&gt; &quot;Given&quot;;</span>
+<span class="nc" id="L181">            case TAKEN_DOWN -&gt; &quot;Taken Down&quot;;</span>
+        };
+    }
+
+    private static String statusBadgeClass(Listing listing) {
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">        if (!listing.isDeleted()) {</span>
+<span class="fc" id="L187">            ListingStatus status = listing.getStatus();</span>
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">            if (status == ListingStatus.LIVE) {</span>
+<span class="nc" id="L189">                return &quot;badge-live&quot;;</span>
+            }
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">            if (status == ListingStatus.PENDING_REVIEW) {</span>
+<span class="fc" id="L192">                return &quot;badge-pending&quot;;</span>
+            }
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if (status == ListingStatus.REJECTED) {</span>
+<span class="nc" id="L195">                return &quot;badge-rejected&quot;;</span>
+            }
+        }
+<span class="nc" id="L198">        return &quot;badge-sold&quot;;</span>
+    }
+
+    private static String typeBadgeClass(Listing listing) {
+<span class="pc bpc" id="L202" title="2 of 3 branches missed.">        return switch (listing.getType()) {</span>
+<span class="fc" id="L203">            case SELL -&gt; &quot;badge-sold&quot;;</span>
+<span class="nc" id="L204">            case LEND -&gt; &quot;badge-pending&quot;;</span>
+<span class="nc" id="L205">            case GIVEAWAY -&gt; &quot;badge-live&quot;;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

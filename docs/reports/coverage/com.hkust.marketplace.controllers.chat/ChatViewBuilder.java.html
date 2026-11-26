@@ -1,0 +1,522 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatViewBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.chat</a> &gt; <span class="el_source">ChatViewBuilder.java</span></div><h1>ChatViewBuilder.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.chat;
+
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.Message;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.utils.ChatService;
+import com.hkust.marketplace.utils.DurationText;
+import com.hkust.marketplace.utils.MessageSearchFilter;
+import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.function.Consumer;
+
+/**
+ * Builds the one chat view shared by the buyer and seller portals, so both sides see the
+ * same conversation record, the same offers-closed banner and the same send behaviour.
+ */
+public final class ChatViewBuilder {
+
+<span class="fc" id="L46">    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern(&quot;dd MMM HH:mm&quot;);</span>
+
+    private ChatViewBuilder() {
+    }
+
+    /**
+     * Builds the chat view for {@code thread} as seen by {@code currentUser}. Whether a send
+     * is allowed is decided by {@link ChatService}, not by hiding the input alone.
+     */
+    public static VBox build(ChatService chatService, User currentUser, ChatThread thread) {
+<span class="fc" id="L56">        return build(chatService, currentUser, thread, null);</span>
+    }
+
+    /**
+     * Builds the chat view for {@code thread}, optionally letting the caller act on a formal
+     * offer (the seller portal opens the matching request). A {@code null} callback keeps the
+     * buyer portal's behaviour unchanged.
+     */
+    public static VBox build(ChatService chatService, User currentUser, ChatThread thread,
+                             Consumer&lt;DealRequest&gt; onViewRequest) {
+<span class="fc" id="L66">        VBox root = new VBox(12);</span>
+<span class="fc" id="L67">        root.setPadding(new Insets(4));</span>
+<span class="fc" id="L68">        root.getChildren().add(header(thread));</span>
+
+<span class="fc" id="L70">        Runnable[] refresh = new Runnable[1];</span>
+
+<span class="fc bfc" id="L72" title="All 2 branches covered.">        boolean offersClosed = !chatService.acceptsOffers(thread);</span>
+<span class="fc" id="L73">        Label banner = new Label(ChatService.OFFERS_CLOSED_BANNER);</span>
+<span class="fc" id="L74">        banner.getStyleClass().add(&quot;chat-banner&quot;);</span>
+<span class="fc" id="L75">        banner.setWrapText(true);</span>
+<span class="fc" id="L76">        banner.setVisible(offersClosed);</span>
+<span class="fc" id="L77">        banner.setManaged(offersClosed);</span>
+<span class="fc" id="L78">        root.getChildren().add(banner);</span>
+
+        // Search looks only inside this thread (SRS UC-1.5 step 3.3); matches replace the
+        // message list until the search is cleared.
+<span class="fc" id="L82">        TextField keyword = new TextField();</span>
+<span class="fc" id="L83">        ComboBox&lt;MessageSearchFilter&gt; kind = new ComboBox&lt;&gt;(</span>
+<span class="fc" id="L84">                FXCollections.observableArrayList(MessageSearchFilter.values()));</span>
+<span class="fc" id="L85">        Label searchStatus = new Label();</span>
+<span class="fc" id="L86">        searchStatus.getStyleClass().add(&quot;subtitle-label&quot;);</span>
+<span class="fc" id="L87">        Hyperlink clearSearch = new Hyperlink(&quot;Clear&quot;);</span>
+<span class="fc" id="L88">        HBox searchInfo = new HBox(6, searchStatus, clearSearch);</span>
+<span class="fc" id="L89">        searchInfo.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L90">        searchInfo.setVisible(false);</span>
+<span class="fc" id="L91">        searchInfo.setManaged(false);</span>
+<span class="fc" id="L92">        root.getChildren().add(searchPanel(keyword, kind, () -&gt; refresh[0].run()));</span>
+<span class="fc" id="L93">        root.getChildren().add(searchInfo);</span>
+<span class="fc" id="L94">        clearSearch.setOnAction(e -&gt; {</span>
+<span class="fc" id="L95">            keyword.clear();</span>
+<span class="fc" id="L96">            kind.setValue(MessageSearchFilter.ALL);</span>
+<span class="fc" id="L97">            refresh[0].run();</span>
+<span class="fc" id="L98">        });</span>
+
+<span class="fc" id="L100">        VBox messageList = new VBox(8);</span>
+<span class="fc" id="L101">        messageList.setPadding(new Insets(4));</span>
+<span class="fc" id="L102">        ScrollPane scroll = new ScrollPane(messageList);</span>
+<span class="fc" id="L103">        scroll.setFitToWidth(true);</span>
+<span class="fc" id="L104">        scroll.setPrefViewportHeight(360);</span>
+<span class="fc" id="L105">        VBox.setVgrow(scroll, Priority.ALWAYS);</span>
+<span class="fc" id="L106">        root.getChildren().add(scroll);</span>
+
+        // Sending clears any search, so the new message is never hidden by it.
+<span class="fc" id="L109">        HBox composerRow = composer(chatService, currentUser, thread, () -&gt; {</span>
+<span class="fc" id="L110">            keyword.clear();</span>
+<span class="fc" id="L111">            kind.setValue(MessageSearchFilter.ALL);</span>
+<span class="fc" id="L112">            refresh[0].run();</span>
+<span class="fc" id="L113">        });</span>
+<span class="fc" id="L114">        root.getChildren().add(composerRow);</span>
+
+<span class="fc" id="L116">        Runnable rerender = () -&gt; {</span>
+<span class="fc" id="L117">            messageList.getChildren().clear();</span>
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">            String query = keyword.getText() == null ? &quot;&quot; : keyword.getText().trim();</span>
+<span class="fc bfc" id="L119" title="All 4 branches covered.">            boolean searching = !query.isEmpty() || kind.getValue() != MessageSearchFilter.ALL;</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">            List&lt;Message&gt; history = searching</span>
+<span class="fc" id="L121">                    ? chatService.searchThread(currentUser, thread, query, kind.getValue())</span>
+<span class="fc" id="L122">                    : chatService.history(thread);</span>
+<span class="fc" id="L123">            searchInfo.setVisible(searching);</span>
+<span class="fc" id="L124">            searchInfo.setManaged(searching);</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">            if (searching) {</span>
+<span class="fc" id="L126">                searchStatus.setText(searchSummary(history.size(), query, kind.getValue()));</span>
+            }
+<span class="fc bfc" id="L128" title="All 2 branches covered.">            if (history.isEmpty()) {</span>
+                // A3: nothing in this thread matches the search.
+<span class="fc bfc" id="L130" title="All 2 branches covered.">                Label empty = new Label(searching ? &quot;No messages found.&quot; : &quot;No messages yet.&quot;);</span>
+<span class="fc" id="L131">                empty.getStyleClass().add(&quot;subtitle-label&quot;);</span>
+<span class="fc" id="L132">                messageList.getChildren().add(empty);</span>
+<span class="fc" id="L133">            } else {</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">                for (Message message : history) {</span>
+<span class="fc" id="L135">                    messageList.getChildren().add(</span>
+<span class="pc" id="L136">                            messageRow(message, currentUser, chatService, () -&gt; refresh[0].run(),</span>
+                                    onViewRequest));
+<span class="fc" id="L138">                }</span>
+            }
+            // Messages always stay open; only the banner and the Make Offer button follow the listing.
+<span class="fc bfc" id="L141" title="All 2 branches covered.">            boolean nowClosed = !chatService.acceptsOffers(thread);</span>
+<span class="fc" id="L142">            banner.setVisible(nowClosed);</span>
+<span class="fc" id="L143">            banner.setManaged(nowClosed);</span>
+<span class="fc" id="L144">            javafx.scene.Node makeOffer = composerRow.lookup(&quot;#&quot; + MAKE_OFFER_ID);</span>
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">            if (makeOffer != null) {</span>
+<span class="fc bfc" id="L146" title="All 2 branches covered.">                makeOffer.setVisible(!nowClosed);</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">                makeOffer.setManaged(!nowClosed);</span>
+            }
+<span class="fc" id="L149">            scroll.setVvalue(1.0);</span>
+<span class="fc" id="L150">        };</span>
+<span class="fc" id="L151">        refresh[0] = rerender;</span>
+<span class="fc" id="L152">        rerender.run();</span>
+<span class="fc" id="L153">        return root;</span>
+    }
+
+    private static VBox header(ChatThread thread) {
+<span class="fc" id="L157">        VBox header = new VBox(4);</span>
+<span class="fc" id="L158">        header.getStyleClass().add(&quot;card&quot;);</span>
+<span class="fc" id="L159">        Label title = new Label(thread.getListing().getTitle());</span>
+<span class="fc" id="L160">        title.getStyleClass().add(&quot;section-title&quot;);</span>
+<span class="fc" id="L161">        Label participants = new Label(&quot;Buyer: &quot; + thread.getBuyer().getNameWithUsername()</span>
+<span class="fc" id="L162">                + &quot;   \u00b7   Seller: &quot; + thread.getSeller().getNameWithUsername()</span>
+<span class="fc" id="L163">                + &quot;   \u00b7   &quot; + thread.getListing().getStatus().name().replace('_', ' '));</span>
+<span class="fc" id="L164">        participants.getStyleClass().add(&quot;subtitle-label&quot;);</span>
+<span class="fc" id="L165">        header.getChildren().addAll(title, participants);</span>
+<span class="fc" id="L166">        return header;</span>
+    }
+
+    private static HBox messageRow(Message message, User currentUser,
+                                   ChatService chatService, Runnable refresh,
+                                   Consumer&lt;DealRequest&gt; onViewRequest) {
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">        return message.isFormalOffer()</span>
+<span class="nc" id="L173">                ? formalOfferRow(message, currentUser, chatService, refresh, onViewRequest)</span>
+<span class="fc" id="L174">                : textBubbleRow(message, currentUser);</span>
+    }
+
+    private static HBox textBubbleRow(Message message, User currentUser) {
+<span class="fc" id="L178">        boolean own = message.getSenderUsername().equalsIgnoreCase(currentUser.getUsername());</span>
+<span class="fc" id="L179">        VBox bubble = new VBox(2);</span>
+<span class="fc bfc" id="L180" title="All 2 branches covered.">        bubble.getStyleClass().addAll(&quot;chat-bubble&quot;, own ? &quot;chat-bubble-own&quot; : &quot;chat-bubble-other&quot;);</span>
+<span class="fc" id="L181">        bubble.setMaxWidth(520);</span>
+
+<span class="fc bfc" id="L183" title="All 2 branches covered.">        Label sender = new Label(own ? &quot;You&quot; : message.getSender().getNameWithUsername());</span>
+<span class="fc" id="L184">        sender.getStyleClass().add(&quot;chat-sender&quot;);</span>
+<span class="fc" id="L185">        Label text = new Label(message.getContent());</span>
+<span class="fc" id="L186">        text.setWrapText(true);</span>
+<span class="fc" id="L187">        text.getStyleClass().add(&quot;chat-text&quot;);</span>
+<span class="fc" id="L188">        Label time = new Label(message.getSentTime().format(TIME_FORMAT));</span>
+<span class="fc" id="L189">        time.getStyleClass().add(&quot;chat-time&quot;);</span>
+<span class="fc" id="L190">        bubble.getChildren().addAll(sender, text, time);</span>
+
+<span class="fc" id="L192">        HBox row = new HBox(bubble);</span>
+<span class="fc bfc" id="L193" title="All 2 branches covered.">        row.setAlignment(own ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);</span>
+<span class="fc" id="L194">        return row;</span>
+    }
+
+    /** Renders a Formal Offer as one card, never as a text bubble. */
+    private static HBox formalOfferRow(Message message, User currentUser,
+                                       ChatService chatService, Runnable refresh,
+                                       Consumer&lt;DealRequest&gt; onViewRequest) {
+<span class="nc" id="L201">        DealRequest request = message.getDealRequest();</span>
+<span class="nc" id="L202">        boolean own = message.getSenderUsername().equalsIgnoreCase(currentUser.getUsername());</span>
+
+<span class="nc" id="L204">        Label kind = new Label(&quot;FORMAL OFFER&quot;);</span>
+<span class="nc" id="L205">        kind.getStyleClass().add(&quot;offer-badge&quot;);</span>
+<span class="nc" id="L206">        Label status = new Label(request.getStatus().name());</span>
+<span class="nc" id="L207">        status.getStyleClass().addAll(&quot;badge&quot;, statusStyle(request.getStatus()));</span>
+
+<span class="nc" id="L209">        Region spacer = new Region();</span>
+<span class="nc" id="L210">        HBox.setHgrow(spacer, Priority.ALWAYS);</span>
+<span class="nc" id="L211">        HBox top = new HBox(8, kind, spacer, status);</span>
+<span class="nc" id="L212">        top.setAlignment(Pos.CENTER_LEFT);</span>
+
+<span class="nc" id="L214">        Label terms = new Label(termsText(request));</span>
+<span class="nc" id="L215">        terms.setWrapText(true);</span>
+<span class="nc" id="L216">        terms.getStyleClass().add(&quot;offer-terms&quot;);</span>
+
+<span class="nc" id="L218">        Label listing = new Label(request.getListing().getTitle());</span>
+<span class="nc" id="L219">        listing.getStyleClass().add(&quot;offer-listing&quot;);</span>
+
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        Label meta = new Label((own ? &quot;You&quot; : message.getSender().getNameWithUsername())</span>
+<span class="nc" id="L222">                + &quot; \u00b7 &quot; + message.getSentTime().format(TIME_FORMAT));</span>
+<span class="nc" id="L223">        meta.getStyleClass().add(&quot;chat-time&quot;);</span>
+
+<span class="nc" id="L225">        VBox card = new VBox(6, top, terms, listing, meta);</span>
+<span class="nc" id="L226">        card.getStyleClass().add(&quot;offer-card&quot;);</span>
+<span class="nc" id="L227">        card.setMaxWidth(520);</span>
+
+<span class="nc" id="L229">        HBox actions = offerActions(chatService, currentUser, request, refresh);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (actions != null) {</span>
+<span class="nc" id="L231">            card.getChildren().add(actions);</span>
+        }
+
+<span class="nc bnc" id="L234" title="All 4 branches missed.">        if (showsRequestLink(currentUser, request) &amp;&amp; onViewRequest != null) {</span>
+<span class="nc" id="L235">            Hyperlink viewRequest = new Hyperlink(&quot;View request&quot;);</span>
+<span class="nc" id="L236">            viewRequest.setOnAction(e -&gt; onViewRequest.accept(request));</span>
+<span class="nc" id="L237">            card.getChildren().add(viewRequest);</span>
+        }
+
+<span class="nc" id="L240">        HBox row = new HBox(card);</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        row.setAlignment(own ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);</span>
+<span class="nc" id="L242">        return row;</span>
+    }
+
+    private static HBox offerActions(ChatService chatService, User currentUser,
+                                     DealRequest request, Runnable refresh) {
+<span class="nc" id="L247">        boolean isListingSeller = currentUser.getUsername()</span>
+<span class="nc" id="L248">                .equalsIgnoreCase(request.getListing().getSellerUsername());</span>
+<span class="nc bnc" id="L249" title="All 4 branches missed.">        if (!isListingSeller || request.getStatus() != RequestStatus.PENDING) {</span>
+<span class="nc" id="L250">            return null;</span>
+        }
+<span class="nc" id="L252">        Button accept = new Button(&quot;Accept&quot;);</span>
+<span class="nc" id="L253">        accept.getStyleClass().addAll(&quot;btn-primary&quot;, &quot;btn-sm&quot;);</span>
+<span class="nc" id="L254">        accept.setOnAction(e -&gt; submit(() -&gt; chatService.acceptOffer(currentUser, request), refresh));</span>
+
+<span class="nc" id="L256">        Button decline = new Button(&quot;Decline&quot;);</span>
+<span class="nc" id="L257">        decline.getStyleClass().addAll(&quot;btn-sm&quot;);</span>
+<span class="nc" id="L258">        decline.setOnAction(e -&gt;</span>
+<span class="nc" id="L259">                submit(() -&gt; chatService.declineOffer(currentUser, request), refresh));</span>
+
+<span class="nc" id="L261">        HBox actions = new HBox(8, accept, decline);</span>
+<span class="nc" id="L262">        actions.setAlignment(Pos.CENTER_RIGHT);</span>
+<span class="nc" id="L263">        return actions;</span>
+    }
+
+    /**
+     * True only for the listing's seller looking at a request that still needs an answer.
+     * Null-safe so an absent viewer or request never renders the action.
+     */
+    static boolean showsRequestLink(User viewer, DealRequest request) {
+<span class="pc bpc" id="L271" title="2 of 4 branches missed.">        if (viewer == null || request == null) {</span>
+<span class="nc" id="L272">            return false;</span>
+        }
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">        boolean isListingSeller = viewer.getUsername() != null</span>
+<span class="fc bfc" id="L275" title="All 2 branches covered.">                &amp;&amp; viewer.getUsername().equalsIgnoreCase(request.getSellerUsername());</span>
+<span class="fc bfc" id="L276" title="All 2 branches covered.">        return isListingSeller</span>
+<span class="fc bfc" id="L277" title="All 2 branches covered.">                &amp;&amp; (request.getStatus() == RequestStatus.PENDING</span>
+<span class="fc bfc" id="L278" title="All 2 branches covered.">                    || request.getStatus() == RequestStatus.COUNTERED);</span>
+    }
+
+    private static String termsText(DealRequest request) {
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        if (request instanceof PriceOffer offer) {</span>
+<span class="nc" id="L283">            return &quot;Price offer: &quot; + new Money(offer.getOfferedPrice()).getDisplay();</span>
+        }
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (request instanceof BorrowRequest borrow) {</span>
+<span class="nc" id="L286">            return &quot;Borrow for &quot; + DurationText.format(</span>
+<span class="nc" id="L287">                    Duration.between(borrow.getStartDate(), borrow.getEndDate()));</span>
+        }
+<span class="nc" id="L289">        return &quot;Claim for this giveaway&quot;;</span>
+    }
+
+    private static String statusStyle(RequestStatus status) {
+<span class="nc bnc" id="L293" title="All 4 branches missed.">        return switch (status) {</span>
+<span class="nc" id="L294">            case PENDING -&gt; &quot;badge-pending&quot;;</span>
+<span class="nc" id="L295">            case ACCEPTED -&gt; &quot;badge-live&quot;;</span>
+<span class="nc" id="L296">            case DECLINED -&gt; &quot;badge-rejected&quot;;</span>
+<span class="nc" id="L297">            case COUNTERED -&gt; &quot;badge-sold&quot;;</span>
+        };
+    }
+
+    private static VBox searchPanel(TextField keyword, ComboBox&lt;MessageSearchFilter&gt; kind, Runnable refresh) {
+<span class="fc" id="L302">        VBox panel = new VBox(8);</span>
+<span class="fc" id="L303">        panel.getStyleClass().add(&quot;card&quot;);</span>
+<span class="fc" id="L304">        panel.setPadding(new Insets(10));</span>
+
+<span class="fc" id="L306">        keyword.setPromptText(&quot;Search this chat...&quot;);</span>
+<span class="fc" id="L307">        HBox.setHgrow(keyword, Priority.ALWAYS);</span>
+<span class="fc" id="L308">        kind.setValue(MessageSearchFilter.ALL);</span>
+
+<span class="fc" id="L310">        Button search = new Button(&quot;Search&quot;);</span>
+<span class="fc" id="L311">        search.getStyleClass().addAll(&quot;btn-primary&quot;, &quot;btn-sm&quot;);</span>
+
+<span class="fc" id="L313">        HBox controls = new HBox(8, keyword, kind, search);</span>
+<span class="fc" id="L314">        controls.setAlignment(Pos.CENTER_LEFT);</span>
+
+<span class="fc" id="L316">        search.setOnAction(e -&gt; refresh.run());</span>
+<span class="pc" id="L317">        keyword.setOnAction(e -&gt; refresh.run());</span>
+<span class="fc" id="L318">        kind.setOnAction(e -&gt; refresh.run());</span>
+
+<span class="fc" id="L320">        panel.getChildren().add(controls);</span>
+<span class="fc" id="L321">        return panel;</span>
+    }
+
+    /** E.g. &quot;2 messages match 'lamp'&quot; or &quot;1 offer in this chat&quot;. */
+    static String searchSummary(int count, String query, MessageSearchFilter kind) {
+<span class="fc bfc" id="L326" title="All 3 branches covered.">        String noun = switch (kind) {</span>
+<span class="pc bpc" id="L327" title="1 of 2 branches missed.">            case OFFERS_ONLY -&gt; count == 1 ? &quot;offer&quot; : &quot;offers&quot;;</span>
+<span class="pc bpc" id="L328" title="1 of 2 branches missed.">            case TEXT_ONLY -&gt; count == 1 ? &quot;text message&quot; : &quot;text messages&quot;;</span>
+<span class="fc bfc" id="L329" title="All 2 branches covered.">            case ALL -&gt; count == 1 ? &quot;message&quot; : &quot;messages&quot;;</span>
+        };
+<span class="fc bfc" id="L331" title="All 2 branches covered.">        if (query.isEmpty()) {</span>
+<span class="fc" id="L332">            return count + &quot; &quot; + noun + &quot; in this chat&quot;;</span>
+        }
+<span class="fc bfc" id="L334" title="All 2 branches covered.">        return count + &quot; &quot; + noun + (count == 1 ? &quot; matches '&quot; : &quot; match '&quot;) + query + &quot;'&quot;;</span>
+    }
+
+    private static final String MAKE_OFFER_ID = &quot;chat-make-offer&quot;;
+
+    private static HBox composer(ChatService chatService, User currentUser, ChatThread thread,
+                                 Runnable refresh) {
+<span class="fc" id="L341">        HBox row = new HBox(8);</span>
+<span class="fc" id="L342">        row.setAlignment(Pos.CENTER_LEFT);</span>
+
+<span class="fc" id="L344">        TextField field = new TextField();</span>
+<span class="fc" id="L345">        field.setPromptText(&quot;Type a message...&quot;);</span>
+<span class="fc" id="L346">        HBox.setHgrow(field, Priority.ALWAYS);</span>
+
+<span class="fc" id="L348">        Button send = new Button(&quot;Send&quot;);</span>
+<span class="fc" id="L349">        send.getStyleClass().addAll(&quot;btn-primary&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L350">        send.setOnAction(e -&gt; {</span>
+            try {
+<span class="fc" id="L352">                chatService.sendText(currentUser, thread, field.getText());</span>
+<span class="fc" id="L353">                field.clear();</span>
+<span class="fc" id="L354">                refresh.run();</span>
+<span class="fc" id="L355">            } catch (RuntimeException ex) {</span>
+<span class="fc" id="L356">                new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();</span>
+<span class="fc" id="L357">            }</span>
+<span class="fc" id="L358">        });</span>
+<span class="pc" id="L359">        field.setOnAction(e -&gt; send.fire());</span>
+
+<span class="fc" id="L361">        boolean isThreadBuyer = currentUser.getUsername()</span>
+<span class="fc" id="L362">                .equalsIgnoreCase(thread.getBuyer().getUsername());</span>
+<span class="fc" id="L363">        Button makeOffer = new Button(&quot;Make Offer&quot;);</span>
+<span class="fc" id="L364">        makeOffer.getStyleClass().addAll(&quot;btn-gold&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L365">        makeOffer.setId(MAKE_OFFER_ID);</span>
+        // The refresh re-checks acceptsOffers and hides this button once the listing leaves Live.
+<span class="fc" id="L367">        makeOffer.setOnAction(e -&gt; openFormalOfferForm(chatService, currentUser, thread, refresh));</span>
+
+<span class="pc bpc" id="L369" title="1 of 2 branches missed.">        if (isThreadBuyer) {</span>
+<span class="fc" id="L370">            boolean open = chatService.acceptsOffers(thread);</span>
+<span class="fc" id="L371">            makeOffer.setVisible(open);</span>
+<span class="fc" id="L372">            makeOffer.setManaged(open);</span>
+<span class="fc" id="L373">            row.getChildren().add(makeOffer);</span>
+        }
+<span class="fc" id="L375">        row.getChildren().addAll(field, send);</span>
+<span class="fc" id="L376">        return row;</span>
+    }
+
+    private static void openFormalOfferForm(ChatService chatService, User currentUser,
+                                            ChatThread thread, Runnable afterPost) {
+<span class="pc bpc" id="L381" title="3 of 4 branches missed.">        switch (thread.getListing().getType()) {</span>
+<span class="fc" id="L382">            case SELL -&gt; promptPrice(chatService, currentUser, thread, afterPost);</span>
+<span class="nc" id="L383">            case LEND -&gt; promptBorrowPeriod(chatService, currentUser, thread, afterPost);</span>
+<span class="nc" id="L384">            case GIVEAWAY -&gt; confirmClaim(chatService, currentUser, thread, afterPost);</span>
+        }
+<span class="fc" id="L386">    }</span>
+
+    private static void promptPrice(ChatService chatService, User currentUser, ChatThread thread,
+                                    Runnable afterPost) {
+<span class="fc" id="L390">        TextInputDialog dialog = new TextInputDialog();</span>
+<span class="fc" id="L391">        dialog.setTitle(&quot;Make an Offer&quot;);</span>
+<span class="fc" id="L392">        dialog.setHeaderText(&quot;Formal price offer for: &quot; + thread.getListing().getTitle());</span>
+<span class="fc" id="L393">        dialog.setContentText(&quot;Your offer price (HK$):&quot;);</span>
+<span class="fc" id="L394">        dialog.showAndWait().ifPresent(raw -&gt; {</span>
+            BigDecimal price;
+            try {
+<span class="nc" id="L397">                price = new BigDecimal(raw.trim());</span>
+<span class="nc" id="L398">            } catch (NumberFormatException ex) {</span>
+<span class="nc" id="L399">                new Alert(Alert.AlertType.WARNING, &quot;Enter a valid price, e.g. 120 or 99.50&quot;)</span>
+<span class="nc" id="L400">                        .showAndWait();</span>
+<span class="nc" id="L401">                return;</span>
+<span class="nc" id="L402">            }</span>
+<span class="nc" id="L403">            submit(() -&gt; chatService.submitFormalOffer(currentUser, thread, price), afterPost);</span>
+<span class="nc" id="L404">        });</span>
+<span class="fc" id="L405">    }</span>
+
+    private static void promptBorrowPeriod(ChatService chatService, User currentUser,
+                                           ChatThread thread, Runnable afterPost) {
+<span class="nc" id="L409">        Dialog&lt;ButtonType&gt; dialog = new Dialog&lt;&gt;();</span>
+<span class="nc" id="L410">        dialog.setTitle(&quot;Request to Borrow&quot;);</span>
+<span class="nc" id="L411">        dialog.setHeaderText(&quot;Formal borrow request for: &quot; + thread.getListing().getTitle());</span>
+
+<span class="nc" id="L413">        TextField days = new TextField();</span>
+<span class="nc" id="L414">        days.setPromptText(&quot;0&quot;);</span>
+<span class="nc" id="L415">        TextField hours = new TextField();</span>
+<span class="nc" id="L416">        hours.setPromptText(&quot;0&quot;);</span>
+<span class="nc" id="L417">        TextField minutes = new TextField();</span>
+<span class="nc" id="L418">        minutes.setPromptText(&quot;0&quot;);</span>
+<span class="nc" id="L419">        TextField seconds = new TextField();</span>
+<span class="nc" id="L420">        seconds.setPromptText(&quot;0&quot;);</span>
+<span class="nc" id="L421">        HBox periodFields = new HBox(8,</span>
+<span class="nc" id="L422">                durationField(&quot;Days&quot;, days),</span>
+<span class="nc" id="L423">                durationField(&quot;Hours&quot;, hours),</span>
+<span class="nc" id="L424">                durationField(&quot;Minutes&quot;, minutes),</span>
+<span class="nc" id="L425">                durationField(&quot;Seconds&quot;, seconds));</span>
+<span class="nc" id="L426">        Label periodHint = new Label(</span>
+                &quot;Enter days / hours / minutes / seconds (minimum total 5 seconds).&quot;);
+<span class="nc" id="L428">        periodHint.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 12px;&quot;);</span>
+<span class="nc" id="L429">        VBox form = new VBox(8,</span>
+                new Label(&quot;Proposed lending period (days, hours, minutes, seconds)&quot;),
+                periodFields, periodHint);
+<span class="nc" id="L432">        form.setPadding(new Insets(8));</span>
+<span class="nc" id="L433">        dialog.getDialogPane().setContent(form);</span>
+
+<span class="nc" id="L435">        ButtonType send = new ButtonType(&quot;Send Request&quot;, ButtonBar.ButtonData.OK_DONE);</span>
+<span class="nc" id="L436">        dialog.getDialogPane().getButtonTypes().addAll(send, ButtonType.CANCEL);</span>
+<span class="nc" id="L437">        dialog.showAndWait().filter(send::equals).ifPresent(ignored -&gt; {</span>
+            Duration period;
+            try {
+<span class="nc" id="L440">                period = parsePeriod(days, hours, minutes, seconds);</span>
+<span class="nc" id="L441">            } catch (RuntimeException ex) {</span>
+<span class="nc" id="L442">                new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();</span>
+<span class="nc" id="L443">                return;</span>
+<span class="nc" id="L444">            }</span>
+<span class="nc" id="L445">            LocalDateTime start = LocalDateTime.now().plusSeconds(1);</span>
+<span class="nc" id="L446">            LocalDateTime end = start.plus(period);</span>
+<span class="nc" id="L447">            submit(() -&gt; chatService.submitFormalOffer(currentUser, thread, start, end), afterPost);</span>
+<span class="nc" id="L448">        });</span>
+<span class="nc" id="L449">    }</span>
+
+    private static void confirmClaim(ChatService chatService, User currentUser, ChatThread thread,
+                                     Runnable afterPost) {
+<span class="nc" id="L453">        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);</span>
+<span class="nc" id="L454">        confirm.setTitle(&quot;Claim Item&quot;);</span>
+<span class="nc" id="L455">        confirm.setHeaderText(&quot;Claim: &quot; + thread.getListing().getTitle());</span>
+<span class="nc" id="L456">        confirm.setContentText(&quot;Send a formal claim for this giveaway item?&quot;);</span>
+<span class="nc" id="L457">        confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(ignored -&gt;</span>
+<span class="nc" id="L458">                submit(() -&gt; chatService.submitFormalOffer(currentUser, thread), afterPost));</span>
+<span class="nc" id="L459">    }</span>
+
+    private static VBox durationField(String unit, TextField field) {
+<span class="nc" id="L462">        Label unitLabel = new Label(unit);</span>
+<span class="nc" id="L463">        unitLabel.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 12px;&quot;);</span>
+<span class="nc" id="L464">        field.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="nc" id="L465">        VBox box = new VBox(4, unitLabel, field);</span>
+<span class="nc" id="L466">        box.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="nc" id="L467">        HBox.setHgrow(box, Priority.ALWAYS);</span>
+<span class="nc" id="L468">        return box;</span>
+    }
+
+    private static Duration parsePeriod(TextField daysField, TextField hoursField,
+                                        TextField minutesField, TextField secondsField) {
+<span class="nc" id="L473">        return parsePeriod(daysField.getText(), hoursField.getText(),</span>
+<span class="nc" id="L474">                minutesField.getText(), secondsField.getText());</span>
+    }
+
+    /**
+     * Parses a lending period in days, hours, minutes and seconds; blank parts count as zero.
+     * Seconds allow the shortest allowed borrow period (5 seconds) to be requested.
+     */
+    public static Duration parsePeriod(String daysText, String hoursText,
+                                       String minutesText, String secondsText) {
+<span class="fc" id="L483">        String days = daysText.trim();</span>
+<span class="fc" id="L484">        String hours = hoursText.trim();</span>
+<span class="fc" id="L485">        String minutes = minutesText.trim();</span>
+<span class="fc" id="L486">        String seconds = secondsText.trim();</span>
+<span class="fc bfc" id="L487" title="All 8 branches covered.">        if (days.isEmpty() &amp;&amp; hours.isEmpty() &amp;&amp; minutes.isEmpty() &amp;&amp; seconds.isEmpty()) {</span>
+<span class="fc" id="L488">            throw new IllegalArgumentException(</span>
+                    &quot;Enter a lending period in days, hours, minutes and/or seconds.&quot;);
+        }
+<span class="fc" id="L491">        long dayCount = parsePart(days, &quot;Days&quot;);</span>
+<span class="fc" id="L492">        long hourCount = parsePart(hours, &quot;Hours&quot;);</span>
+<span class="fc" id="L493">        long minuteCount = parsePart(minutes, &quot;Minutes&quot;);</span>
+<span class="fc" id="L494">        long secondCount = parsePart(seconds, &quot;Seconds&quot;);</span>
+<span class="pc bpc" id="L495" title="3 of 8 branches missed.">        if (dayCount &lt; 0 || hourCount &lt; 0 || minuteCount &lt; 0 || secondCount &lt; 0) {</span>
+<span class="fc" id="L496">            throw new IllegalArgumentException(&quot;Days, hours, minutes and seconds must be non-negative.&quot;);</span>
+        }
+<span class="fc" id="L498">        return Duration.ofDays(dayCount).plusHours(hourCount)</span>
+<span class="fc" id="L499">                .plusMinutes(minuteCount).plusSeconds(secondCount);</span>
+    }
+
+    private static long parsePart(String text, String label) {
+<span class="fc bfc" id="L503" title="All 2 branches covered.">        if (text.isEmpty()) {</span>
+<span class="fc" id="L504">            return 0;</span>
+        }
+        try {
+<span class="fc" id="L507">            return Long.parseLong(text);</span>
+<span class="fc" id="L508">        } catch (NumberFormatException e) {</span>
+<span class="fc" id="L509">            throw new IllegalArgumentException(label + &quot; must be a whole number.&quot;);</span>
+        }
+    }
+
+    private static void submit(Runnable action, Runnable afterPost) {
+        try {
+<span class="nc" id="L515">            action.run();</span>
+<span class="nc" id="L516">            afterPost.run();</span>
+<span class="nc" id="L517">        } catch (RuntimeException ex) {</span>
+<span class="nc" id="L518">            new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();</span>
+<span class="nc" id="L519">        }</span>
+<span class="nc" id="L520">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

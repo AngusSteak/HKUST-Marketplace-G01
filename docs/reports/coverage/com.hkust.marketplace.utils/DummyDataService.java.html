@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DummyDataService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">DummyDataService.java</span></div><h1>DummyDataService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DummyDataService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">DummyDataService.java</span></div><h1>DummyDataService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Listing;
@@ -66,7 +66,7 @@ public class DummyDataService {
 
     /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
     public static synchronized DummyDataService getInstance() {
-<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (instance == null) {</span>
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        if (instance == null) {</span>
 <span class="nc" id="L70">            boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, &quot;false&quot;));</span>
 <span class="nc" id="L71">            Database db = Database.openFile(Path.of(DATABASE_FILE), reset);</span>
             try {
@@ -76,7 +76,7 @@ public class DummyDataService {
 <span class="nc" id="L76">                throw e;</span>
 <span class="nc" id="L77">            }</span>
         }
-<span class="nc" id="L79">        return instance;</span>
+<span class="fc" id="L79">        return instance;</span>
     }
 
     /**
@@ -101,52 +101,60 @@ public class DummyDataService {
 <span class="fc" id="L101">        return data;</span>
     }
 
+    /**
+     * Tests only: makes {@code data} the shared instance, so screen tests run on an in-memory
+     * database instead of {@value #DATABASE_FILE}; {@code null} clears it again.
+     */
+    static synchronized void replaceInstanceForTests(DummyDataService data) {
+<span class="fc" id="L109">        instance = data;</span>
+<span class="fc" id="L110">    }</span>
+
     /** Closes the shared instance's database, e.g. when the application exits. */
     public static synchronized void shutdown() {
-<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (instance != null) {</span>
-<span class="nc" id="L107">            instance.db.close();</span>
-<span class="nc" id="L108">            instance = null;</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (instance != null) {</span>
+<span class="nc" id="L115">            instance.db.close();</span>
+<span class="nc" id="L116">            instance = null;</span>
         }
-<span class="nc" id="L110">    }</span>
+<span class="nc" id="L118">    }</span>
 
     /** The database behind the stores, for stores that persist themselves (#56, #57, #58). */
-<span class="fc" id="L113">    public Database database() { return db; }</span>
+<span class="fc" id="L121">    public Database database() { return db; }</span>
 
     /** The user store. */
-<span class="fc" id="L116">    public UserStore users() { return users; }</span>
+<span class="fc" id="L124">    public UserStore users() { return users; }</span>
     /** The listing store. */
-<span class="fc" id="L118">    public ListingStore listings() { return listings; }</span>
+<span class="fc" id="L126">    public ListingStore listings() { return listings; }</span>
     /** The request and deal store. */
-<span class="fc" id="L120">    public DealStore deals() { return deals; }</span>
+<span class="fc" id="L128">    public DealStore deals() { return deals; }</span>
     /** The notification store. */
-<span class="fc" id="L122">    public NotificationStore notifications() { return notifications; }</span>
+<span class="fc" id="L130">    public NotificationStore notifications() { return notifications; }</span>
     /** The review store. */
-<span class="fc" id="L124">    public ReviewStore reviews() { return reviews; }</span>
+<span class="fc" id="L132">    public ReviewStore reviews() { return reviews; }</span>
     /** The favourites/follows store. */
-<span class="fc" id="L126">    public FavouriteStore favourites() { return favourites; }</span>
+<span class="fc" id="L134">    public FavouriteStore favourites() { return favourites; }</span>
     /** The admin audit log. */
-<span class="fc" id="L128">    public AuditStore audit() { return audit; }</span>
+<span class="fc" id="L136">    public AuditStore audit() { return audit; }</span>
     /** The listing report store. */
-<span class="fc" id="L130">    public ReportStore reports() { return reports; }</span>
+<span class="fc" id="L138">    public ReportStore reports() { return reports; }</span>
     /** The chat store. */
-<span class="fc" id="L132">    public ChatStore chats() { return chats; }</span>
+<span class="fc" id="L140">    public ChatStore chats() { return chats; }</span>
 
     /**
      * Populates this store with the demo data. Visible for tests so they can seed an
      * isolated instance instead of sharing the singleton.
      */
     void seedData() {
-<span class="fc" id="L139">        users.seed();</span>
-<span class="fc" id="L140">        List&lt;Listing&gt; seededListings = listings.seed(users);</span>
+<span class="fc" id="L147">        users.seed();</span>
+<span class="fc" id="L148">        List&lt;Listing&gt; seededListings = listings.seed(users);</span>
         // Requests and deals on L100 (textbook), L102 (lamp) and L103 (calculator); see DealStore.seed
-<span class="fc" id="L142">        deals.seed((Buyer) users.find(&quot;alice&quot;), (Buyer) users.find(&quot;bob&quot;),</span>
-<span class="fc" id="L143">                seededListings.get(0), seededListings.get(2), seededListings.get(3));</span>
-<span class="fc" id="L144">        notifications.seed();</span>
-<span class="fc" id="L145">        reviews.seed();</span>
+<span class="fc" id="L150">        deals.seed((Buyer) users.find(&quot;alice&quot;), (Buyer) users.find(&quot;bob&quot;),</span>
+<span class="fc" id="L151">                seededListings.get(0), seededListings.get(2), seededListings.get(3));</span>
+<span class="fc" id="L152">        notifications.seed();</span>
+<span class="fc" id="L153">        reviews.seed();</span>
         // alice favourites the MacBook charger (L101) and follows its seller charlie
-<span class="fc" id="L147">        favourites.seed((Buyer) users.find(&quot;alice&quot;), seededListings.get(1), (Seller) users.find(&quot;charlie&quot;));</span>
+<span class="fc" id="L155">        favourites.seed((Buyer) users.find(&quot;alice&quot;), seededListings.get(1), (Seller) users.find(&quot;charlie&quot;));</span>
         // a chat on the live charger, and one on alice's reserved textbook (messages stay open, offers closed)
-<span class="fc" id="L149">        chats.seed((Buyer) users.find(&quot;alice&quot;), seededListings.get(1), seededListings.get(0));</span>
-<span class="fc" id="L150">    }</span>
+<span class="fc" id="L157">        chats.seed((Buyer) users.find(&quot;alice&quot;), seededListings.get(1), seededListings.get(0));</span>
+<span class="fc" id="L158">    }</span>
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

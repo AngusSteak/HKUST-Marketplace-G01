@@ -33,13 +33,13 @@ Demo accounts: `admin / admin123`, buyers `alice` and `bob` / `password1`, selle
 
 ## Testing and evidence
 
-- 503 JUnit tests, 0 failures. Report: [`reports/unit-tests.md`](reports/unit-tests.md).
-- Branch coverage 78.7% on the tested business logic; line coverage 83.2%. Report: [`reports/coverage.md`](reports/coverage.md), HTML: [`reports/coverage/index.html`](reports/coverage/index.html).
+- 665 JUnit tests, 0 failures. Report: [`reports/unit-tests.md`](reports/unit-tests.md).
+- Branch coverage 76.2% over every package including the JavaFX controllers (89.0% on the business logic alone); line coverage 84.9%. Report: [`reports/coverage.md`](reports/coverage.md), HTML: [`reports/coverage/index.html`](reports/coverage/index.html).
 - JavaDoc: [`javadoc/index.html`](javadoc/index.html).
 - Screenshots of every portal screen: [`screenshots/`](screenshots/).
 - Demo script with a 15-minute and an 8-minute path: [`DEMO.md`](DEMO.md).
 
-JaCoCo excludes the JavaFX `controllers` package from the coverage figure because it is UI wiring with little branching logic; the excluded classes still have a few smoke tests.
+JaCoCo measures every package, including the JavaFX `controllers`. Screen tests open the buyer, seller and admin portals on an in-memory copy of the demo data and click through them; they need a display and are skipped without one.
 
 ## Assumptions and limitations
 

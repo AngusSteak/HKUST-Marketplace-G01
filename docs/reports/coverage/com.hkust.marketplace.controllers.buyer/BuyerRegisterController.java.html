@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BuyerRegisterController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.buyer</a> &gt; <span class="el_source">BuyerRegisterController.java</span></div><h1>BuyerRegisterController.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.buyer;
+
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.PasswordRule;
+import com.hkust.marketplace.models.UserRole;
+import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.RegistrationService;
+import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.PasswordVisibility;
+import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.UserStore;
+import javafx.collections.FXCollections;
+import javafx.fxml.FXML;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+
+import java.util.Set;
+
+/** Handles the buyer registration form, including the UC-1.1 password rules. */
+<span class="fc" id="L20">public class BuyerRegisterController {</span>
+
+    @FXML private TextField usernameField;
+    @FXML private TextField fullNameField;
+    @FXML private PasswordField passwordField;
+    @FXML private PasswordField confirmPasswordField;
+    @FXML private HBox passwordRow;
+    @FXML private HBox confirmPasswordRow;
+    @FXML private ComboBox&lt;String&gt; residenceCombo;
+    @FXML private Label errorLabel;
+    @FXML private Label successLabel;
+
+    /** Fills the residence-hall choices. */
+    @FXML
+    public void initialize() {
+<span class="fc" id="L35">        PasswordVisibility.attach(passwordField, passwordRow);</span>
+<span class="fc" id="L36">        PasswordVisibility.attach(confirmPasswordField, confirmPasswordRow);</span>
+<span class="fc" id="L37">        residenceCombo.setItems(FXCollections.observableArrayList(</span>
+                &quot;Hall 1&quot;, &quot;Hall 2&quot;, &quot;Hall 3&quot;, &quot;Hall 4&quot;, &quot;Hall 5&quot;,
+                &quot;Hall 6&quot;, &quot;Hall 7&quot;, &quot;Hall 8&quot;, &quot;Hall 9&quot;,
+                &quot;UG Hall 1&quot;, &quot;UG Hall 2&quot;, &quot;Off-campus&quot;
+        ));
+<span class="fc" id="L42">    }</span>
+
+    @FXML
+    private void handleRegister() {
+<span class="fc" id="L46">        hideMessages();</span>
+
+<span class="fc" id="L48">        String username = usernameField.getText().trim();</span>
+<span class="fc" id="L49">        String fullName = fullNameField.getText().trim();</span>
+<span class="fc" id="L50">        String password = passwordField.getText();</span>
+<span class="fc" id="L51">        String confirm = confirmPasswordField.getText();</span>
+<span class="fc" id="L52">        String residence = residenceCombo.getValue();</span>
+
+        // Validation
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        if (username.isEmpty()) {</span>
+<span class="fc" id="L56">            showError(&quot;Username is required.&quot;);</span>
+<span class="fc" id="L57">            return;</span>
+        }
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (DummyDataService.getInstance().users().usernameExists(username)) {</span>
+<span class="fc" id="L60">            showError(&quot;Username already taken. Please choose another.&quot;);</span>
+<span class="fc" id="L61">            return;</span>
+        }
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        if (fullName.isEmpty()) {</span>
+<span class="fc" id="L64">            showError(&quot;Full Name cannot be empty.&quot;);</span>
+<span class="fc" id="L65">            return;</span>
+        }
+<span class="fc" id="L67">        Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(password, username);</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        if (!failed.isEmpty()) {</span>
+<span class="fc" id="L69">            showError(UserStore.formatPasswordErrors(failed));</span>
+<span class="fc" id="L70">            return;</span>
+        }
+<span class="fc bfc" id="L72" title="All 2 branches covered.">        if (!password.equals(confirm)) {</span>
+<span class="fc" id="L73">            showError(&quot;Passwords do not match.&quot;);</span>
+<span class="fc" id="L74">            return;</span>
+        }
+
+<span class="fc" id="L77">        Buyer user = new Buyer(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.BUYER);</span>
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        if (residence != null) {</span>
+<span class="fc" id="L79">            user.setResidenceHall(residence);</span>
+        }
+        // Saves the account and notifies the admin (SRS UC-1.1 step 7).
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">        if (!new RegistrationService(DummyDataService.getInstance()).register(user)) {</span>
+<span class="nc" id="L83">            showError(&quot;Username already taken. Please choose another.&quot;);</span>
+<span class="nc" id="L84">            return;</span>
+        }
+
+<span class="fc" id="L87">        String message = &quot;Registration successful! You can now login.&quot;;</span>
+<span class="fc" id="L88">        showSuccess(message);</span>
+        // Clear form
+<span class="fc" id="L90">        usernameField.clear();</span>
+<span class="fc" id="L91">        fullNameField.clear();</span>
+<span class="fc" id="L92">        passwordField.clear();</span>
+<span class="fc" id="L93">        confirmPasswordField.clear();</span>
+<span class="fc" id="L94">        residenceCombo.getSelectionModel().clearSelection();</span>
+<span class="fc" id="L95">        showInfo(&quot;Registration successful&quot;, message);</span>
+<span class="fc" id="L96">        SceneManager.showBuyerLogin();</span>
+<span class="fc" id="L97">    }</span>
+
+    private void showError(String msg) {
+<span class="fc" id="L100">        errorLabel.setText(msg);</span>
+<span class="fc" id="L101">        errorLabel.setVisible(true);</span>
+<span class="fc" id="L102">        errorLabel.setManaged(true);</span>
+<span class="fc" id="L103">    }</span>
+
+    private void showSuccess(String msg) {
+<span class="fc" id="L106">        successLabel.setText(msg);</span>
+<span class="fc" id="L107">        successLabel.setVisible(true);</span>
+<span class="fc" id="L108">        successLabel.setManaged(true);</span>
+<span class="fc" id="L109">    }</span>
+
+    private void hideMessages() {
+<span class="fc" id="L112">        errorLabel.setVisible(false);</span>
+<span class="fc" id="L113">        errorLabel.setManaged(false);</span>
+<span class="fc" id="L114">        successLabel.setVisible(false);</span>
+<span class="fc" id="L115">        successLabel.setManaged(false);</span>
+<span class="fc" id="L116">    }</span>
+
+    private void showInfo(String title, String message) {
+<span class="fc" id="L119">        Alert alert = new Alert(Alert.AlertType.INFORMATION);</span>
+<span class="fc" id="L120">        alert.setTitle(title);</span>
+<span class="fc" id="L121">        alert.setHeaderText(null);</span>
+<span class="fc" id="L122">        alert.setContentText(message);</span>
+<span class="fc" id="L123">        alert.showAndWait();</span>
+<span class="fc" id="L124">    }</span>
+
+<span class="fc" id="L126">    @FXML private void goLogin() { SceneManager.showBuyerLogin(); }</span>
+<span class="nc" id="L127">    @FXML private void goWelcome() { SceneManager.showWelcome(); }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -95,10 +95,10 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 .\mvnw.cmd test
 ```
 
-- JUnit 5 tests cover the models and services (stores, deal lifecycle, chat, reviews, notifications, admin actions, profile, seller stats) plus the database layer. JavaFX controllers are covered lightly, since most of their work is rendering; a few controller tests cover chat links, seller stats charts and the notification board.
+- JUnit 5 tests cover the models and services (stores, deal lifecycle, chat, reviews, notifications, admin actions, profile, seller stats) plus the database layer. Screen tests open the buyer, seller and admin portals, the login and registration screens and the chat view, and click through them like a user; they need a display and are skipped without one.
 - Tests use an in-memory SQLite database (`Database.inMemory()` or a private `DummyDataService`), so they never create or read `data/marketplace.db`.
 - JaCoCo writes the coverage report to `target/site/jacoco/index.html` (CSV: `target/site/jacoco/jacoco.csv`) during the same `test` run.
-- Latest run: **503 tests, 0 failures**. Line coverage **83.2%**, branch coverage **78.7%** on the tested business logic (models, services/stores, persistence, form state; JavaFX controllers are excluded in `pom.xml`). Committed reports: [`docs/reports/unit-tests.md`](docs/reports/unit-tests.md) and [`docs/reports/coverage/index.html`](docs/reports/coverage/index.html).
+- Latest run: **665 tests, 0 failures**. Branch coverage **76.2%** and line coverage **84.9%** over every package, including the JavaFX controllers (89.0% branch on the business logic alone). Committed reports: [`docs/reports/unit-tests.md`](docs/reports/unit-tests.md) and [`docs/reports/coverage/index.html`](docs/reports/coverage/index.html).
 - API documentation: `.\mvnw.cmd javadoc:javadoc` writes HTML to `target/reports/apidocs/index.html`. A committed copy is at [`docs/javadoc/index.html`](docs/javadoc/index.html).
 - Demo script: [`docs/DEMO.md`](docs/DEMO.md). Supplementary notes for grading: [`docs/SUPPLEMENTARY.md`](docs/SUPPLEMENTARY.md).
 
@@ -174,8 +174,8 @@ All state is reached through `DummyDataService` and its per-area stores, backed 
 | Required item | Where it is |
 | --- | --- |
 | Screenshots of execution | [`docs/screenshots/`](docs/screenshots/) (every screen, seeded demo data) |
-| Unit test report (100% pass) | [`docs/reports/unit-tests.md`](docs/reports/unit-tests.md) — 503 tests, 0 failures |
-| Coverage report (>65% branch) | [`docs/reports/coverage.md`](docs/reports/coverage.md) and [`docs/reports/coverage/index.html`](docs/reports/coverage/index.html) — 78.7% branch |
+| Unit test report (100% pass) | [`docs/reports/unit-tests.md`](docs/reports/unit-tests.md) — 665 tests, 0 failures |
+| Coverage report (>65% branch) | [`docs/reports/coverage.md`](docs/reports/coverage.md) and [`docs/reports/coverage/index.html`](docs/reports/coverage/index.html) — 76.2% branch, controllers included |
 | JavaDoc | [`docs/javadoc/index.html`](docs/javadoc/index.html) |
 | Supplementary notes / demo guide | [`docs/SUPPLEMENTARY.md`](docs/SUPPLEMENTARY.md), [`docs/DEMO.md`](docs/DEMO.md) |
 

@@ -101,6 +101,14 @@ public class DummyDataService {
         return data;
     }
 
+    /**
+     * Tests only: makes {@code data} the shared instance, so screen tests run on an in-memory
+     * database instead of {@value #DATABASE_FILE}; {@code null} clears it again.
+     */
+    static synchronized void replaceInstanceForTests(DummyDataService data) {
+        instance = data;
+    }
+
     /** Closes the shared instance's database, e.g. when the application exits. */
     public static synchronized void shutdown() {
         if (instance != null) {

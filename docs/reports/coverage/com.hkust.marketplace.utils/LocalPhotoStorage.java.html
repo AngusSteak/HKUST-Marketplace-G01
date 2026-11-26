@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocalPhotoStorage.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">LocalPhotoStorage.java</span></div><h1>LocalPhotoStorage.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocalPhotoStorage.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">LocalPhotoStorage.java</span></div><h1>LocalPhotoStorage.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,8 +22,8 @@ import java.util.UUID;
 
     @Override
     public String store(Path source, String sellerUsername, String listingId) {
-<span class="pc bpc" id="L25" title="2 of 4 branches missed.">        if (source == null || !Files.isRegularFile(source)) {</span>
-<span class="nc" id="L26">            throw new IllegalArgumentException(&quot;Source photo must be an existing file&quot;);</span>
+<span class="fc bfc" id="L25" title="All 4 branches covered.">        if (source == null || !Files.isRegularFile(source)) {</span>
+<span class="fc" id="L26">            throw new IllegalArgumentException(&quot;Source photo must be an existing file&quot;);</span>
         }
 
 <span class="fc" id="L29">        String extension = extensionOf(source.getFileName().toString());</span>
@@ -59,16 +59,16 @@ import java.util.UUID;
 
     private static String extensionOf(String filename) {
 <span class="fc" id="L61">        int dot = filename.lastIndexOf('.');</span>
-<span class="pc bpc" id="L62" title="1 of 2 branches missed.">        return dot &lt; 0 ? &quot;&quot; : filename.substring(dot + 1).toLowerCase(Locale.ROOT);</span>
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        return dot &lt; 0 ? &quot;&quot; : filename.substring(dot + 1).toLowerCase(Locale.ROOT);</span>
     }
 
     private static boolean isAllowedExtension(String extension) {
-<span class="pc bpc" id="L66" title="1 of 6 branches missed.">        return extension.equals(&quot;jpg&quot;) || extension.equals(&quot;jpeg&quot;) || extension.equals(&quot;png&quot;);</span>
+<span class="fc bfc" id="L66" title="All 6 branches covered.">        return extension.equals(&quot;jpg&quot;) || extension.equals(&quot;jpeg&quot;) || extension.equals(&quot;png&quot;);</span>
     }
 
     /** Reduces a value to one safe path segment so no traversal or separator can slip in. */
     private static String safeSegment(String raw, String label) {
-<span class="pc bpc" id="L71" title="1 of 4 branches missed.">        if (raw == null || raw.isBlank()) {</span>
+<span class="fc bfc" id="L71" title="All 4 branches covered.">        if (raw == null || raw.isBlank()) {</span>
 <span class="fc" id="L72">            throw new IllegalArgumentException(label + &quot; is required&quot;);</span>
         }
 <span class="fc" id="L74">        String safe = raw.replaceAll(&quot;[^A-Za-z0-9_-]&quot;, &quot;_&quot;);</span>

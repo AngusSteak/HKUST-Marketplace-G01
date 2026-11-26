@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ListingPhotos.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.common</a> &gt; <span class="el_source">ListingPhotos.java</span></div><h1>ListingPhotos.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.common;
+
+import com.hkust.marketplace.models.Listing;
+import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.StackPane;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+/**
+ * Listing photos, shared by the buyer and admin screens so photos look the same everywhere
+ * (brief: consistent shared components across the three portals).
+ */
+public final class ListingPhotos {
+
+    private ListingPhotos() {
+    }
+
+    /**
+     * A photo, or a placeholder when there is none or the file is missing or unreadable. Photos
+     * load in the background so the screen never waits on them; &quot;Loading photo...&quot; shows
+     * underneath until the image appears, and turns into &quot;No photo&quot; if loading fails.
+     */
+    public static StackPane photo(String path, double width, double height) {
+<span class="fc" id="L29">        StackPane box = new StackPane();</span>
+<span class="fc" id="L30">        box.setPrefSize(width, height);</span>
+<span class="fc" id="L31">        box.setMinSize(width, height);</span>
+<span class="fc" id="L32">        box.setMaxSize(width, height);</span>
+<span class="fc" id="L33">        box.setStyle(&quot;-fx-background-color: #eef2f7; -fx-background-radius: 8;&quot;);</span>
+<span class="fc" id="L34">        Label placeholder = new Label(&quot;No photo&quot;);</span>
+<span class="fc" id="L35">        placeholder.setStyle(&quot;-fx-text-fill: #9aa0b0; -fx-font-size: 12px;&quot;);</span>
+<span class="fc" id="L36">        box.getChildren().add(placeholder);</span>
+<span class="pc bpc" id="L37" title="1 of 2 branches missed.">        Path file = path == null ? null : Path.of(path);</span>
+<span class="pc bpc" id="L38" title="3 of 4 branches missed.">        if (file == null || !Files.isRegularFile(file)) {</span>
+<span class="fc" id="L39">            return box;</span>
+        }
+<span class="nc" id="L41">        Image image = new Image(file.toUri().toString(), width, height, true, true, true);</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">        if (image.isError()) {</span>
+<span class="nc" id="L43">            return box;</span>
+        }
+<span class="nc" id="L45">        ImageView view = new ImageView(image);</span>
+<span class="nc" id="L46">        placeholder.setText(&quot;Loading photo...&quot;);</span>
+<span class="nc" id="L47">        box.getChildren().add(view);</span>
+<span class="nc" id="L48">        image.errorProperty().addListener((obs, was, failed) -&gt; {</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">            if (failed) {</span>
+<span class="nc" id="L50">                box.getChildren().remove(view);</span>
+<span class="nc" id="L51">                placeholder.setText(&quot;No photo&quot;);</span>
+            }
+<span class="nc" id="L53">        });</span>
+<span class="nc" id="L54">        return box;</span>
+    }
+
+    /** All of a listing's photos (up to 6) in a wrapping row, or one placeholder if it has none. */
+    public static FlowPane gallery(Listing listing, double width, double height) {
+<span class="fc" id="L59">        FlowPane photos = new FlowPane(10, 10);</span>
+<span class="fc" id="L60">        List&lt;String&gt; paths = listing.getPhotoPaths();</span>
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        if (paths.isEmpty()) {</span>
+<span class="fc" id="L62">            photos.getChildren().add(photo(null, width, height));</span>
+        } else {
+<span class="nc" id="L64">            paths.forEach(path -&gt; photos.getChildren().add(photo(path, width, height)));</span>
+        }
+<span class="fc" id="L66">        return photos;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

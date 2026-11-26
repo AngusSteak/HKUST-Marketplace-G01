@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Listing.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">Listing.java</span></div><h1>Listing.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Listing.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">Listing.java</span></div><h1>Listing.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,21 +33,21 @@ public abstract class Listing {
 <span class="fc bfc" id="L33" title="All 2 branches covered.">        if (seller == null) {</span>
 <span class="fc" id="L34">            throw new IllegalArgumentException(&quot;Seller must not be null&quot;);</span>
         }
-<span class="pc bpc" id="L36" title="1 of 4 branches missed.">        if (title == null || title.isBlank()) {</span>
+<span class="fc bfc" id="L36" title="All 4 branches covered.">        if (title == null || title.isBlank()) {</span>
 <span class="fc" id="L37">            throw new IllegalArgumentException(&quot;Title must not be blank&quot;);</span>
         }
-<span class="pc bpc" id="L39" title="1 of 2 branches missed.">        if (category == null) {</span>
-<span class="nc" id="L40">            throw new IllegalArgumentException(&quot;Category must not be null&quot;);</span>
+<span class="fc bfc" id="L39" title="All 2 branches covered.">        if (category == null) {</span>
+<span class="fc" id="L40">            throw new IllegalArgumentException(&quot;Category must not be null&quot;);</span>
         }
-<span class="pc bpc" id="L42" title="1 of 2 branches missed.">        if (condition == null) {</span>
-<span class="nc" id="L43">            throw new IllegalArgumentException(&quot;Condition must not be null&quot;);</span>
+<span class="fc bfc" id="L42" title="All 2 branches covered.">        if (condition == null) {</span>
+<span class="fc" id="L43">            throw new IllegalArgumentException(&quot;Condition must not be null&quot;);</span>
         }
-<span class="pc bpc" id="L45" title="1 of 2 branches missed.">        if (meetupLocation == null) {</span>
-<span class="nc" id="L46">            throw new IllegalArgumentException(&quot;Meetup location must not be null&quot;);</span>
+<span class="fc bfc" id="L45" title="All 2 branches covered.">        if (meetupLocation == null) {</span>
+<span class="fc" id="L46">            throw new IllegalArgumentException(&quot;Meetup location must not be null&quot;);</span>
         }
 <span class="fc" id="L48">        this.seller = seller;</span>
 <span class="fc" id="L49">        this.title = title;</span>
-<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        this.description = description == null ? &quot;&quot; : description;</span>
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        this.description = description == null ? &quot;&quot; : description;</span>
 <span class="fc" id="L51">        this.category = category;</span>
 <span class="fc" id="L52">        this.condition = condition;</span>
 <span class="fc" id="L53">        this.meetupLocation = meetupLocation;</span>
@@ -117,16 +117,16 @@ public abstract class Listing {
 <span class="fc" id="L117">    public List&lt;String&gt; getPhotoPaths() { return photoPaths; }</span>
     /** Sets the photo paths, rejecting more than six. */
     public void setPhotoPaths(List&lt;String&gt; photoPaths) {
-<span class="pc bpc" id="L120" title="2 of 4 branches missed.">        if (photoPaths != null &amp;&amp; photoPaths.size() &gt; MAX_PHOTOS) {</span>
-<span class="nc" id="L121">            throw new IllegalArgumentException(&quot;A listing can have at most 6 photos&quot;);</span>
+<span class="fc bfc" id="L120" title="All 4 branches covered.">        if (photoPaths != null &amp;&amp; photoPaths.size() &gt; MAX_PHOTOS) {</span>
+<span class="fc" id="L121">            throw new IllegalArgumentException(&quot;A listing can have at most 6 photos&quot;);</span>
         }
-<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        this.photoPaths = photoPaths == null ? new ArrayList&lt;&gt;() : new ArrayList&lt;&gt;(photoPaths);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        this.photoPaths = photoPaths == null ? new ArrayList&lt;&gt;() : new ArrayList&lt;&gt;(photoPaths);</span>
 <span class="fc" id="L124">    }</span>
 
     /** Adds one photo path, rejecting blanks and a seventh photo. */
     public void addPhoto(String path) {
-<span class="pc bpc" id="L128" title="2 of 4 branches missed.">        if (path == null || path.isBlank()) {</span>
-<span class="nc" id="L129">            throw new IllegalArgumentException(&quot;Photo path must not be blank&quot;);</span>
+<span class="fc bfc" id="L128" title="All 4 branches covered.">        if (path == null || path.isBlank()) {</span>
+<span class="fc" id="L129">            throw new IllegalArgumentException(&quot;Photo path must not be blank&quot;);</span>
         }
 <span class="fc bfc" id="L131" title="All 2 branches covered.">        if (photoPaths.size() == MAX_PHOTOS) {</span>
 <span class="fc" id="L132">            throw new IllegalStateException(&quot;A listing can have at most 6 photos&quot;);</span>
