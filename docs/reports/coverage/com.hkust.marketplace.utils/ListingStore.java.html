@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ListingStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ListingStore.java</span></div><h1>ListingStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Condition;
+import com.hkust.marketplace.models.GiveawayListing;
+import com.hkust.marketplace.models.LendListing;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.SaleListing;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.persistence.Database;
+
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+/**
+ * Listings, kept in memory and written to the {@code listings} and {@code listing_photos}
+ * tables on every change and loaded back at startup ({@link #load(UserStore)}). They survive
+ * a restart once the reset-on-start switch is turned off (#59).
+ *
+ * &lt;p&gt;Change a listing's fields, then call {@link #update(Listing)}; never change a
+ * {@code Listing} and skip the store.
+ */
+public class ListingStore {
+
+    private static final int FIRST_ID = 100;
+
+    /**
+     * Synchronized because the loan timer (#22) updates listings from its own thread while the
+     * screens read them. Only the map is locked, never around a database call, so this lock can't
+     * deadlock with the database's; readers get a copy, so they never iterate a changing map.
+     */
+<span class="fc" id="L48">    private final Map&lt;String, Listing&gt; listings = Collections.synchronizedMap(new LinkedHashMap&lt;&gt;());</span>
+<span class="fc" id="L49">    private final AtomicInteger idCounter = new AtomicInteger(FIRST_ID);</span>
+    private final Database db;
+
+<span class="fc" id="L52">    ListingStore(Database db) {</span>
+<span class="fc" id="L53">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L54">    }</span>
+
+    /** Every listing, in the order added; a copy, safe to iterate while others change the store. */
+    public Collection&lt;Listing&gt; all() {
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        return snapshot().stream().filter(l -&gt; !l.isDeleted()).collect(Collectors.toList());</span>
+    }
+
+    private List&lt;Listing&gt; snapshot() {
+<span class="fc" id="L62">        synchronized (listings) {</span>
+<span class="fc" id="L63">            return new ArrayList&lt;&gt;(listings.values());</span>
+        }
+    }
+
+    /** Visible listings with status Live, in insertion order. */
+    public List&lt;Listing&gt; live() {
+<span class="fc bfc" id="L69" title="All 4 branches covered.">        return snapshot().stream().filter(l -&gt; !l.isDeleted() &amp;&amp; l.getStatus() == ListingStatus.LIVE).collect(Collectors.toList());</span>
+    }
+
+    /** Visible listings waiting for admin review. */
+    public List&lt;Listing&gt; pending() {
+<span class="fc bfc" id="L74" title="All 4 branches covered.">        return snapshot().stream().filter(l -&gt; !l.isDeleted() &amp;&amp; l.getStatus() == ListingStatus.PENDING_REVIEW).collect(Collectors.toList());</span>
+    }
+
+    /** A seller's visible listings, in insertion order. */
+    public List&lt;Listing&gt; bySeller(String username) {
+<span class="fc bfc" id="L79" title="All 4 branches covered.">        return snapshot().stream().filter(l -&gt; !l.isDeleted() &amp;&amp; l.getSellerUsername().equalsIgnoreCase(username)).collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Resolves a listing by id, including deleted ones: chat threads, deals and notification
+     * links keep working after a listing is hidden. Callers that want visible listings only must
+     * use one of the filtered collections ({@link #all()}, {@link #live()}, {@link #pending()},
+     * {@link #bySeller(String)} or {@link #findAll(List)}).
+     */
+    public Listing find(String id) {
+<span class="fc" id="L89">        return listings.get(id);</span>
+    }
+
+    /**
+     * Claims and returns the next {@code L...} id in one atomic step. The submit flow reserves
+     * an id before saving so photos can be keyed to the directory the listing will actually
+     * get; two concurrent callers can never receive the same id. {@link #add(Listing)} leaves a
+     * pre-set id untouched and does not advance the counter again.
+     */
+    public String reserveId() {
+<span class="fc" id="L99">        return &quot;L&quot; + idCounter.getAndIncrement();</span>
+    }
+
+    /** The listings with these ids, in the same order, skipping missing and deleted ids. */
+    public List&lt;Listing&gt; findAll(List&lt;String&gt; ids) {
+<span class="fc" id="L104">        return ids.stream().map(listings::get)</span>
+<span class="fc bfc" id="L105" title="All 4 branches covered.">                .filter(l -&gt; l != null &amp;&amp; !l.isDeleted())</span>
+<span class="fc" id="L106">                .toList();</span>
+    }
+
+    /**
+     * Counts one view of a listing's details (SRS UC-1.3 S1 step 2) and saves it. Synchronized
+     * so two buyers opening the listing at once both count.
+     *
+     * @throws IllegalArgumentException if the listing is not in this store, or its row is gone
+     *         from the database (e.g. deleted a moment ago); nothing changes then
+     */
+    public synchronized void recordView(Listing listing) {
+<span class="fc" id="L117">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L118" title="All 2 branches covered.">        if (listings.get(listing.getId()) != listing) {</span>
+<span class="fc" id="L119">            throw new IllegalArgumentException(&quot;Unknown listing: &quot; + listing.getId());</span>
+        }
+<span class="fc" id="L121">        int views = listing.getViewCount() + 1;</span>
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        if (db.update(&quot;UPDATE listings SET view_count = ? WHERE id = ?&quot;, views, listing.getId()) == 0) {</span>
+<span class="fc" id="L123">            throw new IllegalArgumentException(&quot;Listing &quot; + listing.getId() + &quot; no longer exists&quot;);</span>
+        }
+<span class="fc" id="L125">        listing.setViewCount(views);</span>
+<span class="fc" id="L126">    }</span>
+
+    /** Adds a new listing (giving it the next {@code L...} id if it has none) and saves it. */
+    public void add(Listing listing) {
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        if (listing.getId() == null) {</span>
+<span class="fc" id="L131">            listing.setId(&quot;L&quot; + idCounter.getAndIncrement());</span>
+        }
+<span class="fc" id="L133">        db.inTransaction(() -&gt; {</span>
+<span class="fc" id="L134">            db.update(&quot;INSERT INTO listings (id, type, seller_username, title, description, category,&quot;</span>
+                            + &quot; condition, meetup_location, status, submitted_date, reviewed_at,&quot;
+                            + &quot; rejection_reason, takedown_reason, view_count, deleted, price,&quot;
+                            + &quot; lending_duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;,
+<span class="fc" id="L138">                    listing.getId(), listing.getType(), listing.getSellerUsername().toLowerCase(),</span>
+<span class="fc" id="L139">                    listing.getTitle(), listing.getDescription(), listing.getCategory(),</span>
+<span class="fc" id="L140">                    listing.getCondition(), listing.getMeetupLocation(), listing.getStatus(),</span>
+<span class="fc" id="L141">                    listing.getSubmittedDate(), listing.getReviewedAt(), listing.getRejectionReason(),</span>
+<span class="fc" id="L142">                    listing.getTakedownReason(), listing.getViewCount(), listing.isDeleted(), price(listing),</span>
+<span class="fc" id="L143">                    lendingDuration(listing));</span>
+<span class="fc" id="L144">            savePhotos(listing);</span>
+<span class="fc" id="L145">        });</span>
+<span class="fc" id="L146">        listings.put(listing.getId(), listing);</span>
+<span class="fc" id="L147">    }</span>
+
+    /**
+     * Saves every field of an existing listing (status, reasons, dates, view count, details and
+     * photos). Also accepts a new object for the same id, which then replaces the old one.
+     */
+    public void update(Listing listing) {
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        if (!listings.containsKey(listing.getId())) {</span>
+<span class="fc" id="L155">            throw new IllegalArgumentException(&quot;Unknown listing: &quot; + listing.getId());</span>
+        }
+<span class="fc" id="L157">        db.inTransaction(() -&gt; {</span>
+<span class="fc" id="L158">            db.update(&quot;UPDATE listings SET type = ?, seller_username = ?, title = ?, description = ?,&quot;</span>
+                            + &quot; category = ?, condition = ?, meetup_location = ?, status = ?,&quot;
+                            + &quot; submitted_date = ?, reviewed_at = ?, rejection_reason = ?,&quot;
+                            + &quot; takedown_reason = ?, view_count = ?, deleted = ?, price = ?,&quot;
+                            + &quot; lending_duration_seconds = ? WHERE id = ?&quot;,
+<span class="fc" id="L163">                    listing.getType(), listing.getSellerUsername().toLowerCase(), listing.getTitle(),</span>
+<span class="fc" id="L164">                    listing.getDescription(), listing.getCategory(), listing.getCondition(),</span>
+<span class="fc" id="L165">                    listing.getMeetupLocation(), listing.getStatus(), listing.getSubmittedDate(),</span>
+<span class="fc" id="L166">                    listing.getReviewedAt(), listing.getRejectionReason(), listing.getTakedownReason(),</span>
+<span class="fc" id="L167">                    listing.getViewCount(), listing.isDeleted(), price(listing), lendingDuration(listing),</span>
+<span class="fc" id="L168">                    listing.getId());</span>
+<span class="fc" id="L169">            db.update(&quot;DELETE FROM listing_photos WHERE listing_id = ?&quot;, listing.getId());</span>
+<span class="fc" id="L170">            savePhotos(listing);</span>
+<span class="fc" id="L171">        });</span>
+<span class="fc" id="L172">        listings.put(listing.getId(), listing);</span>
+<span class="fc" id="L173">    }</span>
+
+    /**
+     * Deletes a listing and its photos, e.g. a seller withdrawing a listing nobody has acted on.
+     * A listing with requests or deals (and, from #57/#58, chats or reports) cannot be deleted:
+     * the database refuses, this throws {@link com.hkust.marketplace.persistence.DatabaseException}
+     * and nothing changes. Take such a listing down by status instead (#26, #34).
+     */
+    public void remove(String id) {
+<span class="fc" id="L182">        db.update(&quot;DELETE FROM listings WHERE id = ?&quot;, id);</span>
+<span class="fc" id="L183">        listings.remove(id);</span>
+<span class="fc" id="L184">    }</span>
+
+    /** Reads every saved listing back into memory, resolving sellers through {@code users}. */
+    void load(UserStore users) {
+<span class="fc" id="L188">        listings.clear();</span>
+<span class="fc" id="L189">        Map&lt;String, List&lt;String&gt;&gt; photos = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L190" title="All 2 branches covered.">        for (String[] row : db.query(&quot;SELECT listing_id, path FROM listing_photos ORDER BY listing_id, position&quot;,</span>
+<span class="fc" id="L191">                rows -&gt; new String[]{rows.getString(&quot;listing_id&quot;), rows.getString(&quot;path&quot;)})) {</span>
+<span class="fc" id="L192">            photos.computeIfAbsent(row[0], k -&gt; new ArrayList&lt;&gt;()).add(row[1]);</span>
+<span class="fc" id="L193">        }</span>
+<span class="fc" id="L194">        int maxId = FIRST_ID - 1;</span>
+<span class="fc bfc" id="L195" title="All 2 branches covered.">        for (Listing listing : db.query(&quot;SELECT * FROM listings ORDER BY rowid&quot;, row -&gt; toListing(row, users))) {</span>
+<span class="fc" id="L196">            listing.setPhotoPaths(photos.getOrDefault(listing.getId(), List.of()));</span>
+<span class="fc" id="L197">            listings.put(listing.getId(), listing);</span>
+<span class="fc" id="L198">            maxId = Math.max(maxId, numericId(listing.getId()));</span>
+<span class="fc" id="L199">        }</span>
+<span class="fc" id="L200">        idCounter.set(maxId + 1);</span>
+<span class="fc" id="L201">    }</span>
+
+    private static Listing toListing(ResultSet row, UserStore users) throws SQLException {
+<span class="fc" id="L204">        String sellerName = row.getString(&quot;seller_username&quot;);</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (!(users.find(sellerName) instanceof Seller seller)) {</span>
+<span class="nc" id="L206">            throw new IllegalStateException(&quot;Listing &quot; + row.getString(&quot;id&quot;)</span>
+                    + &quot; belongs to unknown seller &quot; + sellerName);
+        }
+<span class="fc" id="L209">        String title = row.getString(&quot;title&quot;);</span>
+<span class="fc" id="L210">        String description = row.getString(&quot;description&quot;);</span>
+<span class="fc" id="L211">        Category category = Category.valueOf(row.getString(&quot;category&quot;));</span>
+<span class="fc" id="L212">        Condition condition = Condition.valueOf(row.getString(&quot;condition&quot;));</span>
+<span class="fc" id="L213">        Location location = Location.valueOf(row.getString(&quot;meetup_location&quot;));</span>
+<span class="pc bpc" id="L214" title="1 of 4 branches missed.">        Listing listing = switch (row.getString(&quot;type&quot;)) {</span>
+<span class="fc" id="L215">            case &quot;SELL&quot; -&gt; new SaleListing(seller, title, description, category, condition, location,</span>
+<span class="fc" id="L216">                    new Money(Database.decimal(row, &quot;price&quot;)));</span>
+<span class="fc" id="L217">            case &quot;LEND&quot; -&gt; new LendListing(seller, title, description, category, condition, location,</span>
+<span class="fc" id="L218">                    Database.seconds(row, &quot;lending_duration_seconds&quot;));</span>
+<span class="fc" id="L219">            case &quot;GIVEAWAY&quot; -&gt; new GiveawayListing(seller, title, description, category, condition, location);</span>
+<span class="pc" id="L220">            default -&gt; throw new IllegalStateException(&quot;Unknown listing type &quot; + row.getString(&quot;type&quot;));</span>
+        };
+<span class="fc" id="L222">        listing.setId(row.getString(&quot;id&quot;));</span>
+<span class="fc" id="L223">        listing.setStatus(ListingStatus.valueOf(row.getString(&quot;status&quot;)));</span>
+<span class="fc" id="L224">        listing.setSubmittedDate(Database.dateTime(row, &quot;submitted_date&quot;));</span>
+<span class="fc" id="L225">        listing.setReviewedAt(Database.dateTime(row, &quot;reviewed_at&quot;));</span>
+<span class="fc" id="L226">        listing.setRejectionReason(row.getString(&quot;rejection_reason&quot;));</span>
+<span class="fc" id="L227">        listing.setTakedownReason(row.getString(&quot;takedown_reason&quot;));</span>
+<span class="fc" id="L228">        listing.setViewCount(row.getInt(&quot;view_count&quot;));</span>
+<span class="fc" id="L229">        listing.setDeleted(Database.bool(row, &quot;deleted&quot;));</span>
+<span class="fc" id="L230">        return listing;</span>
+    }
+
+    private void savePhotos(Listing listing) {
+<span class="fc" id="L234">        List&lt;String&gt; paths = listing.getPhotoPaths();</span>
+<span class="fc bfc" id="L235" title="All 2 branches covered.">        for (int i = 0; i &lt; paths.size(); i++) {</span>
+<span class="fc" id="L236">            db.update(&quot;INSERT INTO listing_photos (listing_id, position, path) VALUES (?, ?, ?)&quot;,</span>
+<span class="fc" id="L237">                    listing.getId(), i, paths.get(i));</span>
+        }
+<span class="fc" id="L239">    }</span>
+
+    private static BigDecimal price(Listing listing) {
+<span class="fc bfc" id="L242" title="All 2 branches covered.">        return listing instanceof SaleListing sale ? sale.getPrice().amount() : null;</span>
+    }
+
+    private static Duration lendingDuration(Listing listing) {
+<span class="fc bfc" id="L246" title="All 2 branches covered.">        return listing instanceof LendListing lend ? lend.getLendingDuration() : null;</span>
+    }
+
+    /** The number in an {@code L123} id, or -1 for ids not made by this store. */
+    private static int numericId(String id) {
+        try {
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">            return id.startsWith(&quot;L&quot;) ? Integer.parseInt(id.substring(1)) : -1;</span>
+<span class="nc" id="L253">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L254">            return -1;</span>
+        }
+    }
+
+    /** Returns the seeded listings so related stores can reference them. */
+    List&lt;Listing&gt; seed(UserStore users) {
+<span class="fc" id="L260">        List&lt;Listing&gt; seeded = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L261">        Seller charlie = (Seller) users.find(&quot;charlie&quot;);</span>
+<span class="fc" id="L262">        Seller diana = (Seller) users.find(&quot;diana&quot;);</span>
+<span class="fc" id="L263">        Random random = new Random();</span>
+
+<span class="fc" id="L265">        Listing textbook = new SaleListing(charlie, &quot;Calculus Textbook (Stewart)&quot;,</span>
+                &quot;Barely used, 8th edition. Perfect for MATH 1013.&quot;,
+<span class="fc" id="L267">                Category.BOOKS_AND_NOTES, Condition.LIKE_NEW, Location.LIBRARY, Money.of(&quot;180&quot;));</span>
+<span class="fc" id="L268">        textbook.setStatus(ListingStatus.LIVE);</span>
+<span class="fc" id="L269">        textbook.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));</span>
+<span class="fc" id="L270">        add(textbook);</span>
+<span class="fc" id="L271">        seeded.add(textbook);</span>
+
+<span class="fc" id="L273">        Listing charger = new SaleListing(charlie, &quot;MacBook Pro Charger 61W&quot;,</span>
+                &quot;Original Apple charger, works perfectly.&quot;,
+<span class="fc" id="L275">                Category.ELECTRONICS, Condition.USED, Location.ACADEMIC_BUILDING, Money.of(&quot;250&quot;));</span>
+<span class="fc" id="L276">        charger.setStatus(ListingStatus.LIVE);</span>
+<span class="fc" id="L277">        charger.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));</span>
+<span class="fc" id="L278">        add(charger);</span>
+<span class="fc" id="L279">        seeded.add(charger);</span>
+
+<span class="fc" id="L281">        Listing lamp = new GiveawayListing(diana, &quot;IKEA Desk Lamp&quot;, &quot;Good condition, LED bulb included.&quot;,</span>
+                Category.FURNITURE, Condition.USED, Location.UG_HALL_V);
+<span class="fc" id="L283">        lamp.setStatus(ListingStatus.LIVE);</span>
+<span class="fc" id="L284">        lamp.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));</span>
+<span class="fc" id="L285">        add(lamp);</span>
+<span class="fc" id="L286">        seeded.add(lamp);</span>
+
+<span class="fc" id="L288">        Listing calculator = new LendListing(diana, &quot;Graphing Calculator TI-84&quot;, &quot;Can lend for one semester.&quot;,</span>
+<span class="fc" id="L289">                Category.ELECTRONICS, Condition.LIKE_NEW, Location.STUDENT_CENTRE, Duration.ofDays(90));</span>
+<span class="fc" id="L290">        calculator.setStatus(ListingStatus.LIVE);</span>
+<span class="fc" id="L291">        calculator.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));</span>
+<span class="fc" id="L292">        add(calculator);</span>
+<span class="fc" id="L293">        seeded.add(calculator);</span>
+
+<span class="fc" id="L295">        Listing fridge = new SaleListing(diana, &quot;Mini Fridge&quot;, &quot;Works well, cleaning required.&quot;,</span>
+<span class="fc" id="L296">                Category.FURNITURE, Condition.USED, Location.UG_HALL_II, Money.of(&quot;400&quot;));</span>
+<span class="fc" id="L297">        fridge.setSubmittedDate(LocalDateTime.now().minusDays(random.nextInt(10)));</span>
+<span class="fc" id="L298">        add(fridge);</span>
+<span class="fc" id="L299">        seeded.add(fridge);</span>
+
+<span class="fc" id="L301">        return seeded;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

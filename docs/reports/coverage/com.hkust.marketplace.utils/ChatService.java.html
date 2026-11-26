@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ChatService.java</span></div><h1>ChatService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.ListingType;
+import com.hkust.marketplace.models.Message;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.persistence.DatabaseException;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+
+/**
+ * The public seam for chat. Both the buyer and seller portals go through this service, so
+ * there is exactly one place that decides who may send and whether a thread accepts offers.
+ * Access control lives here, not in the UI and not in {@link ChatStore}.
+ */
+public final class ChatService {
+
+    /**
+     * Shown on a thread whose Listing is no longer live, and used as the refusal message for a
+     * blocked Formal Offer. Plain messages are never blocked: buyer and seller keep talking
+     * through a reserved or lent deal and after it completes (SRS UC-1.5 only closes offers).
+     */
+    public static final String OFFERS_CLOSED_BANNER =
+            &quot;This listing is no longer live \u2014 new offers are disabled.&quot;;
+
+    private final DummyDataService data;
+    /** Formal Offers are deal requests like any other: validated, saved and notified the same way. */
+    private final DealRequestService requests;
+
+    /** Creates the service over the given stores. */
+<span class="fc" id="L45">    public ChatService(DummyDataService data) {</span>
+<span class="fc" id="L46">        this.data = Objects.requireNonNull(data, &quot;data&quot;);</span>
+<span class="fc" id="L47">        this.requests = new DealRequestService(data);</span>
+<span class="fc" id="L48">    }</span>
+
+    /** Returns the one thread for this (Buyer, Listing) pair, creating it on first use. */
+    public ChatThread openThread(Buyer buyer, Listing listing) {
+<span class="fc" id="L52">        return data.chats().getOrCreate(buyer, listing);</span>
+    }
+
+    /**
+     * Sends a free-text message. Only the thread's Buyer or the Listing's Seller may send.
+     * Messages stay open whatever the Listing's status, so the two can arrange a meet-up or
+     * return and follow up after the deal. Empty content is rejected.
+     *
+     * @throws SecurityException if {@code sender} is not a participant of the thread
+     * @throws IllegalArgumentException if the content is blank
+     */
+    public Message sendText(User sender, ChatThread thread, String content) {
+<span class="fc" id="L64">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
+<span class="fc" id="L65">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
+<span class="fc" id="L66">        requireParticipant(sender, thread);</span>
+<span class="fc" id="L67">        Message message = data.chats().send(thread, sender, content);</span>
+        try {
+<span class="fc" id="L69">            notifyOtherParticipant(sender, thread, content);</span>
+<span class="fc" id="L70">        } catch (DatabaseException e) {</span>
+            // The message is already saved and shown. Reporting the send as failed would make the
+            // sender post it again, so a lost notification is the lesser problem.
+<span class="fc" id="L73">        }</span>
+<span class="fc" id="L74">        return message;</span>
+    }
+
+    /** Longest message preview put in a Chat Message notification. */
+    static final int PREVIEW_LENGTH = 80;
+
+    /** SRS UC-1.5 step 3.1.2: the other participant is told about the new message. */
+    private void notifyOtherParticipant(User sender, ChatThread thread, String content) {
+<span class="fc" id="L82">        boolean fromBuyer = sender.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername());</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        String recipient = fromBuyer ? thread.getSeller().getUsername() : thread.getBuyer().getUsername();</span>
+<span class="fc" id="L84">        String text = content.strip();</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        String preview = text.length() &gt; PREVIEW_LENGTH ? text.substring(0, PREVIEW_LENGTH - 1) + &quot;\u2026&quot; : text;</span>
+<span class="fc" id="L86">        data.notifications().notify(recipient, NotificationCategory.CHAT_MESSAGE,</span>
+<span class="fc" id="L87">                sender.getDisplayName() + &quot; about '&quot; + thread.getListing().getTitle() + &quot;': &quot; + preview,</span>
+                new NotificationRef(NotificationRef.Target.THREAD,
+<span class="fc" id="L89">                        thread.getBuyer().getUsername().toLowerCase() + &quot;|&quot; + thread.getListing().getId()));</span>
+<span class="fc" id="L90">    }</span>
+
+    /**
+     * Submits a price offer on the thread's Sale Listing and posts it as one Formal Offer card.
+     * Only the thread's Buyer may offer, and only while the Listing is live.
+     *
+     * @throws SecurityException if {@code sender} is not the thread's Buyer
+     * @throws IllegalStateException if the Listing is no longer live
+     * @throws IllegalArgumentException if the Listing is not for sale or the price is invalid
+     */
+    public Message submitFormalOffer(User sender, ChatThread thread, BigDecimal price) {
+<span class="fc" id="L101">        Buyer buyer = requireThreadBuyer(sender, thread);</span>
+<span class="fc" id="L102">        requireLive(thread);</span>
+<span class="fc" id="L103">        requireType(thread, ListingType.SELL);</span>
+<span class="fc" id="L104">        DealRequest request = requests.submitOffer(buyer, thread.getListing(), price);</span>
+<span class="fc" id="L105">        return data.chats().sendFormalOffer(thread, buyer, request);</span>
+    }
+
+    /**
+     * Submits a borrow request on the thread's Lend Listing and posts it as one Formal Offer
+     * card. Only the thread's Buyer may request, and only while the Listing is live.
+     *
+     * @throws SecurityException if {@code sender} is not the thread's Buyer
+     * @throws IllegalStateException if the Listing is no longer live
+     * @throws IllegalArgumentException if the Listing is not for lending or the period is invalid
+     */
+    public Message submitFormalOffer(User sender, ChatThread thread,
+                                     LocalDateTime start, LocalDateTime end) {
+<span class="fc" id="L118">        Buyer buyer = requireThreadBuyer(sender, thread);</span>
+<span class="fc" id="L119">        requireLive(thread);</span>
+<span class="fc" id="L120">        requireType(thread, ListingType.LEND);</span>
+<span class="fc" id="L121">        DealRequest request = requests.submitBorrow(buyer, thread.getListing(), start, end);</span>
+<span class="fc" id="L122">        return data.chats().sendFormalOffer(thread, buyer, request);</span>
+    }
+
+    /**
+     * Submits a claim on the thread's Giveaway Listing and posts it as one Formal Offer card.
+     * Only the thread's Buyer may claim, and only while the Listing is live.
+     *
+     * @throws SecurityException if {@code sender} is not the thread's Buyer
+     * @throws IllegalStateException if the Listing is no longer live
+     * @throws IllegalArgumentException if the Listing is not a giveaway
+     */
+    public Message submitFormalOffer(User sender, ChatThread thread) {
+<span class="fc" id="L134">        Buyer buyer = requireThreadBuyer(sender, thread);</span>
+<span class="fc" id="L135">        requireLive(thread);</span>
+<span class="fc" id="L136">        requireType(thread, ListingType.GIVEAWAY);</span>
+<span class="fc" id="L137">        DealRequest request = requests.claim(buyer, thread.getListing());</span>
+<span class="fc" id="L138">        return data.chats().sendFormalOffer(thread, buyer, request);</span>
+    }
+
+    /**
+     * Accepts {@code request} on behalf of the Listing's Seller. This is a thin wrapper:
+     * every transition, deal-creation and Listing-status change stays in
+     * {@link com.hkust.marketplace.models.DealLifecycle#accept}. The card is re-rendered
+     * from the request's live status, never from a local flag.
+     *
+     * @throws SecurityException if {@code seller} is not the Seller of the request's Listing
+     * @throws IllegalStateException if the request is not pending
+     */
+    public Deal acceptOffer(User seller, DealRequest request) {
+<span class="fc" id="L151">        requireListingSeller(seller, request);</span>
+<span class="fc" id="L152">        return data.deals().lifecycle().accept(request);</span>
+    }
+
+    /**
+     * Declines {@code request} on behalf of the Listing's Seller. This is a thin wrapper:
+     * the status change and any Listing relist stay in
+     * {@link com.hkust.marketplace.models.DealLifecycle#decline}. The request and its card
+     * remain in the retained history.
+     *
+     * @throws SecurityException if {@code seller} is not the Seller of the request's Listing
+     * @throws IllegalStateException if the request is not pending or countered
+     */
+    public DealRequest declineOffer(User seller, DealRequest request) {
+<span class="fc" id="L165">        requireListingSeller(seller, request);</span>
+<span class="fc" id="L166">        return data.deals().lifecycle().decline(request);</span>
+    }
+
+    /** All messages in the thread, oldest (send-time) first. History is never removed. */
+    public List&lt;Message&gt; history(ChatThread thread) {
+<span class="fc" id="L171">        return data.chats().history(Objects.requireNonNull(thread, &quot;thread&quot;));</span>
+    }
+
+    /** True while the Listing is live, so the buyer may still post a Formal Offer (UC-1.5 A2). */
+    public boolean acceptsOffers(ChatThread thread) {
+<span class="fc" id="L176">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
+<span class="fc bfc" id="L177" title="All 2 branches covered.">        return thread.getListing().getStatus() == ListingStatus.LIVE;</span>
+    }
+
+    /** Every conversation the buyer participates in. */
+    public List&lt;ChatThread&gt; threadsForBuyer(Buyer buyer) {
+<span class="fc" id="L182">        Objects.requireNonNull(buyer, &quot;buyer&quot;);</span>
+<span class="fc" id="L183">        return data.chats().forBuyer(buyer.getUsername());</span>
+    }
+
+    /** Every conversation on the seller's listings. */
+    public List&lt;ChatThread&gt; threadsForSeller(Seller seller) {
+<span class="fc" id="L188">        Objects.requireNonNull(seller, &quot;seller&quot;);</span>
+<span class="fc" id="L189">        return data.chats().forSeller(seller.getUsername());</span>
+    }
+
+    /**
+     * Searches the messages of every thread the user participates in. A Buyer sees only
+     * their own threads and a Seller only threads on their Listings, so search can never
+     * leak another user's private conversation.
+     *
+     * &lt;p&gt;Matching is a case-insensitive substring test over {@link Message#getContent()}.
+     * A Formal Offer's content is its generated summary, so offers are found by their
+     * price, lending period or Listing title like any other text. {@code filter} selects
+     * the kinds: {@code TEXT_ONLY} drops offers, {@code OFFERS_ONLY} keeps only offers and
+     * {@code ALL} keeps both.
+     *
+     * &lt;p&gt;A blank keyword returns everything only under {@code OFFERS_ONLY}, which doubles as
+     * an &quot;all offers&quot; listing. Under {@code ALL} and {@code TEXT_ONLY} a blank keyword returns
+     * nothing, so an accidental empty search cannot dump a user's whole history. Results are
+     * ordered newest-first.
+     *
+     * @throws NullPointerException if {@code user} or {@code filter} is {@code null}
+     */
+    public List&lt;Message&gt; search(User user, String keyword, MessageSearchFilter filter) {
+<span class="fc" id="L211">        Objects.requireNonNull(user, &quot;user&quot;);</span>
+<span class="fc" id="L212">        Objects.requireNonNull(filter, &quot;filter&quot;);</span>
+<span class="fc bfc" id="L213" title="All 4 branches covered.">        boolean blank = keyword == null || keyword.isBlank();</span>
+<span class="fc bfc" id="L214" title="All 4 branches covered.">        if (blank &amp;&amp; filter != MessageSearchFilter.OFFERS_ONLY) {</span>
+<span class="fc" id="L215">            return List.of();</span>
+        }
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">        String needle = keyword == null ? &quot;&quot; : keyword.trim().toLowerCase(Locale.ROOT);</span>
+<span class="fc" id="L218">        List&lt;Message&gt; matches = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L219" title="All 2 branches covered.">        for (ChatThread thread : participatingThreads(user)) {</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">            for (Message message : data.chats().history(thread)) {</span>
+<span class="fc bfc" id="L221" title="All 2 branches covered.">                if (!matchesKind(message, filter)) {</span>
+<span class="fc" id="L222">                    continue;</span>
+                }
+<span class="fc bfc" id="L224" title="All 2 branches covered.">                if (!needle.isEmpty()</span>
+<span class="fc bfc" id="L225" title="All 2 branches covered.">                        &amp;&amp; !message.getContent().toLowerCase(Locale.ROOT).contains(needle)) {</span>
+<span class="fc" id="L226">                    continue;</span>
+                }
+<span class="fc" id="L228">                matches.add(message);</span>
+<span class="fc" id="L229">            }</span>
+<span class="fc" id="L230">        }</span>
+<span class="fc" id="L231">        matches.sort(Comparator.comparing(Message::getSentTime).reversed());</span>
+<span class="fc" id="L232">        return List.copyOf(matches);</span>
+    }
+
+    private List&lt;ChatThread&gt; participatingThreads(User user) {
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        if (user instanceof Buyer buyer) {</span>
+<span class="fc" id="L237">            return threadsForBuyer(buyer);</span>
+        }
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">        if (user instanceof Seller seller) {</span>
+<span class="fc" id="L240">            return threadsForSeller(seller);</span>
+        }
+<span class="nc" id="L242">        return List.of();</span>
+    }
+
+    private static boolean matchesKind(Message message, MessageSearchFilter filter) {
+<span class="fc bfc" id="L246" title="All 3 branches covered.">        return switch (filter) {</span>
+<span class="fc" id="L247">            case ALL -&gt; true;</span>
+<span class="fc bfc" id="L248" title="All 2 branches covered.">            case TEXT_ONLY -&gt; !message.isFormalOffer();</span>
+<span class="fc" id="L249">            case OFFERS_ONLY -&gt; message.isFormalOffer();</span>
+        };
+    }
+
+    private static void requireListingSeller(User actor, DealRequest request) {
+<span class="fc" id="L254">        Objects.requireNonNull(actor, &quot;seller&quot;);</span>
+<span class="fc" id="L255">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc bfc" id="L256" title="All 2 branches covered.">        if (!actor.getUsername().equalsIgnoreCase(request.getSellerUsername())) {</span>
+<span class="fc" id="L257">            throw new SecurityException(</span>
+                    &quot;Only the listing's seller may accept or decline an offer&quot;);
+        }
+<span class="fc" id="L260">    }</span>
+
+    private static Buyer requireThreadBuyer(User sender, ChatThread thread) {
+<span class="fc" id="L263">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
+<span class="fc" id="L264">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
+<span class="fc bfc" id="L265" title="All 2 branches covered.">        if (!sender.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername())) {</span>
+<span class="fc" id="L266">            throw new SecurityException(&quot;Only the thread's buyer may post a formal offer&quot;);</span>
+        }
+<span class="fc" id="L268">        return thread.getBuyer();</span>
+    }
+
+    private void requireLive(ChatThread thread) {
+<span class="fc bfc" id="L272" title="All 2 branches covered.">        if (!acceptsOffers(thread)) {</span>
+<span class="fc" id="L273">            throw new IllegalStateException(OFFERS_CLOSED_BANNER);</span>
+        }
+<span class="fc" id="L275">    }</span>
+
+    private static void requireType(ChatThread thread, ListingType expected) {
+<span class="fc bfc" id="L278" title="All 2 branches covered.">        if (thread.getListing().getType() != expected) {</span>
+<span class="fc" id="L279">            throw new IllegalArgumentException(&quot;A &quot; + thread.getListing().getType()</span>
+                    + &quot; listing does not accept this kind of formal offer&quot;);
+        }
+<span class="fc" id="L282">    }</span>
+
+    private static void requireParticipant(User sender, ChatThread thread) {
+<span class="fc" id="L285">        String username = sender.getUsername();</span>
+<span class="fc bfc" id="L286" title="All 2 branches covered.">        boolean participant = username.equalsIgnoreCase(thread.getBuyer().getUsername())</span>
+<span class="fc bfc" id="L287" title="All 2 branches covered.">                || username.equalsIgnoreCase(thread.getSeller().getUsername());</span>
+<span class="fc bfc" id="L288" title="All 2 branches covered.">        if (!participant) {</span>
+<span class="fc" id="L289">            throw new SecurityException(</span>
+                    &quot;Only the thread's buyer or the listing's seller may send messages&quot;);
+        }
+<span class="fc" id="L292">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

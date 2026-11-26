@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Database.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.persistence</a> &gt; <span class="el_source">Database.java</span></div><h1>Database.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.persistence;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * The application's SQLite database: one JDBC connection, foreign keys on, and the schema in
+ * {@code src/main/resources/db/schema.sql} applied on open.
+ *
+ * &lt;p&gt;Stores keep their objects in memory and write every change through this class, so the
+ * database always holds the current state and is read back once at startup. All methods are
+ * synchronized because the single connection is shared by the UI thread and background timers.
+ *
+ * &lt;p&gt;Value encoding: timestamps are ISO-8601 TEXT, money is decimal TEXT, durations are whole
+ * seconds, booleans are INTEGER 0/1 (see {@link #param}).
+ */
+public final class Database implements AutoCloseable {
+
+    private static final String SCHEMA_RESOURCE = &quot;/db/schema.sql&quot;;
+
+    private final Connection connection;
+    /** Work to run once the current transaction commits; dropped if it rolls back. */
+<span class="fc" id="L45">    private final List&lt;Runnable&gt; afterCommit = new ArrayList&lt;&gt;();</span>
+    /** The lock that keeps a second running copy of the app off this file; {@code null} in memory. */
+    private final FileChannel lockChannel;
+    /** This database's entry in {@link #OPEN_IN_THIS_PROCESS}; {@code null} in memory. */
+    private final Path openKey;
+
+    /**
+     * Database files this process has open. A second open is refused here, before any new handle
+     * to the lock file is created: on Linux and macOS a file lock belongs to the whole process, so
+     * opening and then closing another handle to the lock file would release the first lock too.
+     */
+<span class="fc" id="L56">    private static final Set&lt;Path&gt; OPEN_IN_THIS_PROCESS = ConcurrentHashMap.newKeySet();</span>
+
+    private Database(String url) {
+<span class="fc" id="L59">        this(url, null, null);</span>
+<span class="fc" id="L60">    }</span>
+
+<span class="fc" id="L62">    private Database(String url, FileChannel lockChannel, Path openKey) {</span>
+<span class="fc" id="L63">        this.lockChannel = lockChannel;</span>
+<span class="fc" id="L64">        this.openKey = openKey;</span>
+        try {
+<span class="fc" id="L66">            this.connection = DriverManager.getConnection(url);</span>
+<span class="fc" id="L67">            try (Statement statement = connection.createStatement()) {</span>
+<span class="fc" id="L68">                statement.execute(&quot;PRAGMA foreign_keys = ON&quot;);</span>
+            }
+<span class="fc" id="L70">            applySchema();</span>
+<span class="nc" id="L71">        } catch (SQLException e) {</span>
+<span class="nc" id="L72">            throw new DatabaseException(&quot;Could not open database &quot; + url, e);</span>
+<span class="fc" id="L73">        }</span>
+<span class="fc" id="L74">    }</span>
+
+    /**
+     * Opens (creating if needed) the database file. With {@code reset} the existing file is
+     * deleted first, so the app starts from a fresh, re-seeded database.
+     *
+     * &lt;p&gt;Only one running copy of the app may use the file at a time: an operating-system lock
+     * on {@code &lt;file&gt;.lock} is taken first and held until {@link #close()} (the system also
+     * releases it if the app crashes). The lock is taken before a reset, so a second copy can
+     * never delete the file under the first.
+     *
+     * @throws DatabaseInUseException if another running copy already has the file open
+     */
+    public static Database openFile(Path file, boolean reset) {
+<span class="fc" id="L88">        Objects.requireNonNull(file, &quot;file&quot;);</span>
+        Path path;
+        try {
+<span class="fc" id="L91">            Path absolute = file.toAbsolutePath().normalize();</span>
+<span class="fc" id="L92">            Files.createDirectories(absolute.getParent());</span>
+            // The real directory, so two spellings of the same folder (symlinks, &quot;..&quot;) match.
+<span class="fc" id="L94">            path = absolute.getParent().toRealPath().resolve(absolute.getFileName());</span>
+<span class="nc" id="L95">        } catch (IOException e) {</span>
+<span class="nc" id="L96">            throw new UncheckedIOException(&quot;Could not prepare database file &quot; + file, e);</span>
+<span class="fc" id="L97">        }</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        if (!OPEN_IN_THIS_PROCESS.add(path)) {</span>
+<span class="fc" id="L99">            throw new DatabaseInUseException(path);   // no new lock-file handle was opened</span>
+        }
+<span class="fc" id="L101">        FileChannel lock = null;</span>
+        try {
+<span class="fc" id="L103">            lock = lock(path);</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">            if (reset) {</span>
+<span class="fc" id="L105">                Files.deleteIfExists(path);</span>
+            }
+<span class="fc" id="L107">            return new Database(&quot;jdbc:sqlite:&quot; + path, lock, path);</span>
+<span class="fc" id="L108">        } catch (IOException | RuntimeException e) {</span>
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">            if (lock != null) {</span>
+<span class="nc" id="L110">                closeQuietly(lock);</span>
+            }
+<span class="fc" id="L112">            OPEN_IN_THIS_PROCESS.remove(path);</span>
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">            if (e instanceof IOException io) {</span>
+<span class="nc" id="L114">                throw new UncheckedIOException(&quot;Could not prepare database file &quot; + path, io);</span>
+            }
+<span class="fc" id="L116">            throw (RuntimeException) e;</span>
+        }
+    }
+
+    /**
+     * Takes the lock on {@code &lt;file&gt;.lock}, or refuses if another process holds it. Only called
+     * when this process does not have the file open (see {@link #OPEN_IN_THIS_PROCESS}).
+     */
+    private static FileChannel lock(Path file) throws IOException {
+<span class="fc" id="L125">        Path lockFile = file.resolveSibling(file.getFileName() + &quot;.lock&quot;);</span>
+<span class="fc" id="L126">        FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);</span>
+        FileLock lock;
+        try {
+<span class="fc" id="L129">            lock = channel.tryLock();</span>
+<span class="nc" id="L130">        } catch (IOException e) {</span>
+<span class="nc" id="L131">            closeQuietly(channel);</span>
+<span class="nc" id="L132">            throw e;</span>
+<span class="nc" id="L133">        } catch (OverlappingFileLockException e) {</span>
+            // Should not happen (the open-files check comes first), but never treat it as free.
+            // Deliberately left open: closing this handle would release the lock this process
+            // already holds on the file (see OPEN_IN_THIS_PROCESS), so a leaked handle is safer.
+<span class="nc" id="L137">            throw new DatabaseInUseException(file);</span>
+<span class="fc" id="L138">        }</span>
+<span class="fc bfc" id="L139" title="All 2 branches covered.">        if (lock == null) {</span>
+            // Held by another process. Closing this handle is safe: this process has no lock on
+            // the file to lose, as the open-files check above ruled out an earlier open here.
+<span class="fc" id="L142">            channel.close();</span>
+<span class="fc" id="L143">            throw new DatabaseInUseException(file);</span>
+        }
+<span class="fc" id="L145">        return channel;</span>
+    }
+
+    private static void closeQuietly(FileChannel channel) {
+        try {
+<span class="fc" id="L150">            channel.close();   // closing the channel releases its lock</span>
+<span class="nc" id="L151">        } catch (IOException ignored) {</span>
+            // nothing more to release
+<span class="fc" id="L153">        }</span>
+<span class="fc" id="L154">    }</span>
+
+    /** A private, empty database that lives only as long as this object; used by tests. */
+    public static Database inMemory() {
+<span class="fc" id="L158">        return new Database(&quot;jdbc:sqlite::memory:&quot;);</span>
+    }
+
+    /** Runs an INSERT, UPDATE or DELETE and returns the number of rows changed. */
+    public synchronized int update(String sql, Object... params) {
+<span class="fc" id="L163">        try (PreparedStatement statement = prepare(sql, params)) {</span>
+<span class="fc" id="L164">            return statement.executeUpdate();</span>
+<span class="fc" id="L165">        } catch (SQLException e) {</span>
+<span class="fc" id="L166">            throw new DatabaseException(&quot;Update failed: &quot; + sql, e);</span>
+        }
+    }
+
+    /** Runs a SELECT and maps every row. */
+    public synchronized &lt;T&gt; List&lt;T&gt; query(String sql, RowMapper&lt;T&gt; mapper, Object... params) {
+<span class="fc" id="L172">        try (PreparedStatement statement = prepare(sql, params);</span>
+<span class="fc" id="L173">             ResultSet rows = statement.executeQuery()) {</span>
+<span class="fc" id="L174">            List&lt;T&gt; results = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L175" title="All 2 branches covered.">            while (rows.next()) {</span>
+<span class="fc" id="L176">                results.add(mapper.map(rows));</span>
+            }
+<span class="fc" id="L178">            return results;</span>
+<span class="nc" id="L179">        } catch (SQLException e) {</span>
+<span class="nc" id="L180">            throw new DatabaseException(&quot;Query failed: &quot; + sql, e);</span>
+        }
+    }
+
+    /** True when {@code table} has no rows. */
+    public boolean isEmpty(String table) {
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">        if (!table.matches(&quot;[a-z_]+&quot;)) {</span>
+<span class="nc" id="L187">            throw new IllegalArgumentException(&quot;Invalid table name: &quot; + table);</span>
+        }
+<span class="fc bfc" id="L189" title="All 2 branches covered.">        return query(&quot;SELECT COUNT(*) FROM &quot; + table, rows -&gt; rows.getLong(1)).get(0) == 0;</span>
+    }
+
+    /**
+     * Runs {@code work} as one transaction: every write inside it is saved together or, if it
+     * throws, none are. Nested calls join the outer transaction.
+     */
+    public synchronized void inTransaction(Runnable work) {
+        try {
+<span class="fc bfc" id="L198" title="All 2 branches covered.">            if (!connection.getAutoCommit()) {</span>
+<span class="fc" id="L199">                work.run();</span>
+<span class="fc" id="L200">                return;</span>
+            }
+<span class="fc" id="L202">            connection.setAutoCommit(false);</span>
+            try {
+<span class="fc" id="L204">                work.run();</span>
+<span class="fc" id="L205">                connection.commit();</span>
+<span class="fc" id="L206">            } catch (RuntimeException | Error e) {</span>
+<span class="fc" id="L207">                afterCommit.clear();</span>
+<span class="fc" id="L208">                connection.rollback();</span>
+<span class="fc" id="L209">                throw e;</span>
+            } finally {
+<span class="fc" id="L211">                connection.setAutoCommit(true);</span>
+            }
+<span class="nc" id="L213">        } catch (SQLException e) {</span>
+<span class="nc" id="L214">            afterCommit.clear();</span>
+<span class="nc" id="L215">            throw new DatabaseException(&quot;Transaction failed&quot;, e);</span>
+<span class="fc" id="L216">        }</span>
+<span class="fc" id="L217">        List&lt;Runnable&gt; committed = new ArrayList&lt;&gt;(afterCommit);</span>
+<span class="fc" id="L218">        afterCommit.clear();</span>
+<span class="fc" id="L219">        committed.forEach(Runnable::run);</span>
+<span class="fc" id="L220">    }</span>
+
+    /**
+     * Runs {@code action} once the data it depends on is saved: straight away outside a
+     * transaction, or when the current transaction commits. If the transaction rolls back the
+     * action never runs. Stores use it to update their in-memory copy only for saved rows.
+     */
+    public synchronized void afterCommit(Runnable action) {
+<span class="fc" id="L228">        Objects.requireNonNull(action, &quot;action&quot;);</span>
+        try {
+<span class="fc bfc" id="L230" title="All 2 branches covered.">            if (connection.getAutoCommit()) {</span>
+<span class="fc" id="L231">                action.run();</span>
+            } else {
+<span class="fc" id="L233">                afterCommit.add(action);</span>
+            }
+<span class="nc" id="L235">        } catch (SQLException e) {</span>
+<span class="nc" id="L236">            throw new DatabaseException(&quot;Could not read the transaction state&quot;, e);</span>
+<span class="fc" id="L237">        }</span>
+<span class="fc" id="L238">    }</span>
+
+    /** Closes the database connection. */
+    @Override
+    public synchronized void close() {
+        try {
+<span class="fc" id="L244">            connection.close();</span>
+<span class="nc" id="L245">        } catch (SQLException e) {</span>
+<span class="nc" id="L246">            throw new DatabaseException(&quot;Could not close database&quot;, e);</span>
+        } finally {
+<span class="pc bpc" id="L248" title="1 of 2 branches missed.">            if (lockChannel != null) {</span>
+<span class="fc" id="L249">                closeQuietly(lockChannel);</span>
+            }
+<span class="pc bpc" id="L251" title="1 of 2 branches missed.">            if (openKey != null) {</span>
+<span class="fc" id="L252">                OPEN_IN_THIS_PROCESS.remove(openKey);</span>
+            }
+        }
+<span class="fc" id="L255">    }</span>
+
+    // ---------- Reading helpers for RowMappers ----------
+
+    /**
+     * Reads an ISO date-time column, or {@code null}.
+     *
+     * @throws SQLException if the column cannot be read
+     */
+    public static LocalDateTime dateTime(ResultSet rows, String column) throws SQLException {
+<span class="fc" id="L265">        String value = rows.getString(column);</span>
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        return value == null ? null : LocalDateTime.parse(value);</span>
+    }
+
+    /**
+     * Reads a decimal column, or {@code null}.
+     *
+     * @throws SQLException if the column cannot be read
+     */
+    public static BigDecimal decimal(ResultSet rows, String column) throws SQLException {
+<span class="fc" id="L275">        String value = rows.getString(column);</span>
+<span class="fc bfc" id="L276" title="All 2 branches covered.">        return value == null ? null : new BigDecimal(value);</span>
+    }
+
+    /**
+     * Reads a duration stored as whole seconds, or {@code null}.
+     *
+     * @throws SQLException if the column cannot be read
+     */
+    public static Duration seconds(ResultSet rows, String column) throws SQLException {
+<span class="fc" id="L285">        long value = rows.getLong(column);</span>
+<span class="pc bpc" id="L286" title="1 of 2 branches missed.">        return rows.wasNull() ? null : Duration.ofSeconds(value);</span>
+    }
+
+    /**
+     * Reads a 0/1 column as a boolean.
+     *
+     * @throws SQLException if the column cannot be read
+     */
+    public static boolean bool(ResultSet rows, String column) throws SQLException {
+<span class="fc bfc" id="L295" title="All 2 branches covered.">        return rows.getInt(column) != 0;</span>
+    }
+
+    // ---------- Internals ----------
+
+    private PreparedStatement prepare(String sql, Object... params) throws SQLException {
+<span class="fc" id="L301">        PreparedStatement statement = connection.prepareStatement(sql);</span>
+<span class="fc bfc" id="L302" title="All 2 branches covered.">        for (int i = 0; i &lt; params.length; i++) {</span>
+<span class="fc" id="L303">            statement.setObject(i + 1, param(params[i]));</span>
+        }
+<span class="fc" id="L305">        return statement;</span>
+    }
+
+    /** Converts Java values to the column encodings described on the class. */
+    private static Object param(Object value) {
+<span class="fc bfc" id="L310" title="All 2 branches covered.">        if (value instanceof LocalDateTime time) return time.toString();</span>
+<span class="fc bfc" id="L311" title="All 2 branches covered.">        if (value instanceof BigDecimal amount) return amount.toPlainString();</span>
+<span class="fc bfc" id="L312" title="All 2 branches covered.">        if (value instanceof Duration duration) return duration.getSeconds();</span>
+<span class="fc bfc" id="L313" title="All 4 branches covered.">        if (value instanceof Boolean flag) return flag ? 1 : 0;</span>
+<span class="fc bfc" id="L314" title="All 2 branches covered.">        if (value instanceof Enum&lt;?&gt; constant) return constant.name();</span>
+<span class="fc" id="L315">        return value;</span>
+    }
+
+    private void applySchema() throws SQLException {
+        String script;
+<span class="fc" id="L320">        try (InputStream in = Database.class.getResourceAsStream(SCHEMA_RESOURCE)) {</span>
+<span class="pc bpc" id="L321" title="1 of 2 branches missed.">            if (in == null) {</span>
+<span class="nc" id="L322">                throw new IllegalStateException(&quot;Missing &quot; + SCHEMA_RESOURCE + &quot; on the classpath&quot;);</span>
+            }
+<span class="fc" id="L324">            script = new String(in.readAllBytes(), StandardCharsets.UTF_8);</span>
+<span class="nc" id="L325">        } catch (IOException e) {</span>
+<span class="nc" id="L326">            throw new UncheckedIOException(&quot;Could not read &quot; + SCHEMA_RESOURCE, e);</span>
+<span class="fc" id="L327">        }</span>
+        // Simple split: schema.sql must not contain ';' or '--' inside string literals.
+<span class="fc" id="L329">        try (Statement statement = connection.createStatement()) {</span>
+<span class="fc bfc" id="L330" title="All 2 branches covered.">            for (String sql : script.replaceAll(&quot;(?m)--.*$&quot;, &quot;&quot;).split(&quot;;&quot;)) {</span>
+<span class="fc bfc" id="L331" title="All 2 branches covered.">                if (!sql.isBlank()) {</span>
+<span class="fc" id="L332">                    statement.execute(sql);</span>
+                }
+            }
+        }
+<span class="fc" id="L336">    }</span>
+
+    /**
+     * Maps the current row of a result set to an object.
+     *
+     * @param &lt;T&gt; the mapped type
+     */
+    @FunctionalInterface
+    public interface RowMapper&lt;T&gt; {
+        /**
+         * Maps the current row to one object.
+         *
+         * @throws SQLException if the row cannot be read
+         */
+        T map(ResultSet row) throws SQLException;
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LendingRules.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">LendingRules.java</span></div><h1>LendingRules.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.time.Duration;
+
+/**
+ * The one place the lending-duration and borrow-period rules live, so a Lend Listing and
+ * the deal lifecycle cannot disagree about what a valid duration is.
+ *
+ * &lt;p&gt;The minimum is five seconds so short loans can be exercised in tests and demos
+ * (SRS UC-1.4). Both methods return the value they validated, so callers assign the
+ * result instead of re-reading their argument.
+ */
+public final class LendingRules {
+
+    /** Shortest lending duration and shortest borrow period allowed. */
+<span class="fc" id="L16">    public static final Duration MINIMUM = Duration.ofSeconds(5);</span>
+
+    private LendingRules() {
+    }
+
+    /**
+     * Validates a Lend Listing's lending duration: present and no shorter than
+     * {@link #MINIMUM}.
+     *
+     * @throws IllegalArgumentException if the duration is missing or too short
+     */
+    public static Duration requireLendingDuration(Duration lendingDuration) {
+<span class="fc bfc" id="L28" title="All 2 branches covered.">        if (lendingDuration == null) {</span>
+<span class="fc" id="L29">            throw new IllegalArgumentException(&quot;Lending duration is required&quot;);</span>
+        }
+<span class="fc bfc" id="L31" title="All 2 branches covered.">        if (lendingDuration.compareTo(MINIMUM) &lt; 0) {</span>
+<span class="fc" id="L32">            throw new IllegalArgumentException(&quot;Lending duration must be at least &quot;</span>
+<span class="fc" id="L33">                    + MINIMUM.toSeconds() + &quot; seconds&quot;);</span>
+        }
+<span class="fc" id="L35">        return lendingDuration;</span>
+    }
+
+    /**
+     * Validates a requested borrow period against the listing's lending duration: present,
+     * no shorter than {@link #MINIMUM}, and no longer than the listing allows.
+     *
+     * @throws IllegalArgumentException if the period is missing, too short or too long
+     */
+    public static Duration requireBorrowPeriod(Duration period, Duration lendingDuration) {
+<span class="pc bpc" id="L45" title="1 of 2 branches missed.">        if (period == null) {</span>
+<span class="nc" id="L46">            throw new IllegalArgumentException(&quot;Borrow period is required&quot;);</span>
+        }
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        if (period.compareTo(MINIMUM) &lt; 0) {</span>
+<span class="fc" id="L49">            throw new IllegalArgumentException(&quot;Borrow period must be at least &quot;</span>
+<span class="fc" id="L50">                    + MINIMUM.toSeconds() + &quot; seconds&quot;);</span>
+        }
+<span class="fc" id="L52">        Duration allowed = requireLendingDuration(lendingDuration);</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        if (period.compareTo(allowed) &gt; 0) {</span>
+<span class="fc" id="L54">            throw new IllegalArgumentException(&quot;Borrow period exceeds the listing's lending duration of &quot;</span>
+<span class="fc" id="L55">                    + allowed.toSeconds() + &quot; seconds&quot;);</span>
+        }
+<span class="fc" id="L57">        return period;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

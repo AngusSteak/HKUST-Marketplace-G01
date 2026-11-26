@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Location.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">Location.java</span></div><h1>Location.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+/** The campus meetup locations offered on listings and seller profiles (SRS Appendix A). */
+<span class="fc" id="L4">public enum Location {</span>
+<span class="fc" id="L5">    ACADEMIC_BUILDING(&quot;Academic Building&quot;),</span>
+<span class="fc" id="L6">    LIBRARY(&quot;Library&quot;),</span>
+<span class="fc" id="L7">    STUDENT_CENTRE(&quot;Student Centre&quot;),</span>
+<span class="fc" id="L8">    NORTH_GATE(&quot;North Gate&quot;),</span>
+<span class="fc" id="L9">    SOUTH_GATE(&quot;South Gate&quot;),</span>
+<span class="fc" id="L10">    SHAW_AUDITORIUM(&quot;Shaw Auditorium&quot;),</span>
+<span class="fc" id="L11">    COFFEE_SHOP_LG5(&quot;Coffee Shop (LG5)&quot;),</span>
+<span class="fc" id="L12">    SPORTS_HALL(&quot;Sports Hall&quot;),</span>
+<span class="fc" id="L13">    UG_HALL_I(&quot;UG Hall I&quot;),</span>
+<span class="fc" id="L14">    UG_HALL_II(&quot;UG Hall II&quot;),</span>
+<span class="fc" id="L15">    UG_HALL_III(&quot;UG Hall III&quot;),</span>
+<span class="fc" id="L16">    UG_HALL_IV(&quot;UG Hall IV&quot;),</span>
+<span class="fc" id="L17">    UG_HALL_V(&quot;UG Hall V&quot;),</span>
+<span class="fc" id="L18">    UG_HALL_VI(&quot;UG Hall VI&quot;),</span>
+<span class="fc" id="L19">    UG_HALL_VII(&quot;UG Hall VII&quot;),</span>
+<span class="fc" id="L20">    UG_HALL_VIII(&quot;UG Hall VIII&quot;),</span>
+<span class="fc" id="L21">    PG_HALL(&quot;PG Hall&quot;),</span>
+<span class="fc" id="L22">    OFF_CAMPUS(&quot;Off-campus&quot;);</span>
+
+    private final String label;
+
+<span class="fc" id="L26">    Location(String label) {</span>
+<span class="fc" id="L27">        this.label = label;</span>
+<span class="fc" id="L28">    }</span>
+
+    public String getLabel() {
+<span class="fc" id="L31">        return label;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L36">        return label;</span>
+    }
+
+    /**
+     * Returns the location with this display label.
+     *
+     * @throws IllegalArgumentException if no location has this label
+     */
+    public static Location fromLabel(String label) {
+<span class="fc bfc" id="L45" title="All 2 branches covered.">        for (Location location : values()) {</span>
+<span class="fc bfc" id="L46" title="All 2 branches covered.">            if (location.label.equals(label)) {</span>
+<span class="fc" id="L47">                return location;</span>
+            }
+        }
+<span class="fc" id="L50">        throw new IllegalArgumentException(&quot;Unknown location label: &quot; + label);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BorrowRequest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">BorrowRequest.java</span></div><h1>BorrowRequest.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.time.LocalDateTime;
+
+/** A request to borrow a Lend listing for a period. The seller may counter with another period. */
+public class BorrowRequest extends DealRequest {
+    private final LocalDateTime startDate;
+    private final LocalDateTime endDate;
+    private LocalDateTime counterStart;
+    private LocalDateTime counterEnd;
+
+    BorrowRequest(String id, Buyer buyer, Listing listing, LocalDateTime startDate,
+                  LocalDateTime endDate, LocalDateTime submittedTime) {
+<span class="fc" id="L14">        super(id, buyer, listing, ListingType.LEND, submittedTime);</span>
+<span class="fc" id="L15">        this.startDate = startDate;</span>
+<span class="fc" id="L16">        this.endDate = endDate;</span>
+<span class="fc" id="L17">    }</span>
+
+    @Override
+<span class="fc" id="L20">    public DealType dealType() { return DealType.LENT; }</span>
+
+<span class="fc" id="L22">    public LocalDateTime getStartDate() { return startDate; }</span>
+<span class="fc" id="L23">    public LocalDateTime getEndDate() { return endDate; }</span>
+
+    /** The seller's counter start, or {@code null} if never countered. */
+<span class="fc" id="L26">    public LocalDateTime getCounterStart() { return counterStart; }</span>
+
+    /** The seller's counter end, or {@code null} if never countered. */
+<span class="fc" id="L29">    public LocalDateTime getCounterEnd() { return counterEnd; }</span>
+
+    /** The start that applies if accepted: the countered start if there is one. */
+    public LocalDateTime agreedStart() {
+<span class="fc bfc" id="L33" title="All 2 branches covered.">        return counterStart != null ? counterStart : startDate;</span>
+    }
+
+    /** The end that applies if accepted (the loan's due date). */
+    public LocalDateTime agreedEnd() {
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        return counterEnd != null ? counterEnd : endDate;</span>
+    }
+
+    void setCounterPeriod(LocalDateTime start, LocalDateTime end) {
+<span class="fc" id="L42">        this.counterStart = start;</span>
+<span class="fc" id="L43">        this.counterEnd = end;</span>
+<span class="fc" id="L44">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

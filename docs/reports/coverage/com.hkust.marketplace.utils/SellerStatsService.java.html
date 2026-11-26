@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SellerStatsService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">SellerStatsService.java</span></div><h1>SellerStatsService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.DealStatus;
+import com.hkust.marketplace.models.DealType;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Derives a seller's activity figures on demand from the stores. Read-only: it never writes to a
+ * store and never caches a result. The visibility rule lives in {@link ListingStore#bySeller}, so
+ * hidden listings are excluded once, here, and cannot leak into any total or row.
+ */
+public final class SellerStatsService {
+
+    private final DummyDataService data;
+
+    /** Creates the service over the given stores. */
+<span class="fc" id="L29">    public SellerStatsService(DummyDataService data) {</span>
+<span class="fc" id="L30">        this.data = Objects.requireNonNull(data, &quot;data&quot;);</span>
+<span class="fc" id="L31">    }</span>
+
+    /** The seller's stats, or a security exception if the actor is not an active seller. */
+    public SellerStats statsFor(User actor) {
+<span class="fc" id="L35">        AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L36">        String username = actor.getUsername();</span>
+
+<span class="fc" id="L38">        List&lt;Listing&gt; visible = data.listings().bySeller(username);</span>
+<span class="fc" id="L39">        Set&lt;String&gt; ids = visible.stream().map(Listing::getId).collect(Collectors.toSet());</span>
+<span class="fc" id="L40">        List&lt;DealRequest&gt; requests = data.deals().allRequests().stream()</span>
+<span class="fc" id="L41">                .filter(request -&gt; ids.contains(request.getListing().getId()))</span>
+<span class="fc" id="L42">                .toList();</span>
+<span class="fc" id="L43">        List&lt;Deal&gt; deals = data.deals().allDeals().stream()</span>
+<span class="fc" id="L44">                .filter(deal -&gt; ids.contains(deal.getListing().getId()))</span>
+<span class="fc" id="L45">                .toList();</span>
+
+<span class="fc" id="L47">        Map&lt;DealType, Integer&gt; byType = new EnumMap&lt;&gt;(DealType.class);</span>
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        for (DealType type : DealType.values()) {</span>
+<span class="fc" id="L49">            byType.put(type, 0);</span>
+        }
+<span class="fc" id="L51">        int completed = 0;</span>
+<span class="fc bfc" id="L52" title="All 2 branches covered.">        for (Deal deal : deals) {</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">            if (isCompleted(deal.getStatus())) {</span>
+<span class="fc" id="L54">                completed++;</span>
+<span class="fc" id="L55">                byType.merge(deal.getDealType(), 1, Integer::sum);</span>
+            }
+<span class="fc" id="L57">        }</span>
+
+<span class="fc" id="L59">        List&lt;SellerStats.ListingStat&gt; rows = visible.stream()</span>
+<span class="fc" id="L60">                .map(listing -&gt; new SellerStats.ListingStat(</span>
+<span class="fc" id="L61">                        listing.getId(),</span>
+<span class="fc" id="L62">                        listing.getTitle(),</span>
+<span class="fc" id="L63">                        listing.getStatus(),</span>
+<span class="fc" id="L64">                        listing.getViewCount(),</span>
+<span class="fc" id="L65">                        countRequestsFor(requests, listing.getId()),</span>
+<span class="fc" id="L66">                        countCompletedDealsFor(deals, listing.getId())))</span>
+<span class="fc" id="L67">                .toList();</span>
+
+<span class="fc" id="L69">        int views = visible.stream().mapToInt(Listing::getViewCount).sum();</span>
+<span class="fc" id="L70">        SellerStats.Totals totals = new SellerStats.Totals(</span>
+                views,
+<span class="fc" id="L72">                requests.size(),</span>
+                completed,
+<span class="fc" id="L74">                data.reviews().averageRating(username),</span>
+<span class="fc" id="L75">                data.reviews().visibleCount(username));</span>
+
+<span class="fc" id="L77">        return new SellerStats(totals, List.copyOf(rows), Collections.unmodifiableMap(byType));</span>
+    }
+
+    private static boolean isCompleted(DealStatus status) {
+<span class="fc bfc" id="L81" title="All 6 branches covered.">        return status == DealStatus.COMPLETED</span>
+                || status == DealStatus.RETURNED
+                || status == DealStatus.AUTO_RETURNED;
+    }
+
+    private static int countRequestsFor(List&lt;DealRequest&gt; requests, String listingId) {
+<span class="fc" id="L87">        return (int) requests.stream()</span>
+<span class="fc" id="L88">                .filter(request -&gt; request.getListing().getId().equals(listingId))</span>
+<span class="fc" id="L89">                .count();</span>
+    }
+
+    private static int countCompletedDealsFor(List&lt;Deal&gt; deals, String listingId) {
+<span class="fc" id="L93">        return (int) deals.stream()</span>
+<span class="fc bfc" id="L94" title="All 4 branches covered.">                .filter(deal -&gt; deal.getListing().getId().equals(listingId) &amp;&amp; isCompleted(deal.getStatus()))</span>
+<span class="fc" id="L95">                .count();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

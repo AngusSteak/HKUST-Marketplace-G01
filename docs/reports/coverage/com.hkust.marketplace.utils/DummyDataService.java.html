@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DummyDataService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">DummyDataService.java</span></div><h1>DummyDataService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.persistence.Database;
+
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * The application's data, split into per-area stores and backed by a local SQLite database
+ * ({@value #DATABASE_FILE}).
+ *
+ * &lt;p&gt;Every store is saved to the database: users and listings (#55); deals, favourites and
+ * follows (#56); chats (#57); notifications, reviews, reports and the audit log (#58). The
+ * database is kept across restarts (#59); it is seeded with the demo data only when empty.
+ */
+public class DummyDataService {
+
+    /** Where the app keeps its database, relative to the working directory. */
+    public static final String DATABASE_FILE = &quot;data/marketplace.db&quot;;
+
+    /**
+     * System property: {@code true} deletes the database at launch and starts again from the demo
+     * data; {@code false} (the default) keeps saved data across restarts.
+     */
+    public static final String RESET_PROPERTY = &quot;marketplace.resetDb&quot;;
+
+    private static DummyDataService instance;
+
+    private final Database db;
+    private final UserStore users;
+    private final ListingStore listings;
+    private final DealStore deals;
+    private final NotificationStore notifications;
+    private final ReviewStore reviews;
+    private final FavouriteStore favourites;
+    private final AuditStore audit;
+    private final ReportStore reports;
+    private final ChatStore chats;
+
+    /**
+     * Creates an empty store on a private in-memory database, with no demo data. Visible for
+     * tests so each test works on an isolated instance; application code must use
+     * {@link #getInstance()}.
+     */
+    DummyDataService() {
+<span class="fc" id="L50">        this(Database.inMemory());</span>
+<span class="fc" id="L51">    }</span>
+
+    /** Creates the stores on {@code db} without loading or seeding anything. */
+<span class="fc" id="L54">    DummyDataService(Database db) {</span>
+<span class="fc" id="L55">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L56">        this.users = new UserStore(db);</span>
+<span class="fc" id="L57">        this.listings = new ListingStore(db);</span>
+<span class="fc" id="L58">        this.deals = new DealStore(db, listings);</span>
+<span class="fc" id="L59">        this.favourites = new FavouriteStore(db);</span>
+<span class="fc" id="L60">        this.chats = new ChatStore(db);</span>
+<span class="fc" id="L61">        this.notifications = new NotificationStore(db);</span>
+<span class="fc" id="L62">        this.reviews = new ReviewStore(db);</span>
+<span class="fc" id="L63">        this.reports = new ReportStore(db);</span>
+<span class="fc" id="L64">        this.audit = new AuditStore(db);</span>
+<span class="fc" id="L65">    }</span>
+
+    /** The shared instance, opened on first use from {@value #DATABASE_FILE}. */
+    public static synchronized DummyDataService getInstance() {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (instance == null) {</span>
+<span class="nc" id="L70">            boolean reset = Boolean.parseBoolean(System.getProperty(RESET_PROPERTY, &quot;false&quot;));</span>
+<span class="nc" id="L71">            Database db = Database.openFile(Path.of(DATABASE_FILE), reset);</span>
+            try {
+<span class="nc" id="L73">                instance = open(db);</span>
+<span class="nc" id="L74">            } catch (RuntimeException e) {</span>
+<span class="nc" id="L75">                db.close();   // release the file and its lock if loading or seeding fails</span>
+<span class="nc" id="L76">                throw e;</span>
+<span class="nc" id="L77">            }</span>
+        }
+<span class="nc" id="L79">        return instance;</span>
+    }
+
+    /**
+     * Opens the stores on {@code db}: a fresh (empty) database is seeded with the demo data,
+     * otherwise the saved data is loaded (users first, since everything else refers to them).
+     */
+    static DummyDataService open(Database db) {
+<span class="fc" id="L87">        DummyDataService data = new DummyDataService(db);</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">        if (db.isEmpty(&quot;users&quot;)) {</span>
+<span class="fc" id="L89">            data.seedData();</span>
+        } else {
+<span class="fc" id="L91">            data.users.load();</span>
+<span class="fc" id="L92">            data.listings.load(data.users);</span>
+<span class="fc" id="L93">            data.deals.load(data.users, data.listings);</span>
+<span class="fc" id="L94">            data.favourites.load();</span>
+<span class="fc" id="L95">            data.chats.load(data.users, data.listings, data.deals);</span>
+<span class="fc" id="L96">            data.notifications.load();</span>
+<span class="fc" id="L97">            data.reviews.load();</span>
+<span class="fc" id="L98">            data.reports.load(data.users, data.listings);</span>
+<span class="fc" id="L99">            data.audit.load();</span>
+        }
+<span class="fc" id="L101">        return data;</span>
+    }
+
+    /** Closes the shared instance's database, e.g. when the application exits. */
+    public static synchronized void shutdown() {
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (instance != null) {</span>
+<span class="nc" id="L107">            instance.db.close();</span>
+<span class="nc" id="L108">            instance = null;</span>
+        }
+<span class="nc" id="L110">    }</span>
+
+    /** The database behind the stores, for stores that persist themselves (#56, #57, #58). */
+<span class="fc" id="L113">    public Database database() { return db; }</span>
+
+    /** The user store. */
+<span class="fc" id="L116">    public UserStore users() { return users; }</span>
+    /** The listing store. */
+<span class="fc" id="L118">    public ListingStore listings() { return listings; }</span>
+    /** The request and deal store. */
+<span class="fc" id="L120">    public DealStore deals() { return deals; }</span>
+    /** The notification store. */
+<span class="fc" id="L122">    public NotificationStore notifications() { return notifications; }</span>
+    /** The review store. */
+<span class="fc" id="L124">    public ReviewStore reviews() { return reviews; }</span>
+    /** The favourites/follows store. */
+<span class="fc" id="L126">    public FavouriteStore favourites() { return favourites; }</span>
+    /** The admin audit log. */
+<span class="fc" id="L128">    public AuditStore audit() { return audit; }</span>
+    /** The listing report store. */
+<span class="fc" id="L130">    public ReportStore reports() { return reports; }</span>
+    /** The chat store. */
+<span class="fc" id="L132">    public ChatStore chats() { return chats; }</span>
+
+    /**
+     * Populates this store with the demo data. Visible for tests so they can seed an
+     * isolated instance instead of sharing the singleton.
+     */
+    void seedData() {
+<span class="fc" id="L139">        users.seed();</span>
+<span class="fc" id="L140">        List&lt;Listing&gt; seededListings = listings.seed(users);</span>
+        // Requests and deals on L100 (textbook), L102 (lamp) and L103 (calculator); see DealStore.seed
+<span class="fc" id="L142">        deals.seed((Buyer) users.find(&quot;alice&quot;), (Buyer) users.find(&quot;bob&quot;),</span>
+<span class="fc" id="L143">                seededListings.get(0), seededListings.get(2), seededListings.get(3));</span>
+<span class="fc" id="L144">        notifications.seed();</span>
+<span class="fc" id="L145">        reviews.seed();</span>
+        // alice favourites the MacBook charger (L101) and follows its seller charlie
+<span class="fc" id="L147">        favourites.seed((Buyer) users.find(&quot;alice&quot;), seededListings.get(1), (Seller) users.find(&quot;charlie&quot;));</span>
+        // a chat on the live charger, and one on alice's reserved textbook (messages stay open, offers closed)
+<span class="fc" id="L149">        chats.seed((Buyer) users.find(&quot;alice&quot;), seededListings.get(1), seededListings.get(0));</span>
+<span class="fc" id="L150">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

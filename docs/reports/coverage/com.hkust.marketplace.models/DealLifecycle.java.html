@@ -1,0 +1,441 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DealLifecycle.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">DealLifecycle.java</span></div><h1>DealLifecycle.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Single source of truth for request, deal and listing status transitions, so the
+ * buyer, seller and admin portals all agree on what is allowed.
+ *
+ * &lt;p&gt;Every transition validates first and changes nothing when it fails: invalid input
+ * (a non-positive price, a bad borrow period, the wrong listing type) throws
+ * {@link IllegalArgumentException}; an illegal move for the current state throws
+ * {@link IllegalStateException}.
+ *
+ * &lt;p&gt;A listing carries at most one active deal. Accepting a request reserves the listing
+ * (or marks it lent) and declines the other open requests on it. A giveaway claim is
+ * recorded as pending and reserves the listing at once, so only the first claim succeeds
+ * while the seller accepts or declines it (SRS UC-1.4 S3, UC-2.5).
+ */
+public final class DealLifecycle {
+
+    private final Clock clock;
+<span class="fc" id="L34">    private final Map&lt;String, DealRequest&gt; requests = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L35">    private final Map&lt;String, Deal&gt; deals = new LinkedHashMap&lt;&gt;();</span>
+    /** listing id -&gt; id of its one active deal */
+<span class="fc" id="L37">    private final Map&lt;String, String&gt; activeDealByListing = new HashMap&lt;&gt;();</span>
+    /** giveaway listing id -&gt; id of the pending claim holding its reservation */
+<span class="fc" id="L39">    private final Map&lt;String, String&gt; pendingClaimByListing = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L40">    private int nextRequestId = 1;</span>
+<span class="fc" id="L41">    private int nextDealId = 1;</span>
+<span class="fc" id="L42">    private Listener listener = listing -&gt; { };</span>
+
+    /**
+     * Told after every successful transition, so a store can save it. A transition only ever
+     * changes one listing, its requests and its deals, so the listing is all a listener needs.
+     */
+    @FunctionalInterface
+    public interface Listener {
+        /** Called after a transition saved against this listing. */
+        void changed(Listing listing);
+    }
+
+    /** Creates an empty lifecycle; the stores load the saved requests and deals into it. */
+    public DealLifecycle() {
+<span class="fc" id="L56">        this(Clock.systemDefaultZone());</span>
+<span class="fc" id="L57">    }</span>
+
+    /** Uses {@code clock} for &quot;now&quot;, so tests can fix the time. */
+<span class="fc" id="L60">    public DealLifecycle(Clock clock) {</span>
+<span class="fc" id="L61">        this.clock = Objects.requireNonNull(clock, &quot;clock&quot;);</span>
+<span class="fc" id="L62">    }</span>
+
+    /** Sets the one listener told about every transition (replaces any earlier one). */
+    public synchronized void setListener(Listener listener) {
+<span class="fc" id="L66">        this.listener = Objects.requireNonNull(listener, &quot;listener&quot;);</span>
+<span class="fc" id="L67">    }</span>
+
+    // ---------- Submit ----------
+
+    /** Records a pending price offer on a live Sale listing. */
+    public synchronized PriceOffer submitOffer(Buyer buyer, Listing listing, BigDecimal price) {
+<span class="fc" id="L73">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L74">        BigDecimal money = requirePositiveMoney(price, &quot;Offer&quot;);</span>
+<span class="fc" id="L75">        PriceOffer offer = new PriceOffer(nextRequestId(), buyer, listing, money, now());</span>
+<span class="fc" id="L76">        requireLiveAndNotDealt(listing);</span>
+<span class="fc" id="L77">        return changed(register(offer));</span>
+    }
+
+    /** Records a pending borrow request on a live Lend listing. */
+    public synchronized BorrowRequest submitBorrow(Buyer buyer, Listing listing,
+                                                   LocalDateTime start, LocalDateTime end) {
+<span class="fc" id="L83">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L84">        BorrowRequest request = new BorrowRequest(nextRequestId(), buyer, listing, start, end, now());</span>
+<span class="fc" id="L85">        validateBorrowPeriod(listing, start, end);</span>
+<span class="fc" id="L86">        requireLiveAndNotDealt(listing);</span>
+<span class="fc" id="L87">        return changed(register(request));</span>
+    }
+
+    /**
+     * Records a pending claim on a live Giveaway listing and reserves it, so a second
+     * claim fails until the seller declines this one. Synchronized: first claim wins.
+     */
+    public synchronized Claim submitClaim(Buyer buyer, Listing listing) {
+<span class="fc" id="L95">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L96">        Claim claim = new Claim(nextRequestId(), buyer, listing, now());</span>
+<span class="fc" id="L97">        requireLiveAndNotDealt(listing);</span>
+<span class="fc" id="L98">        register(claim);</span>
+<span class="fc" id="L99">        listing.setStatus(ListingStatus.RESERVED);</span>
+<span class="fc" id="L100">        pendingClaimByListing.put(listing.getId(), claim.getId());</span>
+<span class="fc" id="L101">        return changed(claim);</span>
+    }
+
+    // ---------- Counter / accept / decline ----------
+
+    /** Seller counters a price offer; repeatable while the offer is countered. */
+    public synchronized PriceOffer counterOffer(PriceOffer offer, BigDecimal counterPrice) {
+<span class="fc" id="L108">        requireOpen(offer, &quot;counter&quot;);</span>
+<span class="fc" id="L109">        BigDecimal money = requirePositiveMoney(counterPrice, &quot;Counter price&quot;);</span>
+<span class="fc" id="L110">        offer.setCounterPrice(money);</span>
+<span class="fc" id="L111">        offer.setStatus(RequestStatus.COUNTERED);</span>
+<span class="fc" id="L112">        return changed(offer);</span>
+    }
+
+    /** Seller counters a borrow request with another period; repeatable while countered. */
+    public synchronized BorrowRequest counterBorrow(BorrowRequest request,
+                                                    LocalDateTime start, LocalDateTime end) {
+<span class="fc" id="L118">        requireOpen(request, &quot;counter&quot;);</span>
+<span class="fc" id="L119">        validateBorrowPeriod(request.getListing(), start, end);</span>
+<span class="fc" id="L120">        request.setCounterPeriod(start, end);</span>
+<span class="fc" id="L121">        request.setStatus(RequestStatus.COUNTERED);</span>
+<span class="fc" id="L122">        return changed(request);</span>
+    }
+
+    /** Seller accepts a pending request. A countered request is accepted by the buyer via {@link #acceptCounter}. */
+    public synchronized Deal accept(DealRequest request) {
+<span class="fc" id="L127">        requireStatus(request, RequestStatus.PENDING);</span>
+<span class="fc" id="L128">        return changed(acceptAsDeal(request));</span>
+    }
+
+    /** Buyer accepts the seller's counter on their request. */
+    public synchronized Deal acceptCounter(DealRequest request) {
+<span class="fc" id="L133">        requireStatus(request, RequestStatus.COUNTERED);</span>
+<span class="fc" id="L134">        return changed(acceptAsDeal(request));</span>
+    }
+
+    /** Declines a pending or countered request. Declining a pending claim relists the giveaway. */
+    public synchronized DealRequest decline(DealRequest request) {
+<span class="fc" id="L139">        requireOpen(request, &quot;decline&quot;);</span>
+<span class="fc" id="L140">        request.setStatus(RequestStatus.DECLINED);</span>
+<span class="fc bfc" id="L141" title="All 2 branches covered.">        if (request instanceof Claim) {</span>
+<span class="fc" id="L142">            String listingId = request.getListing().getId();</span>
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">            if (pendingClaimByListing.remove(listingId, request.getId())) {</span>
+<span class="fc" id="L144">                request.getListing().setStatus(ListingStatus.LIVE);</span>
+            }
+        }
+<span class="fc" id="L147">        return changed(request);</span>
+    }
+
+    // ---------- Return / complete / cancel ----------
+
+    /** Buyer returns a borrowed item. Only loans are returned. */
+    public synchronized Deal returnItem(Deal deal) {
+<span class="fc" id="L154">        requireBorrowedAndActive(deal, &quot;return&quot;);</span>
+<span class="fc" id="L155">        close(deal, DealStatus.RETURNED);</span>
+<span class="fc" id="L156">        releaseListing(deal);</span>
+<span class="fc" id="L157">        return changed(deal);</span>
+    }
+
+    /** Due date passed and the item was recorded as returned automatically. */
+    public synchronized Deal autoReturn(Deal deal) {
+<span class="fc" id="L162">        requireBorrowedAndActive(deal, &quot;auto-return&quot;);</span>
+<span class="fc" id="L163">        close(deal, DealStatus.AUTO_RETURNED);</span>
+<span class="fc" id="L164">        releaseListing(deal);</span>
+<span class="fc" id="L165">        return changed(deal);</span>
+    }
+
+    /** Completes a sale or giveaway directly; a loan completes after it is returned. */
+    public synchronized Deal complete(Deal deal) {
+<span class="fc" id="L170">        Objects.requireNonNull(deal, &quot;deal&quot;);</span>
+<span class="fc bfc" id="L171" title="All 2 branches covered.">        boolean returnedLoan = deal.getDealType() == DealType.LENT</span>
+<span class="fc bfc" id="L172" title="All 4 branches covered.">                &amp;&amp; (deal.getStatus() == DealStatus.RETURNED || deal.getStatus() == DealStatus.AUTO_RETURNED);</span>
+<span class="fc bfc" id="L173" title="All 4 branches covered.">        boolean directSale = deal.getStatus() == DealStatus.ACTIVE &amp;&amp; deal.getDealType() != DealType.LENT;</span>
+<span class="fc bfc" id="L174" title="All 4 branches covered.">        if (!returnedLoan &amp;&amp; !directSale) {</span>
+<span class="fc" id="L175">            throw new IllegalStateException(&quot;Cannot complete a &quot; + deal.getStatus() + &quot; deal&quot;);</span>
+        }
+<span class="fc bfc" id="L177" title="All 2 branches covered.">        if (directSale) {</span>
+<span class="fc" id="L178">            String listingId = deal.getListing().getId();</span>
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">            if (!deal.getId().equals(activeDealByListing.get(listingId))) {</span>
+<span class="nc" id="L180">                throw new IllegalStateException(&quot;Deal is not the listing's active deal&quot;);</span>
+            }
+<span class="fc bfc" id="L182" title="All 2 branches covered.">            deal.getListing().setStatus(deal.getDealType() == DealType.SOLD</span>
+<span class="fc" id="L183">                    ? ListingStatus.SOLD</span>
+<span class="fc" id="L184">                    : ListingStatus.GIVEN);</span>
+<span class="fc" id="L185">            activeDealByListing.remove(listingId, deal.getId());</span>
+<span class="fc" id="L186">            close(deal, DealStatus.COMPLETED);</span>
+<span class="fc" id="L187">        } else {</span>
+            // A returned loan's listing is already LIVE and its return date is kept;
+            // finalising it must not touch a newer deal on the same listing.
+<span class="fc" id="L190">            deal.setStatus(DealStatus.COMPLETED);</span>
+        }
+<span class="fc" id="L192">        return changed(deal);</span>
+    }
+
+    /**
+     * Cancels an active deal: marks it cancelled and returns the listing to Live. Only an ACTIVE
+     * deal can be cancelled.
+     */
+    public synchronized Deal cancel(Deal deal) {
+<span class="fc" id="L200">        requireStatus(deal, DealStatus.ACTIVE);</span>
+<span class="fc" id="L201">        close(deal, DealStatus.CANCELLED);</span>
+<span class="fc" id="L202">        releaseListing(deal);</span>
+<span class="fc" id="L203">        return changed(deal);</span>
+    }
+
+    // ---------- Restore (loading saved data only) ----------
+
+    /**
+     * Rebuilds a saved price offer exactly as stored, without validation, because its dates
+     * and listing status are history. Only for loading the database; never call from a screen.
+     */
+    public synchronized PriceOffer restoreOffer(String id, Buyer buyer, Listing listing,
+                                                BigDecimal offeredPrice, BigDecimal counterPrice,
+                                                LocalDateTime submittedTime, RequestStatus status) {
+<span class="fc" id="L215">        PriceOffer offer = new PriceOffer(id, buyer, listing, offeredPrice, submittedTime);</span>
+<span class="fc" id="L216">        offer.setCounterPrice(counterPrice);</span>
+<span class="fc" id="L217">        return restored(offer, status);</span>
+    }
+
+    /** Rebuilds a saved borrow request; see {@link #restoreOffer}. */
+    public synchronized BorrowRequest restoreBorrow(String id, Buyer buyer, Listing listing,
+                                                    LocalDateTime startDate, LocalDateTime endDate,
+                                                    LocalDateTime counterStart, LocalDateTime counterEnd,
+                                                    LocalDateTime submittedTime, RequestStatus status) {
+<span class="fc" id="L225">        BorrowRequest request = new BorrowRequest(id, buyer, listing, startDate, endDate, submittedTime);</span>
+<span class="pc bpc" id="L226" title="1 of 4 branches missed.">        if (counterStart != null || counterEnd != null) {</span>
+<span class="fc" id="L227">            request.setCounterPeriod(counterStart, counterEnd);</span>
+        }
+<span class="fc" id="L229">        return restored(request, status);</span>
+    }
+
+    /** Rebuilds a saved claim; a pending one holds its listing's reservation again. */
+    public synchronized Claim restoreClaim(String id, Buyer buyer, Listing listing,
+                                           LocalDateTime submittedTime, RequestStatus status) {
+<span class="fc" id="L235">        Claim claim = restored(new Claim(id, buyer, listing, submittedTime), status);</span>
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        if (status == RequestStatus.PENDING) {</span>
+<span class="fc" id="L237">            pendingClaimByListing.put(listing.getId(), id);</span>
+        }
+<span class="fc" id="L239">        return claim;</span>
+    }
+
+    /**
+     * Rebuilds a saved deal for an already restored request; an active one is its listing's
+     * active deal again. The due date is derived from the request, as for a new deal.
+     */
+    public synchronized Deal restoreDeal(String id, DealRequest request, LocalDateTime startDate,
+                                         LocalDateTime completedDate, DealStatus status) {
+<span class="pc bpc" id="L248" title="1 of 2 branches missed.">        if (requests.get(request.getId()) != request) {</span>
+<span class="nc" id="L249">            throw new IllegalArgumentException(&quot;Restore request &quot; + request.getId() + &quot; first&quot;);</span>
+        }
+<span class="fc" id="L251">        Deal deal = new Deal(id, request, startDate);</span>
+<span class="fc" id="L252">        deal.setCompletedDate(completedDate);</span>
+<span class="fc" id="L253">        deal.setStatus(Objects.requireNonNull(status, &quot;status&quot;));</span>
+<span class="fc" id="L254">        deals.put(id, deal);</span>
+<span class="fc bfc" id="L255" title="All 2 branches covered.">        if (status == DealStatus.ACTIVE) {</span>
+<span class="fc" id="L256">            activeDealByListing.put(request.getListing().getId(), id);</span>
+        }
+<span class="fc" id="L258">        nextDealId = Math.max(nextDealId, numericId(id, &quot;D&quot;) + 1);</span>
+<span class="fc" id="L259">        return deal;</span>
+    }
+
+    /** A request by id, or {@code null}. */
+    public synchronized DealRequest findRequest(String id) {
+<span class="fc" id="L264">        return requests.get(id);</span>
+    }
+
+    // ---------- Queries ----------
+
+    /** The listing's one active deal, if any. */
+    public synchronized Optional&lt;Deal&gt; activeDeal(Listing listing) {
+<span class="fc" id="L271">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L272">        return Optional.ofNullable(activeDealByListing.get(listing.getId())).map(deals::get);</span>
+    }
+
+    /** Requests submitted for a listing, in submit order. */
+    public synchronized List&lt;DealRequest&gt; requestsFor(Listing listing) {
+<span class="fc" id="L277">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L278">        List&lt;DealRequest&gt; matching = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L279" title="All 2 branches covered.">        for (DealRequest request : requests.values()) {</span>
+<span class="fc bfc" id="L280" title="All 2 branches covered.">            if (request.getListing().getId().equals(listing.getId())) matching.add(request);</span>
+<span class="fc" id="L281">        }</span>
+<span class="fc" id="L282">        return matching;</span>
+    }
+
+    /** Every request, in submit order. */
+    public synchronized List&lt;DealRequest&gt; requests() {
+<span class="fc" id="L287">        return Collections.unmodifiableList(new ArrayList&lt;&gt;(requests.values()));</span>
+    }
+
+    /** Every deal, in the order the requests were accepted. */
+    public synchronized List&lt;Deal&gt; deals() {
+<span class="fc" id="L292">        return Collections.unmodifiableList(new ArrayList&lt;&gt;(deals.values()));</span>
+    }
+
+    // ---------- Internals ----------
+
+    private LocalDateTime now() {
+<span class="fc" id="L298">        return LocalDateTime.now(clock);</span>
+    }
+
+    private &lt;T&gt; T changed(T result) {
+<span class="fc bfc" id="L302" title="All 2 branches covered.">        Listing listing = result instanceof Deal deal ? deal.getListing() : ((DealRequest) result).getListing();</span>
+<span class="fc" id="L303">        listener.changed(listing);</span>
+<span class="fc" id="L304">        return result;</span>
+    }
+
+    private &lt;R extends DealRequest&gt; R restored(R request, RequestStatus status) {
+<span class="pc bpc" id="L308" title="1 of 2 branches missed.">        if (requests.containsKey(request.getId())) {</span>
+<span class="nc" id="L309">            throw new IllegalArgumentException(&quot;Duplicate request id &quot; + request.getId());</span>
+        }
+<span class="fc" id="L311">        request.setStatus(Objects.requireNonNull(status, &quot;status&quot;));</span>
+<span class="fc" id="L312">        requests.put(request.getId(), request);</span>
+<span class="fc" id="L313">        nextRequestId = Math.max(nextRequestId, numericId(request.getId(), &quot;Q&quot;) + 1);</span>
+<span class="fc" id="L314">        return request;</span>
+    }
+
+    private static int numericId(String id, String prefix) {
+<span class="pc bpc" id="L318" title="2 of 4 branches missed.">        if (id == null || !id.startsWith(prefix)) {</span>
+<span class="nc" id="L319">            throw new IllegalArgumentException(&quot;Expected a &quot; + prefix + &quot;-id, got &quot; + id);</span>
+        }
+<span class="fc" id="L321">        return Integer.parseInt(id.substring(prefix.length()));</span>
+    }
+
+    private String nextRequestId() {
+<span class="fc" id="L325">        return &quot;Q&quot; + nextRequestId;</span>
+    }
+
+    private &lt;R extends DealRequest&gt; R register(R request) {
+<span class="fc" id="L329">        requests.put(request.getId(), request);</span>
+<span class="fc" id="L330">        nextRequestId++;</span>
+<span class="fc" id="L331">        return request;</span>
+    }
+
+    private void validateBorrowPeriod(Listing listing, LocalDateTime start, LocalDateTime end) {
+<span class="fc bfc" id="L335" title="All 4 branches covered.">        if (start == null || end == null) {</span>
+<span class="fc" id="L336">            throw new IllegalArgumentException(&quot;Borrow start and end are required&quot;);</span>
+        }
+<span class="fc bfc" id="L338" title="All 2 branches covered.">        if (start.isBefore(now())) {</span>
+<span class="fc" id="L339">            throw new IllegalArgumentException(&quot;Borrow start cannot be in the past&quot;);</span>
+        }
+<span class="fc bfc" id="L341" title="All 2 branches covered.">        if (!end.isAfter(start)) {</span>
+<span class="fc" id="L342">            throw new IllegalArgumentException(&quot;Borrow end must be after the start&quot;);</span>
+        }
+<span class="pc bpc" id="L344" title="1 of 2 branches missed.">        if (!(listing instanceof LendListing lend)) {</span>
+<span class="nc" id="L345">            throw new IllegalArgumentException(&quot;Not a lending listing&quot;);</span>
+        }
+<span class="fc" id="L347">        LendingRules.requireBorrowPeriod(Duration.between(start, end), lend.getLendingDuration());</span>
+<span class="fc" id="L348">    }</span>
+
+    private static BigDecimal requirePositiveMoney(BigDecimal amount, String what) {
+<span class="fc bfc" id="L351" title="All 4 branches covered.">        if (amount == null || amount.signum() &lt;= 0) {</span>
+<span class="fc" id="L352">            throw new IllegalArgumentException(what + &quot; must be a positive amount&quot;);</span>
+        }
+<span class="fc bfc" id="L354" title="All 2 branches covered.">        if (amount.stripTrailingZeros().scale() &gt; 2) {</span>
+<span class="fc" id="L355">            throw new IllegalArgumentException(what + &quot; can have at most two decimal places&quot;);</span>
+        }
+<span class="fc" id="L357">        return amount.setScale(2, RoundingMode.UNNECESSARY);</span>
+    }
+
+    private void requireLiveAndNotDealt(Listing listing) {
+<span class="fc" id="L361">        Objects.requireNonNull(listing.getId(), &quot;listing id&quot;);</span>
+<span class="fc bfc" id="L362" title="All 2 branches covered.">        if (listing.getStatus() != ListingStatus.LIVE) {</span>
+<span class="fc" id="L363">            throw new IllegalStateException(&quot;Listing is not live: &quot; + listing.getStatus());</span>
+        }
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">        if (activeDealByListing.containsKey(listing.getId())) {</span>
+<span class="nc" id="L366">            throw new IllegalStateException(&quot;Listing already has an active deal&quot;);</span>
+        }
+<span class="fc" id="L368">    }</span>
+
+    private static void requireOpen(DealRequest request, String action) {
+<span class="fc" id="L371">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc bfc" id="L372" title="All 4 branches covered.">        if (request.getStatus() != RequestStatus.PENDING &amp;&amp; request.getStatus() != RequestStatus.COUNTERED) {</span>
+<span class="fc" id="L373">            throw new IllegalStateException(&quot;Cannot &quot; + action + &quot; a &quot; + request.getStatus() + &quot; request&quot;);</span>
+        }
+<span class="fc" id="L375">    }</span>
+
+    private static void requireBorrowedAndActive(Deal deal, String action) {
+<span class="fc" id="L378">        requireStatus(deal, DealStatus.ACTIVE);</span>
+<span class="fc bfc" id="L379" title="All 2 branches covered.">        if (deal.getDealType() != DealType.LENT) {</span>
+<span class="fc" id="L380">            throw new IllegalStateException(&quot;Cannot &quot; + action + &quot; a &quot; + deal.getDealType() + &quot; deal&quot;);</span>
+        }
+<span class="fc" id="L382">    }</span>
+
+    private Deal acceptAsDeal(DealRequest request) {
+<span class="fc" id="L385">        Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L386" title="All 2 branches covered.">        if (request instanceof Claim) {</span>
+<span class="pc bpc" id="L387" title="1 of 2 branches missed.">            if (!request.getId().equals(pendingClaimByListing.get(listing.getId()))) {</span>
+<span class="nc" id="L388">                throw new IllegalStateException(&quot;Claim no longer holds the listing's reservation&quot;);</span>
+            }
+        } else {
+<span class="fc" id="L391">            requireLiveAndNotDealt(listing);</span>
+        }
+<span class="fc" id="L393">        request.setStatus(RequestStatus.ACCEPTED);</span>
+<span class="fc bfc" id="L394" title="All 2 branches covered.">        for (DealRequest other : requests.values()) {</span>
+<span class="fc bfc" id="L395" title="All 2 branches covered.">            if (other != request</span>
+<span class="fc bfc" id="L396" title="All 2 branches covered.">                    &amp;&amp; other.getListing().getId().equals(listing.getId())</span>
+<span class="fc bfc" id="L397" title="All 2 branches covered.">                    &amp;&amp; (other.getStatus() == RequestStatus.PENDING</span>
+<span class="fc bfc" id="L398" title="All 2 branches covered.">                        || other.getStatus() == RequestStatus.COUNTERED)) {</span>
+<span class="fc" id="L399">                other.setStatus(RequestStatus.DECLINED);</span>
+            }
+<span class="fc" id="L401">        }</span>
+<span class="fc" id="L402">        pendingClaimByListing.remove(listing.getId());</span>
+<span class="fc" id="L403">        return openDeal(request);</span>
+    }
+
+    private Deal openDeal(DealRequest request) {
+<span class="fc" id="L407">        Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L408" title="All 2 branches covered.">        listing.setStatus(request.dealType() == DealType.LENT ? ListingStatus.LENT : ListingStatus.RESERVED);</span>
+<span class="fc" id="L409">        Deal deal = new Deal(&quot;D&quot; + nextDealId++, request, now());</span>
+<span class="fc" id="L410">        deals.put(deal.getId(), deal);</span>
+<span class="fc" id="L411">        activeDealByListing.put(listing.getId(), deal.getId());</span>
+<span class="fc" id="L412">        return deal;</span>
+    }
+
+    private void close(Deal deal, DealStatus status) {
+<span class="fc" id="L416">        deal.setStatus(status);</span>
+<span class="fc" id="L417">        deal.setCompletedDate(now());</span>
+<span class="fc" id="L418">    }</span>
+
+    private void releaseListing(Deal deal) {
+<span class="fc" id="L421">        deal.getListing().setStatus(ListingStatus.LIVE);</span>
+<span class="fc" id="L422">        activeDealByListing.remove(deal.getListing().getId());</span>
+<span class="fc" id="L423">    }</span>
+
+    private static void requireStatus(DealRequest request, RequestStatus expected) {
+<span class="fc" id="L426">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc bfc" id="L427" title="All 2 branches covered.">        if (request.getStatus() != expected) {</span>
+<span class="fc" id="L428">            throw new IllegalStateException(</span>
+<span class="fc" id="L429">                    &quot;Expected a &quot; + expected + &quot; request but was &quot; + request.getStatus());</span>
+        }
+<span class="fc" id="L431">    }</span>
+
+    private static void requireStatus(Deal deal, DealStatus expected) {
+<span class="fc" id="L434">        Objects.requireNonNull(deal, &quot;deal&quot;);</span>
+<span class="fc bfc" id="L435" title="All 2 branches covered.">        if (deal.getStatus() != expected) {</span>
+<span class="fc" id="L436">            throw new IllegalStateException(</span>
+<span class="fc" id="L437">                    &quot;Expected a &quot; + expected + &quot; deal but was &quot; + deal.getStatus());</span>
+        }
+<span class="fc" id="L439">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

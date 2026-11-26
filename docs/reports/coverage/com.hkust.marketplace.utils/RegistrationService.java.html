@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">RegistrationService.java</span></div><h1>RegistrationService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+import com.hkust.marketplace.persistence.DatabaseException;
+
+import java.util.Objects;
+
+/**
+ * Buyer and seller registration (SRS UC-1.1, UC-2.1): saves the new account and tells every
+ * admin about it (step 7, an Account Change notification). The registration screens validate
+ * the form first; this class only stores the result.
+ */
+public final class RegistrationService {
+
+    private final DummyDataService data;
+
+<span class="fc" id="L20">    public RegistrationService(DummyDataService data) {</span>
+<span class="fc" id="L21">        this.data = Objects.requireNonNull(data, &quot;data&quot;);</span>
+<span class="fc" id="L22">    }</span>
+
+    /**
+     * Registers a buyer or seller account.
+     *
+     * @return {@code false} if the username is already taken by any account (nothing changes)
+     * @throws IllegalArgumentException for an admin account; there is no admin registration
+     */
+    public boolean register(User account) {
+<span class="fc" id="L31">        Objects.requireNonNull(account, &quot;account&quot;);</span>
+<span class="fc bfc" id="L32" title="All 4 branches covered.">        if (account.getRole() != UserRole.BUYER &amp;&amp; account.getRole() != UserRole.SELLER) {</span>
+<span class="fc" id="L33">            throw new IllegalArgumentException(&quot;Only buyer and seller accounts can register.&quot;);</span>
+        }
+<span class="fc bfc" id="L35" title="All 2 branches covered.">        if (!data.users().register(account)) {</span>
+<span class="fc" id="L36">            return false;</span>
+        }
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        String role = account.getRole() == UserRole.SELLER ? &quot;seller&quot; : &quot;buyer&quot;;</span>
+<span class="fc" id="L39">        String message = &quot;New &quot; + role + &quot; account registered: &quot; + account.getFullName()</span>
+<span class="fc" id="L40">                + &quot; (@&quot; + account.getUsername() + &quot;).&quot;;</span>
+<span class="fc" id="L41">        NotificationRef ref = new NotificationRef(NotificationRef.Target.USER, account.getUsername());</span>
+        try {
+<span class="fc bfc" id="L43" title="All 2 branches covered.">            for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
+<span class="fc" id="L44">                data.notifications().notify(admin.getUsername(), NotificationCategory.ACCOUNT_CHANGE, message, ref);</span>
+<span class="fc" id="L45">            }</span>
+<span class="fc" id="L46">        } catch (DatabaseException e) {</span>
+            // The account is saved and can log in; a missed admin notice must not make the new
+            // user think registration failed and try again with a taken username.
+<span class="fc" id="L49">            System.err.println(&quot;[RegistrationService] admin notice for @&quot; + account.getUsername()</span>
+<span class="fc" id="L50">                    + &quot; not saved: &quot; + e.getMessage());</span>
+<span class="fc" id="L51">        }</span>
+<span class="fc" id="L52">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

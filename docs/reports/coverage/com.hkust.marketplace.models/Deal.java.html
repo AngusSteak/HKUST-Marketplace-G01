@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Deal.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">Deal.java</span></div><h1>Deal.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+/**
+ * An accepted {@link DealRequest} and its own lifecycle (SRS class diagram, 0..1 per request).
+ *
+ * &lt;p&gt;The buyer, seller, listing and deal type are derived through the request, so they are
+ * never stored twice. Deals are created and moved between states only by {@link DealLifecycle}.
+ */
+public class Deal {
+    private final String id;
+    private final DealRequest request;
+    private final LocalDateTime startDate;
+    private final LocalDateTime dueDate;
+    private LocalDateTime completedDate;
+<span class="fc" id="L18">    private DealStatus status = DealStatus.ACTIVE;</span>
+    private Review review;
+
+<span class="fc" id="L21">    Deal(String id, DealRequest request, LocalDateTime startDate) {</span>
+<span class="fc" id="L22">        this.id = Objects.requireNonNull(id, &quot;id&quot;);</span>
+<span class="fc" id="L23">        this.request = Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc" id="L24">        this.startDate = Objects.requireNonNull(startDate, &quot;startDate&quot;);</span>
+<span class="fc bfc" id="L25" title="All 2 branches covered.">        this.dueDate = request instanceof BorrowRequest borrow ? borrow.agreedEnd() : null;</span>
+<span class="fc" id="L26">    }</span>
+
+<span class="fc" id="L28">    public String getId() { return id; }</span>
+<span class="fc" id="L29">    public DealRequest getRequest() { return request; }</span>
+<span class="fc" id="L30">    public LocalDateTime getStartDate() { return startDate; }</span>
+
+    /** When a borrowed item must be returned; {@code null} for sales and giveaways. */
+<span class="fc" id="L33">    public LocalDateTime getDueDate() { return dueDate; }</span>
+
+    /** When the deal was completed, returned, auto-returned or cancelled; {@code null} while active. */
+<span class="fc" id="L36">    public LocalDateTime getCompletedDate() { return completedDate; }</span>
+
+<span class="fc" id="L38">    public DealStatus getStatus() { return status; }</span>
+
+<span class="fc" id="L40">    public Buyer getBuyer() { return request.getBuyer(); }</span>
+<span class="fc" id="L41">    public Listing getListing() { return request.getListing(); }</span>
+<span class="fc" id="L42">    public String getBuyerUsername() { return request.getBuyerUsername(); }</span>
+<span class="fc" id="L43">    public String getSellerUsername() { return request.getSellerUsername(); }</span>
+<span class="fc" id="L44">    public String getBuyerDisplayName() { return request.getBuyerDisplayName(); }</span>
+<span class="fc" id="L45">    public String getSellerDisplayName() { return request.getSellerDisplayName(); }</span>
+<span class="fc" id="L46">    public DealType getDealType() { return request.dealType(); }</span>
+
+    /** The buyer's review of the seller for this deal, or {@code null} if not reviewed yet. */
+<span class="fc" id="L49">    public Review getReview() { return review; }</span>
+<span class="fc bfc" id="L50" title="All 2 branches covered.">    public boolean isReviewed() { return review != null; }</span>
+
+    /** Attaches the buyer's review; at most one review per completed deal (SRS UC-1.9). */
+    public void setReview(Review review) {
+<span class="fc" id="L54">        Objects.requireNonNull(review, &quot;review&quot;);</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        if (status != DealStatus.COMPLETED) {</span>
+<span class="fc" id="L56">            throw new IllegalStateException(&quot;Only completed deals can be reviewed&quot;);</span>
+        }
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        if (this.review != null) {</span>
+<span class="fc" id="L59">            throw new IllegalStateException(&quot;Deal &quot; + id + &quot; already has a review&quot;);</span>
+        }
+<span class="fc" id="L61">        this.review = review;</span>
+<span class="fc" id="L62">    }</span>
+
+<span class="fc" id="L64">    void setStatus(DealStatus status) { this.status = status; }</span>
+<span class="fc" id="L65">    void setCompletedDate(LocalDateTime completedDate) { this.completedDate = completedDate; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,522 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SellerService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">SellerService.java</span></div><h1>SellerService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.forms.PhotoDraft;
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealLifecycle;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.LendListing;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.SaleListing;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Seller-only actions on the seller's own listings. Every method checks that {@code seller}
+ * is an active Seller account that owns the listing, and throws {@link SecurityException}
+ * otherwise, before changing anything.
+ */
+public final class SellerService {
+
+    /** SRS UC-2.4 A2: a listing that is no longer live or pending can't be changed. */
+    public static final String NOT_CHANGEABLE = &quot;This listing can no longer be changed.&quot;;
+
+    /** Shown when a listing with open offers is edited. */
+    public static final String HAS_ACTIVE_OFFERS = &quot;This listing has open offers and cannot be edited.&quot;;
+
+    /** SRS UC-2.5 A2: only a live listing can be marked as sold. */
+    public static final String NOT_LIVE = &quot;Only a live listing can be marked as sold.&quot;;
+
+    /** SRS UC-2.5 A3: only a Sale listing can be marked as sold. */
+    public static final String NOT_SALE_LISTING = &quot;Only a Sale listing can be marked as sold.&quot;;
+
+    private final DummyDataService data;
+
+    /** Creates the service over the given stores. */
+<span class="fc" id="L61">    public SellerService(DummyDataService data) {</span>
+<span class="fc" id="L62">        this.data = Objects.requireNonNull(data, &quot;data&quot;);</span>
+<span class="fc" id="L63">    }</span>
+
+    /**
+     * Creates a listing from the reusable form for an active Seller, notifying every admin.
+     *
+     * @throws SecurityException if {@code actor} is not a signed-in, active Seller
+     * @throws IllegalArgumentException if the form state still has validation errors
+     */
+    public Listing createListing(User actor, ListingFormState state, PhotoStorage photos) {
+<span class="fc" id="L72">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L73">        Objects.requireNonNull(state, &quot;state&quot;);</span>
+<span class="fc" id="L74">        Objects.requireNonNull(photos, &quot;photos&quot;);</span>
+
+<span class="fc" id="L76">        Map&lt;String, String&gt; errors = state.validate(seller);</span>
+<span class="fc bfc" id="L77" title="All 2 branches covered.">        if (!errors.isEmpty()) {</span>
+<span class="fc" id="L78">            throw new IllegalArgumentException(&quot;Invalid listing: &quot; + errors);</span>
+        }
+
+<span class="fc" id="L81">        String id = data.listings().reserveId();</span>
+<span class="fc" id="L82">        List&lt;String&gt; storedPaths = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        for (PhotoDraft draft : state.getChosenPhotos()) {</span>
+<span class="fc" id="L84">            storedPaths.add(photos.store(draft.source(), seller.getUsername(), id));</span>
+<span class="fc" id="L85">        }</span>
+<span class="fc" id="L86">        state.setPhotoPaths(storedPaths);</span>
+
+<span class="fc" id="L88">        Listing listing = state.buildListing(seller);</span>
+<span class="fc" id="L89">        listing.setId(id);</span>
+
+        try {
+<span class="fc" id="L92">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L93">                data.listings().add(listing);</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">                for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
+<span class="fc" id="L95">                    data.notifications().notify(admin.getUsername(), NotificationCategory.NEW_SUBMISSION,</span>
+<span class="fc" id="L96">                            seller.getFullName() + &quot; submitted '&quot; + listing.getTitle() + &quot;' for review.&quot;,</span>
+<span class="fc" id="L97">                            new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
+<span class="fc" id="L98">                }</span>
+<span class="fc" id="L99">            });</span>
+<span class="nc" id="L100">        } catch (RuntimeException e) {</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">            for (String path : storedPaths) {</span>
+                try {
+<span class="nc" id="L103">                    Files.deleteIfExists(Path.of(path));</span>
+<span class="nc" id="L104">                } catch (IOException ignored) {</span>
+                    // best-effort cleanup of a photo whose listing was never saved
+<span class="nc" id="L106">                }</span>
+<span class="nc" id="L107">            }</span>
+<span class="nc" id="L108">            throw e;</span>
+<span class="fc" id="L109">        }</span>
+<span class="fc" id="L110">        return listing;</span>
+    }
+
+    /**
+     * Applies an edited listing form to one of the seller's own listings. The saved photo paths
+     * and the listing row share one transaction; the photo files themselves are written first.
+     *
+     * @param actor the acting seller
+     * @param listing the listing to edit
+     * @param state the edited form
+     * @param photos storage for newly chosen photos
+     * @return the saved listing
+     * @throws SecurityException if the actor is not an active seller who owns the listing
+     * @throws IllegalStateException if the listing is deleted, not Live, Pending Review or Rejected, or has open offers
+     */
+    public Listing updateListing(User actor, Listing listing, ListingFormState state, PhotoStorage photos) {
+<span class="fc" id="L126">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L127">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L128">        Objects.requireNonNull(state, &quot;state&quot;);</span>
+<span class="fc" id="L129">        Objects.requireNonNull(photos, &quot;photos&quot;);</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L131">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc" id="L133">        ListingStatus status = listing.getStatus();</span>
+<span class="pc bpc" id="L134" title="1 of 8 branches missed.">        if (listing.isDeleted() || (status != ListingStatus.LIVE &amp;&amp; status != ListingStatus.PENDING_REVIEW</span>
+                &amp;&amp; status != ListingStatus.REJECTED)) {
+<span class="fc" id="L136">            throw new IllegalStateException(NOT_CHANGEABLE);</span>
+        }
+<span class="fc" id="L138">        boolean hasOpenOffers = data.deals().lifecycle().requestsFor(listing).stream()</span>
+<span class="pc bpc" id="L139" title="1 of 4 branches missed.">                .anyMatch(r -&gt; r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED);</span>
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        if (hasOpenOffers) {</span>
+<span class="fc" id="L141">            throw new IllegalStateException(HAS_ACTIVE_OFFERS);</span>
+        }
+
+<span class="fc" id="L144">        Map&lt;String, String&gt; errors = state.validate(seller);</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (!errors.isEmpty()) {</span>
+<span class="fc" id="L146">            throw new IllegalArgumentException(&quot;Invalid listing: &quot; + errors);</span>
+        }
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        if (state.getType() != listing.getType()) {</span>
+<span class="fc" id="L149">            throw new IllegalArgumentException(&quot;Listing type cannot be changed.&quot;);</span>
+        }
+
+<span class="fc" id="L152">        listing.setTitle(state.getTitle());</span>
+<span class="fc" id="L153">        listing.setDescription(state.getDescription());</span>
+<span class="fc" id="L154">        listing.setCategory(state.getCategory());</span>
+<span class="fc" id="L155">        listing.setCondition(state.getCondition());</span>
+<span class="fc" id="L156">        listing.setMeetupLocation(state.getMeetupLocation());</span>
+
+<span class="fc" id="L158">        List&lt;String&gt; paths = new ArrayList&lt;&gt;(listing.getPhotoPaths());</span>
+<span class="fc bfc" id="L159" title="All 2 branches covered.">        for (PhotoDraft draft : state.getChosenPhotos()) {</span>
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">            if (paths.size() &gt;= ListingFormState.MAX_PHOTOS) {</span>
+<span class="nc" id="L161">                break;</span>
+            }
+<span class="fc" id="L163">            paths.add(photos.store(draft.source(), seller.getUsername(), listing.getId()));</span>
+<span class="fc" id="L164">        }</span>
+<span class="fc" id="L165">        listing.setPhotoPaths(paths);</span>
+
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        if (listing instanceof SaleListing sale) {</span>
+<span class="fc" id="L168">            sale.setPrice(Money.of(state.getRawPrice()));</span>
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">        } else if (listing instanceof LendListing lend) {</span>
+<span class="fc" id="L170">            lend.setLendingDuration(state.getLendingDuration());</span>
+        }
+
+<span class="fc" id="L173">        listing.setStatus(ListingStatus.PENDING_REVIEW);</span>
+<span class="fc" id="L174">        listing.setRejectionReason(null);</span>
+<span class="fc" id="L175">        listing.setTakedownReason(null);</span>
+<span class="fc" id="L176">        listing.setReviewedAt(null);</span>
+
+<span class="fc" id="L178">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L179">            data.listings().update(listing);</span>
+<span class="fc" id="L180">            NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());</span>
+<span class="fc bfc" id="L181" title="All 2 branches covered.">            for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
+<span class="fc" id="L182">                data.notifications().notify(admin.getUsername(), NotificationCategory.NEW_SUBMISSION,</span>
+<span class="fc" id="L183">                        seller.getFullName() + &quot; updated '&quot; + listing.getTitle() + &quot;' and resubmitted it for review.&quot;,</span>
+                        ref);
+<span class="fc" id="L185">            }</span>
+<span class="fc" id="L186">        });</span>
+<span class="fc" id="L187">        return listing;</span>
+    }
+
+    /**
+     * Withdraws one of the seller's own listings (SRS UC-2.4 A1). Open requests are declined,
+     * their buyers get a LISTING_REMOVED notice and the listing is hidden — all in one
+     * transaction, so a failure part-way through changes nothing. The row is kept so chat, deal
+     * and notification history can still resolve the listing by id.
+     *
+     * @throws SecurityException if {@code seller} is not an active Seller who owns the listing
+     * @throws IllegalStateException with {@link #NOT_CHANGEABLE} if the listing is Reserved,
+     *         Sold, Lent, Given or Taken Down (SRS UC-2.4 A2)
+     */
+    public void deleteListing(User seller, Listing listing) {
+<span class="fc" id="L201">        AccessControl.require(seller, UserRole.SELLER);</span>
+<span class="fc" id="L202">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L204">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc" id="L206">        ListingStatus status = listing.getStatus();</span>
+<span class="pc bpc" id="L207" title="1 of 6 branches missed.">        if (status != ListingStatus.LIVE &amp;&amp; status != ListingStatus.PENDING_REVIEW</span>
+                &amp;&amp; status != ListingStatus.REJECTED) {
+<span class="fc" id="L209">            throw new IllegalStateException(NOT_CHANGEABLE);</span>
+        }
+<span class="fc" id="L211">        List&lt;DealRequest&gt; open = data.deals().lifecycle().requestsFor(listing).stream()</span>
+<span class="pc bpc" id="L212" title="1 of 4 branches missed.">                .filter(r -&gt; r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)</span>
+<span class="fc" id="L213">                .toList();</span>
+<span class="fc" id="L214">        NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());</span>
+<span class="fc" id="L215">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L216">            open.forEach(r -&gt; data.deals().lifecycle().decline(r));</span>
+<span class="fc bfc" id="L217" title="All 2 branches covered.">            for (DealRequest r : open) {</span>
+<span class="fc" id="L218">                data.notifications().notify(r.getBuyerUsername(), NotificationCategory.LISTING_REMOVED,</span>
+<span class="fc" id="L219">                        &quot;'&quot; + listing.getTitle() + &quot;' was withdrawn from the marketplace, so your request was declined.&quot;,</span>
+                        ref);
+<span class="fc" id="L221">            }</span>
+<span class="fc" id="L222">            listing.setDeleted(true);</span>
+<span class="fc" id="L223">            data.listings().update(listing);</span>
+<span class="fc" id="L224">        });</span>
+<span class="fc" id="L225">    }</span>
+
+    /**
+     * Marks one of the seller's own live Sale listings as sold (SRS UC-2.5). Open requests are
+     * declined and their buyers get an OFFER_UPDATE notice, then the listing is set to SOLD — all
+     * in one transaction, so a failure part-way through changes nothing. No deal is created:
+     * completing a deal stays the shared deal lifecycle's job.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException with {@link #NOT_LIVE}, {@link #NOT_SALE_LISTING} or
+     *         {@link #NOT_CHANGEABLE} if the listing is not a visible, live Sale listing
+     */
+    public void markSold(User actor, Listing listing) {
+<span class="fc" id="L238">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L239">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L240" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L241">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc bfc" id="L243" title="All 2 branches covered.">        if (listing.isDeleted()) {</span>
+<span class="fc" id="L244">            throw new IllegalStateException(NOT_CHANGEABLE);</span>
+        }
+<span class="fc bfc" id="L246" title="All 2 branches covered.">        if (listing.getStatus() != ListingStatus.LIVE) {</span>
+<span class="fc" id="L247">            throw new IllegalStateException(NOT_LIVE);</span>
+        }
+<span class="fc bfc" id="L249" title="All 2 branches covered.">        if (!(listing instanceof SaleListing)) {</span>
+<span class="fc" id="L250">            throw new IllegalStateException(NOT_SALE_LISTING);</span>
+        }
+<span class="fc" id="L252">        List&lt;DealRequest&gt; open = data.deals().lifecycle().requestsFor(listing).stream()</span>
+<span class="pc bpc" id="L253" title="1 of 4 branches missed.">                .filter(r -&gt; r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)</span>
+<span class="fc" id="L254">                .toList();</span>
+<span class="fc" id="L255">        NotificationRef ref = new NotificationRef(NotificationRef.Target.LISTING, listing.getId());</span>
+<span class="fc" id="L256">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L257">            open.forEach(r -&gt; data.deals().lifecycle().decline(r));</span>
+<span class="fc bfc" id="L258" title="All 2 branches covered.">            for (DealRequest r : open) {</span>
+<span class="fc" id="L259">                data.notifications().notify(r.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L260">                        &quot;'&quot; + listing.getTitle() + &quot;' was marked as sold, so your offer was declined.&quot;,</span>
+                        ref);
+<span class="fc" id="L262">            }</span>
+<span class="fc" id="L263">            listing.setStatus(ListingStatus.SOLD);</span>
+<span class="fc" id="L264">            data.listings().update(listing);</span>
+<span class="fc" id="L265">        });</span>
+<span class="fc" id="L266">    }</span>
+
+    /**
+     * Accepts one of the seller's own PENDING requests; the deal and Reserved/Lent status come
+     * from {@link DealLifecycle#accept(DealRequest)}. Other open requests are captured before the transition
+     * because accepting declines them. Each affected buyer gets one OFFER_UPDATE notice: a DEAL
+     * ref for the accepted buyer, a REQUEST ref for a buyer whose request was declined. The
+     * seller is never notified, and all writes share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is an active Seller who does not own the listing
+     * @throws IllegalStateException if the request is not PENDING
+     */
+    public Deal acceptRequest(User actor, DealRequest request) {
+<span class="fc" id="L279">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L280">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc" id="L281">        Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L282" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L283">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc bfc" id="L285" title="All 2 branches covered.">        if (request.getStatus() != RequestStatus.PENDING) {</span>
+<span class="fc" id="L286">            throw new IllegalStateException(&quot;Only a PENDING request can be accepted; was &quot; + request.getStatus());</span>
+        }
+
+<span class="fc" id="L289">        List&lt;DealRequest&gt; others = data.deals().lifecycle().requestsFor(listing).stream()</span>
+<span class="pc bpc" id="L290" title="1 of 4 branches missed.">                .filter(r -&gt; r != request &amp;&amp; isOpen(r))</span>
+<span class="fc" id="L291">                .toList();</span>
+
+<span class="fc" id="L293">        AtomicReference&lt;Deal&gt; accepted = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L294">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L295">            Deal deal = data.deals().lifecycle().accept(request);</span>
+<span class="fc" id="L296">            accepted.set(deal);</span>
+<span class="fc" id="L297">            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L298">                    &quot;Your request for '&quot; + listing.getTitle() + &quot;' was accepted.&quot;,</span>
+<span class="fc" id="L299">                    new NotificationRef(NotificationRef.Target.DEAL, deal.getId()));</span>
+<span class="fc" id="L300">            Set&lt;String&gt; notified = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L301">            notified.add(normalize(request.getBuyerUsername()));</span>
+<span class="fc bfc" id="L302" title="All 2 branches covered.">            for (DealRequest other : others) {</span>
+<span class="fc bfc" id="L303" title="All 2 branches covered.">                if (notified.add(normalize(other.getBuyerUsername()))) {</span>
+<span class="fc" id="L304">                    data.notifications().notify(other.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L305">                            &quot;Your request for '&quot; + listing.getTitle()</span>
+                                    + &quot;' was declined because another request was accepted.&quot;,
+<span class="fc" id="L307">                            new NotificationRef(NotificationRef.Target.REQUEST, other.getId()));</span>
+                }
+<span class="fc" id="L309">            }</span>
+<span class="fc" id="L310">        });</span>
+<span class="fc" id="L311">        return accepted.get();</span>
+    }
+
+    /**
+     * Declines one of the seller's own PENDING or COUNTERED requests through
+     * {@link DealLifecycle#decline(DealRequest)}, relisting a pending giveaway claim to Live. The buyer gets
+     * one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and the status
+     * change and notice share one transaction so a failure part-way through changes nothing.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING or COUNTERED
+     */
+    public void declineRequest(User actor, DealRequest request) {
+<span class="fc" id="L324">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L325">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc" id="L326">        Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L327" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L328">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc bfc" id="L330" title="All 2 branches covered.">        if (!isOpen(request)) {</span>
+<span class="fc" id="L331">            throw new IllegalStateException(&quot;Only a PENDING or COUNTERED request can be declined; was &quot;</span>
+<span class="fc" id="L332">                    + request.getStatus());</span>
+        }
+
+<span class="fc" id="L335">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L336">            data.deals().lifecycle().decline(request);</span>
+<span class="fc" id="L337">            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L338">                    &quot;Your request for '&quot; + listing.getTitle() + &quot;' was declined.&quot;,</span>
+<span class="fc" id="L339">                    new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));</span>
+<span class="fc" id="L340">        });</span>
+<span class="fc" id="L341">    }</span>
+
+    /**
+     * Declines every PENDING or COUNTERED request on one of the seller's listings, looping the
+     * same {@link DealLifecycle#decline(DealRequest)} call used by {@link #declineRequest}. Each affected buyer
+     * gets one OFFER_UPDATE notice even when they made several requests on the listing; no seller
+     * notice is sent and no bulk lifecycle method is added. All writes share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     */
+    public void declineAllForListing(User actor, Listing listing) {
+<span class="fc" id="L352">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L353">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L354" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L355">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc" id="L357">        List&lt;DealRequest&gt; open = data.deals().lifecycle().requestsFor(listing).stream()</span>
+<span class="fc" id="L358">                .filter(SellerService::isOpen)</span>
+<span class="fc" id="L359">                .toList();</span>
+
+<span class="fc" id="L361">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L362">            open.forEach(request -&gt; data.deals().lifecycle().decline(request));</span>
+<span class="fc" id="L363">            Set&lt;String&gt; notified = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L364" title="All 2 branches covered.">            for (DealRequest request : open) {</span>
+<span class="fc bfc" id="L365" title="All 2 branches covered.">                if (notified.add(normalize(request.getBuyerUsername()))) {</span>
+<span class="fc" id="L366">                    data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L367">                            &quot;Your request for '&quot; + listing.getTitle() + &quot;' was declined.&quot;,</span>
+<span class="fc" id="L368">                            new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));</span>
+                }
+<span class="fc" id="L370">            }</span>
+<span class="fc" id="L371">        });</span>
+<span class="fc" id="L372">    }</span>
+
+    /**
+     * Proposes one alternative Counter Price on a PENDING Price Offer. The raw amount is turned
+     * into a {@link BigDecimal} and handed to {@link DealLifecycle#counterOffer(PriceOffer, BigDecimal)}, which owns the
+     * positive-and-two-decimals rule and sets COUNTERED; this service never re-checks those rules.
+     * The buyer gets one OFFER_UPDATE notice with a REQUEST ref; the seller is never notified, and
+     * the transition and notice share one transaction so a failure changes nothing.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING, so it cannot be countered twice
+     * @throws IllegalArgumentException if the raw price is malformed or fails the lifecycle rules
+     */
+    public PriceOffer counterPriceOffer(User actor, PriceOffer offer, String rawCounterPrice) {
+<span class="fc" id="L386">        requireCounterable(actor, offer);</span>
+<span class="fc" id="L387">        BigDecimal counterPrice = new BigDecimal(rawCounterPrice);</span>
+
+<span class="fc" id="L389">        AtomicReference&lt;PriceOffer&gt; countered = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L390">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L391">            countered.set(data.deals().lifecycle().counterOffer(offer, counterPrice));</span>
+<span class="fc" id="L392">            data.notifications().notify(offer.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L393">                    &quot;Your price offer for '&quot; + offer.getListing().getTitle() + &quot;' was countered at HK$&quot;</span>
+<span class="fc" id="L394">                            + countered.get().getCounterPrice().toPlainString() + &quot;.&quot;,</span>
+<span class="fc" id="L395">                    new NotificationRef(NotificationRef.Target.REQUEST, offer.getId()));</span>
+<span class="fc" id="L396">        });</span>
+<span class="fc" id="L397">        return countered.get();</span>
+    }
+
+    /**
+     * Proposes one alternative Counter Period on a PENDING Borrow Request. The start and end are
+     * handed to {@link DealLifecycle#counterBorrow(BorrowRequest, LocalDateTime, LocalDateTime)}, which owns the not-in-the-past, end-after-start
+     * and within-the-listing's-lending-duration rules and sets COUNTERED; this service never
+     * re-checks those rules. The buyer gets one OFFER_UPDATE notice with a REQUEST ref; the seller
+     * is never notified, and the transition and notice share one transaction.
+     *
+     * @throws SecurityException if {@code actor} is not an active Seller who owns the listing
+     * @throws IllegalStateException if the request is not PENDING, so it cannot be countered twice
+     * @throws IllegalArgumentException if the period is missing or fails the lifecycle rules
+     */
+    public BorrowRequest counterBorrowRequest(User actor, BorrowRequest request,
+                                              LocalDateTime start, LocalDateTime end) {
+<span class="fc" id="L413">        requireCounterable(actor, request);</span>
+
+<span class="fc" id="L415">        AtomicReference&lt;BorrowRequest&gt; countered = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L416">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L417">            countered.set(data.deals().lifecycle().counterBorrow(request, start, end));</span>
+<span class="fc" id="L418">            data.notifications().notify(request.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L419">                    &quot;Your borrow request for '&quot; + request.getListing().getTitle()</span>
+                            + &quot;' was countered with a new Counter Period.&quot;,
+<span class="fc" id="L421">                    new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));</span>
+<span class="fc" id="L422">        });</span>
+<span class="fc" id="L423">        return countered.get();</span>
+    }
+
+    private void requireCounterable(User actor, DealRequest request) {
+<span class="fc" id="L427">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L428">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc" id="L429">        Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L430" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L431">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc bfc" id="L433" title="All 2 branches covered.">        if (request.getStatus() != RequestStatus.PENDING) {</span>
+<span class="fc" id="L434">            throw new IllegalStateException(&quot;Only a PENDING request can be countered; was &quot; + request.getStatus());</span>
+        }
+<span class="fc" id="L436">    }</span>
+
+    /** Open requests grouped by listing, newest request group first (the Requests screen). */
+    public LinkedHashMap&lt;Listing, List&lt;DealRequest&gt;&gt; pendingRequestsByListing(User actor) {
+<span class="fc" id="L440">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L441">        List&lt;DealRequest&gt; all = data.deals().allRequests();</span>
+<span class="fc" id="L442">        Comparator&lt;DealRequest&gt; newestFirst = newestFirst(all);</span>
+
+<span class="fc" id="L444">        Map&lt;String, Listing&gt; listingsById = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L445">        Map&lt;String, List&lt;DealRequest&gt;&gt; byListingId = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L446" title="All 2 branches covered.">        for (DealRequest request : all) {</span>
+<span class="fc" id="L447">            Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L448" title="All 4 branches covered.">            if (!isOpen(request) || !isAvailable(listing)</span>
+<span class="fc bfc" id="L449" title="All 2 branches covered.">                    || !seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L450">                continue;</span>
+            }
+<span class="fc" id="L452">            String id = listing.getId();</span>
+<span class="fc" id="L453">            listingsById.putIfAbsent(id, listing);</span>
+<span class="fc" id="L454">            byListingId.computeIfAbsent(id, key -&gt; new ArrayList&lt;&gt;()).add(request);</span>
+<span class="fc" id="L455">        }</span>
+<span class="fc" id="L456">        byListingId.values().forEach(group -&gt; group.sort(newestFirst));</span>
+
+<span class="fc" id="L458">        List&lt;String&gt; orderedIds = new ArrayList&lt;&gt;(byListingId.keySet());</span>
+<span class="fc" id="L459">        orderedIds.sort((left, right) -&gt; newestFirst.compare(</span>
+<span class="fc" id="L460">                byListingId.get(left).get(0), byListingId.get(right).get(0)));</span>
+
+<span class="fc" id="L462">        LinkedHashMap&lt;Listing, List&lt;DealRequest&gt;&gt; result = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L463" title="All 2 branches covered.">        for (String id : orderedIds) {</span>
+<span class="fc" id="L464">            result.put(listingsById.get(id), List.copyOf(byListingId.get(id)));</span>
+<span class="fc" id="L465">        }</span>
+<span class="fc" id="L466">        return result;</span>
+    }
+
+    /** Open requests on one of the seller's listings, newest first. */
+    public List&lt;DealRequest&gt; pendingRequestsForListing(User actor, Listing listing) {
+<span class="fc" id="L471">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L472">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L473" title="All 2 branches covered.">        if (!seller.getUsername().equalsIgnoreCase(listing.getSellerUsername())) {</span>
+<span class="fc" id="L474">            throw new SecurityException(&quot;@&quot; + seller.getUsername() + &quot; does not own listing &quot; + listing.getId());</span>
+        }
+<span class="fc bfc" id="L476" title="All 2 branches covered.">        if (!isRespondableListing(listing)) {</span>
+<span class="fc" id="L477">            return List.of();</span>
+        }
+<span class="fc" id="L479">        List&lt;DealRequest&gt; group = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L480" title="All 2 branches covered.">        for (DealRequest request : data.deals().lifecycle().requestsFor(listing)) {</span>
+<span class="fc bfc" id="L481" title="All 2 branches covered.">            if (isOpen(request)) {</span>
+<span class="fc" id="L482">                group.add(request);</span>
+            }
+<span class="fc" id="L484">        }</span>
+<span class="fc" id="L485">        group.sort(newestFirst(data.deals().allRequests()));</span>
+<span class="fc" id="L486">        return List.copyOf(group);</span>
+    }
+
+    private static Comparator&lt;DealRequest&gt; newestFirst(List&lt;DealRequest&gt; all) {
+<span class="fc" id="L490">        Map&lt;String, Integer&gt; submitOrder = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L491" title="All 2 branches covered.">        for (int i = 0; i &lt; all.size(); i++) {</span>
+<span class="fc" id="L492">            submitOrder.put(all.get(i).getId(), i);</span>
+        }
+<span class="fc" id="L494">        return Comparator.comparing(DealRequest::getSubmittedTime)</span>
+<span class="fc" id="L495">                .thenComparingInt(request -&gt; submitOrder.getOrDefault(request.getId(), -1))</span>
+<span class="fc" id="L496">                .reversed();</span>
+    }
+
+    private static boolean isOpen(DealRequest request) {
+<span class="fc" id="L500">        RequestStatus status = request.getStatus();</span>
+<span class="fc bfc" id="L501" title="All 4 branches covered.">        return status == RequestStatus.PENDING || status == RequestStatus.COUNTERED;</span>
+    }
+
+    private static String normalize(String username) {
+<span class="fc" id="L505">        return username.toLowerCase(Locale.ROOT);</span>
+    }
+
+    private static boolean isAvailable(Listing listing) {
+<span class="fc bfc" id="L509" title="All 2 branches covered.">        if (listing.isDeleted()) {</span>
+<span class="fc" id="L510">            return false;</span>
+        }
+<span class="fc" id="L512">        ListingStatus status = listing.getStatus();</span>
+<span class="pc bpc" id="L513" title="1 of 6 branches missed.">        return status == ListingStatus.LIVE || status == ListingStatus.PENDING_REVIEW</span>
+                || status == ListingStatus.REJECTED;
+    }
+
+    private static boolean isRespondableListing(Listing listing) {
+<span class="fc bfc" id="L518" title="All 2 branches covered.">        return !listing.isDeleted()</span>
+<span class="fc bfc" id="L519" title="All 4 branches covered.">                &amp;&amp; (isAvailable(listing) || listing.getStatus() == ListingStatus.RESERVED);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

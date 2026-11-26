@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FavouriteStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">FavouriteStore.java</span></div><h1>FavouriteStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.persistence.Database;
+
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Favourites (Buyer to Listing) and Follows (Buyer to Seller) associations, both
+ * many-to-many with no duplicates (SRS class diagram, UC-1.3 S1). Lists keep the order in
+ * which items were added. Keys are lower-cased usernames, matching {@link UserStore}.
+ * Every toggle is saved to the {@code favourites} / {@code follows} tables; {@link #load()}
+ * rebuilds them at startup.
+ */
+public class FavouriteStore {
+
+    private final Database db;
+
+    /** buyer username -&gt; favourite listing ids */
+<span class="fc" id="L27">    private final Map&lt;String, Set&lt;String&gt;&gt; favourites = new HashMap&lt;&gt;();</span>
+    /** buyer username -&gt; followed seller usernames */
+<span class="fc" id="L29">    private final Map&lt;String, Set&lt;String&gt;&gt; follows = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L31">    FavouriteStore(Database db) {</span>
+<span class="fc" id="L32">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L33">    }</span>
+
+    /** Adds the listing to the buyer's favourites, or removes it if already there. Returns the new state. */
+    public synchronized boolean toggleFavourite(Buyer buyer, Listing listing) {
+<span class="fc" id="L37">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L38">        String owner = key(buyer);</span>
+<span class="fc" id="L39">        String listingId = Objects.requireNonNull(listing.getId(), &quot;listing id&quot;);</span>
+<span class="fc bfc" id="L40" title="All 2 branches covered.">        boolean added = !favourites.getOrDefault(owner, Set.of()).contains(listingId);</span>
+<span class="fc bfc" id="L41" title="All 2 branches covered.">        if (added) {</span>
+<span class="fc" id="L42">            db.update(&quot;INSERT INTO favourites (buyer_username, listing_id, position)&quot;</span>
+                    + &quot; VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM favourites))&quot;, owner, listingId);
+        } else {
+<span class="fc" id="L45">            db.update(&quot;DELETE FROM favourites WHERE buyer_username = ? AND listing_id = ?&quot;, owner, listingId);</span>
+        }
+<span class="fc" id="L47">        return toggle(favourites, owner, listingId);</span>
+    }
+
+    /** Follows the seller, or unfollows if already following. Returns the new state. */
+    public synchronized boolean toggleFollow(Buyer buyer, Seller seller) {
+<span class="fc" id="L52">        Objects.requireNonNull(seller, &quot;seller&quot;);</span>
+<span class="fc" id="L53">        String owner = key(buyer);</span>
+<span class="fc" id="L54">        String sellerKey = key(seller.getUsername());</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        boolean added = !follows.getOrDefault(owner, Set.of()).contains(sellerKey);</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">        if (added) {</span>
+<span class="fc" id="L57">            db.update(&quot;INSERT INTO follows (buyer_username, seller_username, position)&quot;</span>
+                    + &quot; VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM follows))&quot;, owner, sellerKey);
+        } else {
+<span class="fc" id="L60">            db.update(&quot;DELETE FROM follows WHERE buyer_username = ? AND seller_username = ?&quot;, owner, sellerKey);</span>
+        }
+<span class="fc" id="L62">        return toggle(follows, owner, sellerKey);</span>
+    }
+
+    /** Whether the buyer has favourited the listing. */
+    public synchronized boolean isFavourite(Buyer buyer, Listing listing) {
+<span class="fc" id="L67">        return favourites.getOrDefault(key(buyer), Set.of()).contains(listing.getId());</span>
+    }
+
+    /** Whether the buyer follows the seller. */
+    public synchronized boolean isFollowing(Buyer buyer, Seller seller) {
+<span class="fc" id="L72">        return follows.getOrDefault(key(buyer), Set.of()).contains(key(seller.getUsername()));</span>
+    }
+
+    /**
+     * The buyer's favourite listing ids, oldest first. Ids are kept even if a listing is later
+     * removed, so callers resolve them through {@link ListingStore#find} and skip missing ones.
+     */
+    public synchronized List&lt;String&gt; favouriteListingIds(Buyer buyer) {
+<span class="fc" id="L80">        return List.copyOf(favourites.getOrDefault(key(buyer), Set.of()));</span>
+    }
+
+    /** Usernames of the sellers the buyer follows, oldest first. */
+    public synchronized List&lt;String&gt; followedSellers(Buyer buyer) {
+<span class="fc" id="L85">        return List.copyOf(follows.getOrDefault(key(buyer), Set.of()));</span>
+    }
+
+    /** Usernames of the buyers following the seller, e.g. to notify them of a new listing. */
+    public synchronized List&lt;String&gt; followersOf(Seller seller) {
+<span class="fc" id="L90">        String sellerKey = key(seller.getUsername());</span>
+<span class="fc" id="L91">        return follows.entrySet().stream()</span>
+<span class="fc" id="L92">                .filter(e -&gt; e.getValue().contains(sellerKey))</span>
+<span class="fc" id="L93">                .map(Map.Entry::getKey)</span>
+<span class="fc" id="L94">                .sorted()</span>
+<span class="fc" id="L95">                .toList();</span>
+    }
+
+    /** Rebuilds favourites and follows from the database, in the order they were added. */
+    synchronized void load() {
+<span class="fc" id="L100">        db.query(&quot;SELECT buyer_username, listing_id FROM favourites ORDER BY position&quot;, row -&gt;</span>
+<span class="fc" id="L101">                favourites.computeIfAbsent(row.getString(1), k -&gt; new LinkedHashSet&lt;&gt;()).add(row.getString(2)));</span>
+<span class="fc" id="L102">        db.query(&quot;SELECT buyer_username, seller_username FROM follows ORDER BY position&quot;, row -&gt;</span>
+<span class="fc" id="L103">                follows.computeIfAbsent(row.getString(1), k -&gt; new LinkedHashSet&lt;&gt;()).add(row.getString(2)));</span>
+<span class="fc" id="L104">    }</span>
+
+    void seed(Buyer alice, Listing favourite, Seller followed) {
+<span class="fc" id="L107">        toggleFavourite(alice, favourite);</span>
+<span class="fc" id="L108">        toggleFollow(alice, followed);</span>
+<span class="fc" id="L109">    }</span>
+
+    private static boolean toggle(Map&lt;String, Set&lt;String&gt;&gt; links, String owner, String target) {
+<span class="fc" id="L112">        Set&lt;String&gt; targets = links.computeIfAbsent(owner, k -&gt; new LinkedHashSet&lt;&gt;());</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        if (targets.remove(target)) {</span>
+<span class="fc" id="L114">            return false;</span>
+        }
+<span class="fc" id="L116">        targets.add(target);</span>
+<span class="fc" id="L117">        return true;</span>
+    }
+
+    private static String key(Buyer buyer) {
+<span class="fc" id="L121">        Objects.requireNonNull(buyer, &quot;buyer&quot;);</span>
+<span class="fc" id="L122">        return key(buyer.getUsername());</span>
+    }
+
+    private static String key(String username) {
+<span class="fc" id="L126">        return Objects.requireNonNull(username, &quot;username&quot;).toLowerCase();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

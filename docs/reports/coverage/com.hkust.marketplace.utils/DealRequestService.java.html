@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DealRequestService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">DealRequestService.java</span></div><h1>DealRequestService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Claim;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingStatus;
+import com.hkust.marketplace.models.ListingType;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+/**
+ * Make Deal Request (SRS UC-1.4): a buyer's price offer, borrow request or claim on a live
+ * listing. Each method checks the buyer and the listing, records the request through
+ * {@link com.hkust.marketplace.models.DealLifecycle} (which validates the terms and saves it)
+ * and notifies the seller.
+ *
+ * &lt;p&gt;Refusals throw with a message for the buyer: {@link SecurityException} if the actor is not
+ * an active buyer, {@link IllegalStateException} if the listing is no longer available (A1) or
+ * the giveaway was already claimed (A4), and {@link IllegalArgumentException} for an invalid
+ * offer or borrow period (A2, A3).
+ */
+public final class DealRequestService {
+
+    /** SRS UC-1.4 A1. */
+    public static final String NOT_AVAILABLE = &quot;Sorry, this item is no longer available.&quot;;
+    /** SRS UC-1.4 A4. */
+    public static final String ALREADY_CLAIMED = &quot;Sorry, someone else has already claimed this item.&quot;;
+
+<span class="fc" id="L41">    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern(&quot;d MMM yyyy HH:mm&quot;);</span>
+
+    private final DummyDataService data;
+
+    /** Creates the service over the given stores. */
+<span class="fc" id="L46">    public DealRequestService(DummyDataService data) {</span>
+<span class="fc" id="L47">        this.data = Objects.requireNonNull(data, &quot;data&quot;);</span>
+<span class="fc" id="L48">    }</span>
+
+    /** S1: a pending price offer on a live Sale listing. */
+    public PriceOffer submitOffer(User actor, Listing listing, BigDecimal price) {
+<span class="fc" id="L52">        Buyer buyer = requireBuyer(actor);</span>
+<span class="fc" id="L53">        requireAvailable(listing, ListingType.SELL);</span>
+<span class="fc" id="L54">        PriceOffer offer = record(() -&gt; data.deals().lifecycle().submitOffer(buyer, listing, price), null);</span>
+<span class="fc" id="L55">        notifySeller(offer, buyer.getDisplayName() + &quot; offered &quot; + new Money(offer.getOfferedPrice()).getDisplay()</span>
+<span class="fc" id="L56">                + &quot; for your listing '&quot; + listing.getTitle() + &quot;'.&quot;);</span>
+<span class="fc" id="L57">        return offer;</span>
+    }
+
+    /** S2: a pending borrow request on a live Lend listing. */
+    public BorrowRequest submitBorrow(User actor, Listing listing, LocalDateTime start, LocalDateTime end) {
+<span class="fc" id="L62">        Buyer buyer = requireBuyer(actor);</span>
+<span class="fc" id="L63">        requireAvailable(listing, ListingType.LEND);</span>
+<span class="fc" id="L64">        BorrowRequest request = record(() -&gt; data.deals().lifecycle().submitBorrow(buyer, listing, start, end), null);</span>
+<span class="fc" id="L65">        notifySeller(request, buyer.getDisplayName() + &quot; asked to borrow '&quot; + listing.getTitle() + &quot;' from &quot;</span>
+<span class="fc" id="L66">                + start.format(WHEN) + &quot; to &quot; + end.format(WHEN) + &quot;.&quot;);</span>
+<span class="fc" id="L67">        return request;</span>
+    }
+
+    /**
+     * S3: a pending claim on a live giveaway, which reserves it at once. Only the first claim
+     * succeeds; a later one is refused with {@link #ALREADY_CLAIMED}.
+     */
+    public Claim claim(User actor, Listing listing) {
+<span class="fc" id="L75">        Buyer buyer = requireBuyer(actor);</span>
+<span class="fc" id="L76">        requireAvailable(listing, ListingType.GIVEAWAY);</span>
+<span class="fc" id="L77">        Claim claim = record(() -&gt; data.deals().lifecycle().submitClaim(buyer, listing), listing);</span>
+<span class="fc" id="L78">        notifySeller(claim, buyer.getDisplayName() + &quot; claimed your giveaway '&quot; + listing.getTitle() + &quot;'.&quot;);</span>
+<span class="fc" id="L79">        return claim;</span>
+    }
+
+    private static Buyer requireBuyer(User actor) {
+<span class="fc" id="L83">        return (Buyer) AccessControl.require(actor, UserRole.BUYER);</span>
+    }
+
+    /** A1: the listing must still be live and its seller's account active. */
+    private static void requireAvailable(Listing listing, ListingType type) {
+<span class="fc" id="L88">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">        if (listing.getType() != type) {</span>
+<span class="nc" id="L90">            throw new IllegalArgumentException(&quot;This action is only for &quot; + type + &quot; listings.&quot;);</span>
+        }
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        if (!ListingSearch.isBrowsable(listing)) {</span>
+<span class="fc" id="L93">            throw new IllegalStateException(NOT_AVAILABLE);</span>
+        }
+<span class="fc" id="L95">    }</span>
+
+    /**
+     * Records the request. The lifecycle re-checks availability under its own lock, so if the
+     * listing changed since our check its refusal is reported in the buyer's words: a giveaway
+     * that is now Reserved was claimed by someone else (A4); anything else is no longer
+     * available (A1).
+     */
+    static &lt;R extends DealRequest&gt; R record(Supplier&lt;R&gt; submit, Listing claimedGiveaway) {
+        try {
+<span class="fc" id="L105">            return submit.get();</span>
+<span class="fc" id="L106">        } catch (IllegalStateException e) {</span>
+<span class="fc bfc" id="L107" title="All 2 branches covered.">            boolean claimedFirst = claimedGiveaway != null</span>
+<span class="fc bfc" id="L108" title="All 2 branches covered.">                    &amp;&amp; claimedGiveaway.getStatus() == ListingStatus.RESERVED;</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            throw new IllegalStateException(claimedFirst ? ALREADY_CLAIMED : NOT_AVAILABLE, e);</span>
+        }
+    }
+
+    /** Step 6: the seller hears about the new request (New Request, links to the request). */
+    private void notifySeller(DealRequest request, String message) {
+<span class="fc" id="L115">        data.notifications().notify(request.getSellerUsername(), NotificationCategory.NEW_REQUEST, message,</span>
+<span class="fc" id="L116">                new NotificationRef(NotificationRef.Target.REQUEST, request.getId()));</span>
+<span class="fc" id="L117">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

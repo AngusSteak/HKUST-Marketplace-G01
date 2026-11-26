@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AccessControl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">AccessControl.java</span></div><h1>AccessControl.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+
+import java.util.Arrays;
+
+/**
+ * Role checks for the service layer (brief: role-based access control at the API layer, not
+ * only in the UI). Services call {@link #require} with the acting user before changing
+ * anything, so a buyer or seller session cannot run an admin-only action even if a screen
+ * offered it by mistake.
+ */
+public final class AccessControl {
+
+    private AccessControl() {
+    }
+
+    /**
+     * Returns {@code actor} if it is a signed-in, active account with one of {@code allowed}.
+     *
+     * @param actor the acting user, normally {@code SessionManager.getCurrentUser()}
+     * @param allowed the roles allowed to run the action
+     * @return the same {@code actor}, so callers can chain the check with the action
+     * @throws SecurityException otherwise (no actor, deactivated or deleted account, wrong role)
+     */
+    public static User require(User actor, UserRole... allowed) {
+<span class="fc bfc" id="L28" title="All 2 branches covered.">        if (actor == null) {</span>
+<span class="fc" id="L29">            throw new SecurityException(&quot;Not signed in&quot;);</span>
+        }
+<span class="fc bfc" id="L31" title="All 4 branches covered.">        if (!actor.isActive() || actor.isDeleted()) {</span>
+<span class="fc" id="L32">            throw new SecurityException(&quot;Account @&quot; + actor.getUsername() + &quot; is not active&quot;);</span>
+        }
+<span class="fc bfc" id="L34" title="All 4 branches covered.">        if (Arrays.stream(allowed).noneMatch(role -&gt; role == actor.getRole())) {</span>
+<span class="fc" id="L35">            throw new SecurityException(&quot;@&quot; + actor.getUsername() + &quot; (&quot; + actor.getRole()</span>
+<span class="fc" id="L36">                    + &quot;) may not do this; needs &quot; + Arrays.toString(allowed));</span>
+        }
+<span class="fc" id="L38">        return actor;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

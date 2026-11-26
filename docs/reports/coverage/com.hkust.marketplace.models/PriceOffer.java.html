@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PriceOffer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">PriceOffer.java</span></div><h1>PriceOffer.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/** A price offer on a Sale listing. The seller may counter with a different price. */
+public class PriceOffer extends DealRequest {
+    private final BigDecimal offeredPrice;
+    private BigDecimal counterPrice;
+
+    PriceOffer(String id, Buyer buyer, Listing listing, BigDecimal offeredPrice,
+               LocalDateTime submittedTime) {
+<span class="fc" id="L13">        super(id, buyer, listing, ListingType.SELL, submittedTime);</span>
+<span class="fc" id="L14">        this.offeredPrice = offeredPrice;</span>
+<span class="fc" id="L15">    }</span>
+
+    @Override
+<span class="fc" id="L18">    public DealType dealType() { return DealType.SOLD; }</span>
+
+<span class="fc" id="L20">    public BigDecimal getOfferedPrice() { return offeredPrice; }</span>
+
+    /** The seller's counter price, or {@code null} if the offer was never countered. */
+<span class="fc" id="L23">    public BigDecimal getCounterPrice() { return counterPrice; }</span>
+
+    /** The price that applies if accepted: the counter price if there is one. */
+    public BigDecimal agreedPrice() {
+<span class="fc bfc" id="L27" title="All 2 branches covered.">        return counterPrice != null ? counterPrice : offeredPrice;</span>
+    }
+
+<span class="fc" id="L30">    void setCounterPrice(BigDecimal counterPrice) { this.counterPrice = counterPrice; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

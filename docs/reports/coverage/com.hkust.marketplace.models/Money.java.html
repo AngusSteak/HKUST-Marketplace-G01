@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Money.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">Money.java</span></div><h1>Money.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+/**
+ * A validated asking price on a Sale listing, always at most two decimal places.
+ *
+ * &lt;p&gt;Groupmate note: the asking price is a {@code Money}; a buyer's offer
+ * ({@code PriceOffer.offeredPrice}) stays a {@link BigDecimal} because #42 already shipped that
+ * shape. Convert with {@code money.amount()} at the offer dialog. Do not add {@code Money} to the
+ * deal classes without asking the deal owner.
+ *
+ * @param amount the positive price, rounded to two decimal places
+ */
+public record Money(BigDecimal amount) implements Comparable&lt;Money&gt; {
+
+    /** Validates and normalises the amount. */
+<span class="fc" id="L19">    public Money {</span>
+<span class="fc bfc" id="L20" title="All 2 branches covered.">        if (amount == null) {</span>
+<span class="fc" id="L21">            throw new IllegalArgumentException(&quot;Asking price is required&quot;);</span>
+        }
+<span class="fc bfc" id="L23" title="All 2 branches covered.">        if (amount.signum() &lt;= 0) {</span>
+<span class="fc" id="L24">            throw new IllegalArgumentException(&quot;Asking price must be a positive amount&quot;);</span>
+        }
+<span class="fc bfc" id="L26" title="All 2 branches covered.">        if (amount.stripTrailingZeros().scale() &gt; 2) {</span>
+<span class="fc" id="L27">            throw new IllegalArgumentException(&quot;Asking price can have at most two decimal places&quot;);</span>
+        }
+<span class="fc" id="L29">        amount = amount.setScale(2, RoundingMode.UNNECESSARY);</span>
+<span class="fc" id="L30">    }</span>
+
+    /** Parses a trimmed string, rejecting blank or malformed input. */
+    public static Money of(String raw) {
+<span class="fc bfc" id="L34" title="All 4 branches covered.">        if (raw == null || raw.trim().isEmpty()) {</span>
+<span class="fc" id="L35">            throw new IllegalArgumentException(&quot;Asking price is required&quot;);</span>
+        }
+        try {
+<span class="fc" id="L38">            return new Money(new BigDecimal(raw.trim()));</span>
+<span class="fc" id="L39">        } catch (NumberFormatException e) {</span>
+<span class="fc" id="L40">            throw new IllegalArgumentException(&quot;Invalid asking price: &quot; + raw, e);</span>
+        }
+    }
+
+    /** Renders whole amounts without decimals and fractional amounts with exactly two. */
+    public String getDisplay() {
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        return &quot;HK$ &quot; + (amount.stripTrailingZeros().scale() &lt;= 0</span>
+<span class="fc" id="L47">                ? String.format(&quot;%.0f&quot;, amount)</span>
+<span class="fc" id="L48">                : String.format(&quot;%.2f&quot;, amount));</span>
+    }
+
+    /** Compares by amount. */
+    @Override
+    public int compareTo(Money other) {
+<span class="fc" id="L54">        return amount.compareTo(other.amount);</span>
+    }
+
+    /** Shows the amount with two decimals. */
+    @Override
+    public String toString() {
+<span class="fc" id="L60">        return getDisplay();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

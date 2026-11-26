@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">NotificationStore.java</span></div><h1>NotificationStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Notification;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.persistence.Database;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+/**
+ * Notification board, one list shared by all recipients. Every notification is saved to the
+ * {@code notifications} table when it is added, and its read flag by {@link #markRead};
+ * {@link #load()} rebuilds them at startup.
+ */
+public class NotificationStore {
+
+<span class="fc" id="L22">    private final List&lt;Notification&gt; notifications = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L23">    private final AtomicInteger idCounter = new AtomicInteger(1);</span>
+    private final Database db;
+
+<span class="fc" id="L26">    NotificationStore(Database db) {</span>
+<span class="fc" id="L27">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L28">    }</span>
+
+    /** The recipient's notifications, newest first. */
+    public synchronized List&lt;Notification&gt; forUser(String username) {
+<span class="fc" id="L32">        return notifications.stream()</span>
+<span class="fc" id="L33">                .filter(n -&gt; n.getUsername().equalsIgnoreCase(username))</span>
+<span class="fc" id="L34">                .sorted(Comparator.comparing(Notification::getTimestamp).reversed()</span>
+<span class="fc" id="L35">                        .thenComparing(Comparator.comparingInt(NotificationStore::idOrder).reversed()))</span>
+<span class="fc" id="L36">                .collect(Collectors.toList());</span>
+    }
+
+    /** Insertion order as a number, so two notices saved in the same instant still order newest first. */
+    private static int idOrder(Notification notification) {
+<span class="fc" id="L41">        String id = notification.getId();</span>
+        try {
+<span class="pc bpc" id="L43" title="2 of 4 branches missed.">            return id != null &amp;&amp; id.startsWith(&quot;N&quot;) ? Integer.parseInt(id.substring(1)) : 0;</span>
+<span class="nc" id="L44">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L45">            return 0;</span>
+        }
+    }
+
+    /** The user's notifications of one category, newest first; {@code null} means every category. */
+    public synchronized List&lt;Notification&gt; forUser(String username, NotificationCategory category) {
+<span class="fc" id="L51">        return forUser(username).stream()</span>
+<span class="fc bfc" id="L52" title="All 4 branches covered.">                .filter(n -&gt; category == null || n.getCategory() == category)</span>
+<span class="fc" id="L53">                .collect(Collectors.toList());</span>
+    }
+
+    /** How many of the user's notifications are still unread. */
+    public synchronized long unreadCount(String username) {
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        return forUser(username).stream().filter(n -&gt; !n.isRead()).count();</span>
+    }
+
+    /**
+     * The single way the application creates notifications: every one has an SRS category
+     * and, where applicable, a reference to the object an OPEN should navigate to.
+     */
+    public synchronized Notification notify(String recipient, NotificationCategory category,
+                               String content, NotificationRef relatedRef) {
+<span class="fc" id="L67">        Objects.requireNonNull(recipient, &quot;recipient&quot;);</span>
+<span class="fc" id="L68">        Objects.requireNonNull(category, &quot;category&quot;);</span>
+<span class="pc bpc" id="L69" title="1 of 4 branches missed.">        if (content == null || content.isBlank()) {</span>
+<span class="fc" id="L70">            throw new IllegalArgumentException(&quot;Notification content must not be blank&quot;);</span>
+        }
+<span class="fc" id="L72">        Notification n = new Notification(recipient, category.getLabel(), content, category, relatedRef);</span>
+<span class="fc" id="L73">        add(n);</span>
+<span class="fc" id="L74">        return n;</span>
+    }
+
+    /** Saves and shows an already-built notification. */
+    public synchronized void add(Notification n) {
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">        if (n.getId() == null) {</span>
+<span class="fc" id="L80">            n.setId(&quot;N&quot; + idCounter.getAndIncrement());</span>
+        }
+<span class="fc" id="L82">        NotificationRef ref = n.getRelatedRef();</span>
+<span class="fc" id="L83">        db.update(&quot;INSERT INTO notifications (id, recipient_username, title, message, category,&quot;</span>
+                        + &quot; related_target, related_id, timestamp, read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;,
+<span class="fc" id="L85">                n.getId(), n.getUsername().toLowerCase(), n.getTitle(), n.getMessage(), n.getCategory(),</span>
+<span class="fc bfc" id="L86" title="All 4 branches covered.">                ref == null ? null : ref.getTarget(), ref == null ? null : ref.getId(),</span>
+<span class="fc" id="L87">                n.getTimestamp(), n.isRead());</span>
+        // Only once saved: inside a transaction that later rolls back, the notice never appears.
+<span class="fc" id="L89">        db.afterCommit(() -&gt; {</span>
+<span class="fc" id="L90">            synchronized (this) {</span>
+<span class="fc" id="L91">                notifications.add(n);</span>
+<span class="fc" id="L92">            }</span>
+<span class="fc" id="L93">        });</span>
+<span class="fc" id="L94">    }</span>
+
+    /** Marks the notification read (or unread) and saves the flag. */
+    public synchronized void markRead(Notification n, boolean read) {
+<span class="fc" id="L98">        Objects.requireNonNull(n, &quot;notification&quot;);</span>
+<span class="fc" id="L99">        int rows = db.update(&quot;UPDATE notifications SET read = ? WHERE id = ?&quot;, read, n.getId());</span>
+<span class="pc bpc" id="L100" title="1 of 2 branches missed.">        if (rows == 0) {</span>
+<span class="nc" id="L101">            throw new IllegalArgumentException(&quot;Unknown notification: &quot; + n.getId());</span>
+        }
+<span class="fc" id="L103">        n.setRead(read);</span>
+<span class="fc" id="L104">    }</span>
+
+    /** Rebuilds the saved notifications, oldest first, and resumes the {@code N} id counter. */
+    synchronized void load() {
+<span class="fc" id="L108">        db.query(&quot;SELECT * FROM notifications ORDER BY CAST(substr(id, 2) AS INTEGER)&quot;, row -&gt; {</span>
+<span class="fc" id="L109">            String target = row.getString(&quot;related_target&quot;);</span>
+<span class="fc" id="L110">            Notification n = new Notification(row.getString(&quot;recipient_username&quot;), row.getString(&quot;title&quot;),</span>
+<span class="fc" id="L111">                    row.getString(&quot;message&quot;), NotificationCategory.valueOf(row.getString(&quot;category&quot;)),</span>
+<span class="fc bfc" id="L112" title="All 2 branches covered.">                    target == null ? null : new NotificationRef(NotificationRef.Target.valueOf(target),</span>
+<span class="fc" id="L113">                            row.getString(&quot;related_id&quot;)));</span>
+<span class="fc" id="L114">            n.setId(row.getString(&quot;id&quot;));</span>
+<span class="fc" id="L115">            n.setTimestamp(Database.dateTime(row, &quot;timestamp&quot;));</span>
+<span class="fc" id="L116">            n.setRead(Database.bool(row, &quot;read&quot;));</span>
+<span class="fc" id="L117">            notifications.add(n);</span>
+<span class="fc" id="L118">            idCounter.set(Math.max(idCounter.get(), Integer.parseInt(n.getId().substring(1)) + 1));</span>
+<span class="fc" id="L119">            return n;</span>
+        });
+<span class="fc" id="L121">    }</span>
+
+    void seed() {
+<span class="fc" id="L124">        notify(&quot;alice&quot;, NotificationCategory.OFFER_UPDATE,</span>
+                &quot;Charlie accepted your offer of HK$160 for Calculus Textbook.&quot;,
+                new NotificationRef(NotificationRef.Target.DEAL, &quot;D1&quot;));
+        // Sellers get New Request for incoming offers; Offer Update is the buyer-side category (SRS UC-2.7).
+<span class="fc" id="L128">        notify(&quot;charlie&quot;, NotificationCategory.NEW_REQUEST,</span>
+                &quot;Alice offered HK$160 for your Calculus Textbook.&quot;,
+                new NotificationRef(NotificationRef.Target.REQUEST, &quot;Q1&quot;));
+        // No seller notice for a pending submission: New Submission is admin-only and UC-2.3
+        // only confirms on screen to the seller, so only the admin is notified.
+<span class="fc" id="L133">        notify(&quot;admin&quot;, NotificationCategory.NEW_SUBMISSION,</span>
+                &quot;Diana submitted 'Mini Fridge' for review.&quot;,
+                new NotificationRef(NotificationRef.Target.LISTING, &quot;L104&quot;));
+<span class="fc" id="L136">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

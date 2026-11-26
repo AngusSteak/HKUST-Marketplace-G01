@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SellerStats.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">SellerStats.java</span></div><h1>SellerStats.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.DealType;
+import com.hkust.marketplace.models.ListingStatus;
+
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+
+/**
+ * Immutable snapshot of a seller's activity, derived on demand from the stores and never
+ * persisted. The dashboard renders this value; it never aggregates the stores itself.
+ *
+ * @param totals the headline counts
+ * @param listings one row per listing owned by the seller
+ * @param completedByType completed deals counted per deal type
+ */
+<span class="fc" id="L18">public record SellerStats(Totals totals, List&lt;ListingStat&gt; listings, Map&lt;DealType, Integer&gt; completedByType) {</span>
+
+    /**
+     * The headline numbers on the stats page.
+     *
+     * @param views total views across the seller's listings
+     * @param offers total offers received
+     * @param completed total completed deals
+     * @param averageRating the average visible review score, empty when there are no reviews
+     * @param visibleReviews how many reviews are visible
+     */
+<span class="fc" id="L29">    public record Totals(int views, int offers, int completed, OptionalDouble averageRating, int visibleReviews) {</span>
+    }
+
+    /**
+     * One listing's activity.
+     *
+     * @param listingId the listing id
+     * @param title the listing title
+     * @param status the current listing status
+     * @param views views of this listing
+     * @param offers offers received on this listing
+     * @param completed completed deals for this listing
+     */
+<span class="fc" id="L42">    public record ListingStat(String listingId, String title, ListingStatus status,</span>
+                              int views, int offers, int completed) {
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

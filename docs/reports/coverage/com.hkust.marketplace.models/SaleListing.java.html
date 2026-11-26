@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SaleListing.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">SaleListing.java</span></div><h1>SaleListing.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+/** A listing sold for a fixed asking price (SRS UC-1.4). */
+public final class SaleListing extends Listing {
+    private Money price;
+
+    /**
+     * Creates a sale listing.
+     *
+     * @param seller the owning seller
+     * @param title the listing title
+     * @param description the listing description
+     * @param category the category
+     * @param condition the item condition
+     * @param meetupLocation where the item is handed over
+     * @param price the asking price
+     */
+    public SaleListing(Seller seller, String title, String description, Category category,
+                       Condition condition, Location meetupLocation, Money price) {
+<span class="fc" id="L20">        super(seller, title, description, category, condition, meetupLocation);</span>
+<span class="fc" id="L21">        setPrice(price);</span>
+<span class="fc" id="L22">    }</span>
+
+    public Money getPrice() {
+<span class="fc" id="L25">        return price;</span>
+    }
+
+    /** Admin edit (SRS UC-3.7); the listing keeps its type and seller. */
+    public void setPrice(Money price) {
+<span class="fc bfc" id="L30" title="All 2 branches covered.">        if (price == null) {</span>
+<span class="fc" id="L31">            throw new IllegalArgumentException(&quot;Asking price must not be null&quot;);</span>
+        }
+<span class="fc" id="L33">        this.price = price;</span>
+<span class="fc" id="L34">    }</span>
+
+    @Override
+    public ListingType getType() {
+<span class="fc" id="L38">        return ListingType.SELL;</span>
+    }
+
+    @Override
+    public String getPriceDisplay() {
+<span class="fc" id="L43">        return price.getDisplay();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

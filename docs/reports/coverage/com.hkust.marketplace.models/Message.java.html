@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Message.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">Message.java</span></div><h1>Message.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * One entry in a {@link ChatThread} (ADR-0005). A single final class with a private
+ * constructor and named factories, so a message can never be built in an invalid shape.
+ *
+ * &lt;p&gt;There are exactly two shapes: {@link #text(String, User)} carries user-authored text and
+ * no request link, while {@link #formalOffer(User, DealRequest)} carries a linked request and
+ * a generated summary instead of user text. Because the offer factory has no content
+ * parameter, a mixed text-and-offer message is unconstructible.
+ */
+public final class Message {
+
+    private final String content;
+    private final LocalDateTime sentTime;
+    private final User sender;
+    /** The request behind a Formal Offer; {@code null} for a plain text message. */
+    private final DealRequest dealRequest;
+
+<span class="fc" id="L26">    private Message(String content, LocalDateTime sentTime, User sender, DealRequest dealRequest) {</span>
+<span class="fc" id="L27">        this.content = content;</span>
+<span class="fc" id="L28">        this.sentTime = sentTime;</span>
+<span class="fc" id="L29">        this.sender = sender;</span>
+<span class="fc" id="L30">        this.dealRequest = dealRequest;</span>
+<span class="fc" id="L31">    }</span>
+
+    /** Creates a free-text message. Empty or blank content is rejected. */
+    public static Message text(String content, User sender) {
+<span class="fc" id="L35">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
+<span class="fc bfc" id="L36" title="All 4 branches covered.">        if (content == null || content.isBlank()) {</span>
+<span class="fc" id="L37">            throw new IllegalArgumentException(&quot;Message content must not be blank&quot;);</span>
+        }
+<span class="fc" id="L39">        return new Message(content, LocalDateTime.now(), sender, null);</span>
+    }
+
+    /**
+     * Creates a Formal Offer from {@code request}. There is deliberately no content parameter:
+     * the stored content is a generated summary of the request's terms (used for keyword search
+     * and card labelling), never user-authored text. The summary omits the request status,
+     * because status changes after the offer is made.
+     */
+    public static Message formalOffer(User sender, DealRequest request) {
+<span class="fc" id="L49">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
+<span class="fc" id="L50">        Objects.requireNonNull(request, &quot;dealRequest&quot;);</span>
+<span class="fc" id="L51">        return new Message(summarize(request), LocalDateTime.now(), sender, request);</span>
+    }
+
+    /**
+     * Rebuilds a saved message exactly as stored: its original time and, for a Formal Offer,
+     * the stored summary and the restored request. Only for loading the database.
+     */
+    public static Message restore(String content, LocalDateTime sentTime, User sender,
+                                  DealRequest dealRequest) {
+<span class="fc" id="L60">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
+<span class="fc" id="L61">        Objects.requireNonNull(sentTime, &quot;sentTime&quot;);</span>
+<span class="pc bpc" id="L62" title="2 of 4 branches missed.">        if (content == null || content.isBlank()) {</span>
+<span class="nc" id="L63">            throw new IllegalArgumentException(&quot;Message content must not be blank&quot;);</span>
+        }
+<span class="fc" id="L65">        return new Message(content, sentTime, sender, dealRequest);</span>
+    }
+
+<span class="fc" id="L68">    public String getContent() { return content; }</span>
+
+<span class="fc" id="L70">    public LocalDateTime getSentTime() { return sentTime; }</span>
+
+<span class="nc" id="L72">    public User getSender() { return sender; }</span>
+
+    /** Convenience mirror of the bean-style username accessors used by the other models. */
+<span class="fc" id="L75">    public String getSenderUsername() { return sender.getUsername(); }</span>
+
+    /** The request behind a Formal Offer, or {@code null} for a plain text message. */
+<span class="fc" id="L78">    public DealRequest getDealRequest() { return dealRequest; }</span>
+
+    /** True only when this message carries a Formal Offer; derived from the request link. */
+<span class="fc bfc" id="L81" title="All 2 branches covered.">    public boolean isFormalOffer() { return dealRequest != null; }</span>
+
+    /** Generated, status-free summary of the request's terms plus the Listing title. */
+    private static String summarize(DealRequest request) {
+<span class="fc" id="L85">        String title = request.getListing().getTitle();</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L87">            return &quot;Offer of &quot; + new Money(offer.getOfferedPrice()).getDisplay() + &quot; for &quot; + title;</span>
+        }
+<span class="fc bfc" id="L89" title="All 2 branches covered.">        if (request instanceof BorrowRequest borrow) {</span>
+<span class="fc" id="L90">            Duration period = Duration.between(borrow.getStartDate(), borrow.getEndDate());</span>
+<span class="fc" id="L91">            return &quot;Borrow request for &quot; + describe(period) + &quot; for &quot; + title;</span>
+        }
+<span class="fc" id="L93">        return &quot;Claim for &quot; + title;</span>
+    }
+
+    /**
+     * Human-readable duration for the summary. Kept local because a model must not depend on
+     * the presentation helpers in {@code utils}; mirrors {@code DurationText}'s two-unit style.
+     */
+    private static String describe(Duration duration) {
+<span class="fc" id="L101">        long totalSeconds = Math.max(0, duration.getSeconds());</span>
+<span class="fc" id="L102">        long[] amounts = {</span>
+                totalSeconds / 86_400,
+                (totalSeconds % 86_400) / 3_600,
+                (totalSeconds % 3_600) / 60,
+                totalSeconds % 60
+        };
+<span class="fc" id="L108">        String[] names = {&quot;day&quot;, &quot;hour&quot;, &quot;minute&quot;, &quot;second&quot;};</span>
+<span class="fc" id="L109">        List&lt;String&gt; parts = new ArrayList&lt;&gt;(2);</span>
+<span class="pc bpc" id="L110" title="1 of 4 branches missed.">        for (int i = 0; i &lt; amounts.length &amp;&amp; parts.size() &lt; 2; i++) {</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">            if (amounts[i] &gt; 0) {</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">                parts.add(amounts[i] + &quot; &quot; + names[i] + (amounts[i] == 1 ? &quot;&quot; : &quot;s&quot;));</span>
+            }
+        }
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">        return parts.isEmpty() ? &quot;0 seconds&quot; : String.join(&quot; &quot;, parts);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

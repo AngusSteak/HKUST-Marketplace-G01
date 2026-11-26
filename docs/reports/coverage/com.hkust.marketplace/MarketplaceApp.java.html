@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MarketplaceApp.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace</a> &gt; <span class="el_source">MarketplaceApp.java</span></div><h1>MarketplaceApp.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace;
+
+import com.hkust.marketplace.persistence.DatabaseInUseException;
+import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.LoanTimer;
+import com.hkust.marketplace.utils.SceneManager;
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.stage.Stage;
+
+/**
+ * HKUST Marketplace - Main Application Entry Point
+ * Frontend-only demo / skeleton for student development.
+ *
+ * This application provides a complete UI skeleton for the Buyer, Seller and Admin portals.
+ * Data is stored in a local SQLite database (data/marketplace.db); see DummyDataService.
+ */
+<span class="nc" id="L19">public class MarketplaceApp extends Application {</span>
+
+    /** Auto-returns overdue loans and sends due-date reminders while the app runs (#22). */
+    private LoanTimer loanTimer;
+
+    /** Starts the JavaFX window and the loan timer. */
+    @Override
+    public void start(Stage primaryStage) {
+        try {
+<span class="nc" id="L28">            loanTimer = new LoanTimer(DummyDataService.getInstance());</span>
+<span class="nc" id="L29">        } catch (DatabaseInUseException e) {</span>
+            // A second copy would not see the first one's changes and could overwrite them.
+<span class="nc" id="L31">            Alert alert = new Alert(Alert.AlertType.WARNING,</span>
+                    &quot;HKUST Marketplace is already running on this computer.\n\n&quot;
+                            + &quot;Use the window that is already open, or close it and start the app again. &quot;
+                            + &quot;To switch user, log out and log in again.&quot;);
+<span class="nc" id="L35">            alert.setHeaderText(&quot;Already running&quot;);</span>
+<span class="nc" id="L36">            alert.setTitle(&quot;HKUST Marketplace&quot;);</span>
+<span class="nc" id="L37">            alert.showAndWait();</span>
+<span class="nc" id="L38">            Platform.exit();</span>
+<span class="nc" id="L39">            return;</span>
+<span class="nc" id="L40">        } catch (RuntimeException e) {</span>
+            // e.g. a read-only data/ folder or a file system without locking
+<span class="nc" id="L42">            Alert alert = new Alert(Alert.AlertType.ERROR,</span>
+<span class="nc" id="L43">                    &quot;The database in the data/ folder could not be opened:\n&quot; + e.getMessage()</span>
+                            + &quot;\n\nCheck that the project folder is writable, then start the app again.&quot;);
+<span class="nc" id="L45">            alert.setHeaderText(&quot;Could not open the database&quot;);</span>
+<span class="nc" id="L46">            alert.setTitle(&quot;HKUST Marketplace&quot;);</span>
+<span class="nc" id="L47">            alert.showAndWait();</span>
+<span class="nc" id="L48">            Platform.exit();</span>
+<span class="nc" id="L49">            return;</span>
+<span class="nc" id="L50">        }</span>
+<span class="nc" id="L51">        loanTimer.start();</span>
+<span class="nc" id="L52">        SceneManager.init(primaryStage);</span>
+<span class="nc" id="L53">        SceneManager.showWelcome();</span>
+<span class="nc" id="L54">        primaryStage.setTitle(&quot;HKUST Marketplace&quot;);</span>
+<span class="nc" id="L55">        primaryStage.setMinWidth(1100);</span>
+<span class="nc" id="L56">        primaryStage.setMinHeight(700);</span>
+<span class="nc" id="L57">        primaryStage.show();</span>
+<span class="nc" id="L58">    }</span>
+
+    /** Closes the SQLite database cleanly when the window is closed. */
+    @Override
+    public void stop() {
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (loanTimer != null) {</span>
+<span class="nc" id="L64">            loanTimer.stop();</span>
+        }
+<span class="nc" id="L66">        DummyDataService.shutdown();</span>
+<span class="nc" id="L67">    }</span>
+
+    /** Launches the application. */
+    public static void main(String[] args) {
+<span class="nc" id="L71">        launch(args);</span>
+<span class="nc" id="L72">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

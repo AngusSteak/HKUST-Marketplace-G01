@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DealHistorySearch.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">DealHistorySearch.java</span></div><h1>DealHistorySearch.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Deal;
+
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+
+/**
+ * Deal History filters (SRS UC-1.6 S1): the buyer's finished deals narrowed by a date range,
+ * category, seller and keyword. Kept free of JavaFX so the rules are unit tested.
+ */
+public final class DealHistorySearch {
+
+    /** SRS UC-1.6 A4. */
+    public static final String INVALID_DATE_RANGE = &quot;Invalid date range: the start date is after the end date.&quot;;
+
+    private DealHistorySearch() {
+    }
+
+    /**
+     * What the buyer filtered by; every field is optional ({@code null} or blank means &quot;any&quot;).
+     * The dates are inclusive and match the day the deal finished.
+     *
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
+     * @param category the category to keep, or {@code null}
+     * @param seller text to find in the seller's name or username
+     * @param keyword text to find in the listing's title or description
+     */
+<span class="fc" id="L34">    public record Criteria(LocalDate from, LocalDate to, Category category, String seller, String keyword) {</span>
+
+        /** No filters: every finished deal, in the order given. */
+        public static Criteria all() {
+<span class="fc" id="L38">            return new Criteria(null, null, null, null, null);</span>
+        }
+    }
+
+    /**
+     * The deals matching every criterion, keeping the given order (newest first from
+     * {@link DealStore#pastDealsForBuyer}).
+     *
+     * @throws IllegalArgumentException with {@link #INVALID_DATE_RANGE} if {@code from} is after {@code to}
+     */
+    public static List&lt;Deal&gt; filter(Collection&lt;Deal&gt; deals, Criteria criteria) {
+<span class="fc" id="L49">        Objects.requireNonNull(criteria, &quot;criteria&quot;);</span>
+<span class="fc bfc" id="L50" title="All 6 branches covered.">        if (criteria.from() != null &amp;&amp; criteria.to() != null &amp;&amp; criteria.from().isAfter(criteria.to())) {</span>
+<span class="fc" id="L51">            throw new IllegalArgumentException(INVALID_DATE_RANGE);</span>
+        }
+<span class="fc" id="L53">        String seller = normalise(criteria.seller());</span>
+<span class="fc" id="L54">        String keyword = normalise(criteria.keyword());</span>
+<span class="fc" id="L55">        return deals.stream()</span>
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">                .filter(d -&gt; d.getCompletedDate() != null)</span>
+<span class="fc bfc" id="L57" title="All 4 branches covered.">                .filter(d -&gt; criteria.from() == null || !d.getCompletedDate().toLocalDate().isBefore(criteria.from()))</span>
+<span class="fc bfc" id="L58" title="All 4 branches covered.">                .filter(d -&gt; criteria.to() == null || !d.getCompletedDate().toLocalDate().isAfter(criteria.to()))</span>
+<span class="fc bfc" id="L59" title="All 4 branches covered.">                .filter(d -&gt; criteria.category() == null || d.getListing().getCategory() == criteria.category())</span>
+<span class="fc bfc" id="L60" title="All 4 branches covered.">                .filter(d -&gt; seller.isEmpty() || contains(d.getSellerDisplayName(), seller)</span>
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">                        || contains(d.getSellerUsername(), seller))</span>
+<span class="fc bfc" id="L62" title="All 4 branches covered.">                .filter(d -&gt; keyword.isEmpty() || contains(d.getListing().getTitle(), keyword)</span>
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">                        || contains(d.getListing().getDescription(), keyword))</span>
+<span class="fc" id="L64">                .toList();</span>
+    }
+
+    private static boolean contains(String text, String needle) {
+<span class="pc bpc" id="L68" title="1 of 4 branches missed.">        return text != null &amp;&amp; normalise(text).contains(needle);</span>
+    }
+
+    private static String normalise(String text) {
+<span class="fc bfc" id="L72" title="All 2 branches covered.">        return text == null ? &quot;&quot; : text.trim().replaceAll(&quot;\\s+&quot;, &quot; &quot;).toLowerCase(Locale.ROOT);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

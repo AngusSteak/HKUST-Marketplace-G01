@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocalPhotoStorage.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">LocalPhotoStorage.java</span></div><h1>LocalPhotoStorage.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.UUID;
+
+/**
+ * Demo photo storage: copies chosen photos into a managed folder under the project root
+ * and returns only a project-root-relative path for {@code Listing.photoPaths}.
+ *
+ * &lt;p&gt;A real backend can replace this implementation without changing callers; see
+ * {@link PhotoStorage} for the mapping contract.
+ */
+<span class="fc" id="L16">public class LocalPhotoStorage implements PhotoStorage {</span>
+
+    /** Announced default from the design discussion. */
+    private static final long MAX_BYTES = 10L * 1024 * 1024;
+
+<span class="fc" id="L21">    private static final Path ROOT = Path.of(&quot;data&quot;, &quot;photos&quot;);</span>
+
+    @Override
+    public String store(Path source, String sellerUsername, String listingId) {
+<span class="pc bpc" id="L25" title="2 of 4 branches missed.">        if (source == null || !Files.isRegularFile(source)) {</span>
+<span class="nc" id="L26">            throw new IllegalArgumentException(&quot;Source photo must be an existing file&quot;);</span>
+        }
+
+<span class="fc" id="L29">        String extension = extensionOf(source.getFileName().toString());</span>
+<span class="fc bfc" id="L30" title="All 2 branches covered.">        if (!isAllowedExtension(extension)) {</span>
+<span class="fc" id="L31">            throw new IllegalArgumentException(&quot;Only JPEG and PNG photos are supported&quot;);</span>
+        }
+        try {
+<span class="fc bfc" id="L34" title="All 2 branches covered.">            if (Files.size(source) &gt; MAX_BYTES) {</span>
+<span class="fc" id="L35">                throw new IllegalArgumentException(&quot;Photo must be at most 10 MB&quot;);</span>
+            }
+<span class="nc" id="L37">        } catch (IOException ex) {</span>
+<span class="nc" id="L38">            throw new IllegalStateException(&quot;Could not read the photo file&quot;, ex);</span>
+<span class="fc" id="L39">        }</span>
+
+<span class="fc" id="L41">        String safeUser = safeSegment(sellerUsername, &quot;seller username&quot;);</span>
+<span class="fc" id="L42">        String safeId = safeSegment(listingId, &quot;listing id&quot;);</span>
+<span class="fc" id="L43">        String filename = UUID.randomUUID() + &quot;.&quot; + extension;</span>
+<span class="fc" id="L44">        Path directory = ROOT.resolve(safeUser).resolve(safeId);</span>
+<span class="fc" id="L45">        Path destination = directory.resolve(filename);</span>
+
+        try {
+<span class="fc" id="L48">            Files.createDirectories(directory);</span>
+<span class="pc bpc" id="L49" title="1 of 2 branches missed.">            if (Files.exists(destination)) {</span>
+<span class="nc" id="L50">                throw new IllegalStateException(&quot;Destination already exists: &quot; + destination);</span>
+            }
+<span class="fc" id="L52">            Files.copy(source, destination);</span>
+<span class="nc" id="L53">        } catch (IOException ex) {</span>
+<span class="nc" id="L54">            throw new IllegalStateException(&quot;Could not store the photo&quot;, ex);</span>
+<span class="fc" id="L55">        }</span>
+
+<span class="fc" id="L57">        return &quot;data/photos/&quot; + safeUser + &quot;/&quot; + safeId + &quot;/&quot; + filename;</span>
+    }
+
+    private static String extensionOf(String filename) {
+<span class="fc" id="L61">        int dot = filename.lastIndexOf('.');</span>
+<span class="pc bpc" id="L62" title="1 of 2 branches missed.">        return dot &lt; 0 ? &quot;&quot; : filename.substring(dot + 1).toLowerCase(Locale.ROOT);</span>
+    }
+
+    private static boolean isAllowedExtension(String extension) {
+<span class="pc bpc" id="L66" title="1 of 6 branches missed.">        return extension.equals(&quot;jpg&quot;) || extension.equals(&quot;jpeg&quot;) || extension.equals(&quot;png&quot;);</span>
+    }
+
+    /** Reduces a value to one safe path segment so no traversal or separator can slip in. */
+    private static String safeSegment(String raw, String label) {
+<span class="pc bpc" id="L71" title="1 of 4 branches missed.">        if (raw == null || raw.isBlank()) {</span>
+<span class="fc" id="L72">            throw new IllegalArgumentException(label + &quot; is required&quot;);</span>
+        }
+<span class="fc" id="L74">        String safe = raw.replaceAll(&quot;[^A-Za-z0-9_-]&quot;, &quot;_&quot;);</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if (safe.isEmpty()) {</span>
+<span class="nc" id="L76">            throw new IllegalArgumentException(&quot;Invalid &quot; + label);</span>
+        }
+<span class="fc" id="L78">        return safe;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

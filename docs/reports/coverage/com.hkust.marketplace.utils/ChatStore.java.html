@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ChatStore.java</span></div><h1>ChatStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Message;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.persistence.Database;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Chat threads and their retained message history, one thread per (Buyer, Listing) pair.
+ * Threads and messages are saved to the {@code chat_threads} and {@code messages} tables as
+ * they are created; {@link #load} rebuilds them at startup. All methods are synchronized
+ * because the brief requires concurrent actions to be safe.
+ *
+ * &lt;p&gt;This store only stores and returns data. Participant checks and the offers-closed rule
+ * live in {@link ChatService}, the public seam both portals call.
+ */
+public class ChatStore {
+
+    /** thread key -&gt; thread, in the order the threads were opened */
+<span class="fc" id="L30">    private final Map&lt;String, ChatThread&gt; threads = new LinkedHashMap&lt;&gt;();</span>
+    /** thread key -&gt; messages, in send order */
+<span class="fc" id="L32">    private final Map&lt;String, List&lt;Message&gt;&gt; messages = new LinkedHashMap&lt;&gt;();</span>
+    private final Database db;
+
+<span class="fc" id="L35">    ChatStore(Database db) {</span>
+<span class="fc" id="L36">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L37">    }</span>
+
+    /** Returns the single thread for this pair, creating it on first call. */
+    public synchronized ChatThread getOrCreate(Buyer buyer, Listing listing) {
+<span class="fc" id="L41">        String key = key(buyer, listing);</span>
+<span class="fc" id="L42">        ChatThread existing = threads.get(key);</span>
+<span class="fc bfc" id="L43" title="All 2 branches covered.">        if (existing != null) {</span>
+<span class="fc" id="L44">            return existing;</span>
+        }
+<span class="fc" id="L46">        ChatThread thread = new ChatThread(buyer, listing);</span>
+<span class="fc" id="L47">        saveThread(thread);</span>
+<span class="fc" id="L48">        threads.put(key, thread);</span>
+<span class="fc" id="L49">        return thread;</span>
+    }
+
+    /** Appends a free-text message; the caller has already enforced access control. */
+    public synchronized Message send(ChatThread thread, User sender, String content) {
+<span class="fc" id="L54">        return append(thread, Message.text(content, sender));</span>
+    }
+
+    /**
+     * Appends a Formal Offer card for an already-created request, as one message. The caller
+     * has already enforced access control and created the request through the deal lifecycle.
+     */
+    public synchronized Message sendFormalOffer(ChatThread thread, User sender,
+                                                DealRequest dealRequest) {
+<span class="fc" id="L63">        return append(thread, Message.formalOffer(sender, dealRequest));</span>
+    }
+
+    /** The thread's messages in send-time order. History is never removed. */
+    public synchronized List&lt;Message&gt; history(ChatThread thread) {
+<span class="fc" id="L68">        List&lt;Message&gt; stored = messages.getOrDefault(key(thread), List.of());</span>
+<span class="fc" id="L69">        List&lt;Message&gt; ordered = new ArrayList&lt;&gt;(stored);</span>
+        // Stable sort: messages sent in the same instant keep their send order.
+<span class="fc" id="L71">        ordered.sort(Comparator.comparing(Message::getSentTime));</span>
+<span class="fc" id="L72">        return List.copyOf(ordered);</span>
+    }
+
+    /** Every thread the buyer participates in, oldest first. */
+    public synchronized List&lt;ChatThread&gt; forBuyer(String username) {
+<span class="fc" id="L77">        return threads.values().stream()</span>
+<span class="fc" id="L78">                .filter(thread -&gt; sameUser(username, thread.getBuyer().getUsername()))</span>
+<span class="fc" id="L79">                .toList();</span>
+    }
+
+    /** Every thread on the seller's listings, oldest first. */
+    public synchronized List&lt;ChatThread&gt; forSeller(String username) {
+<span class="fc" id="L84">        return threads.values().stream()</span>
+<span class="fc" id="L85">                .filter(thread -&gt; sameUser(username, thread.getSeller().getUsername()))</span>
+<span class="fc" id="L86">                .toList();</span>
+    }
+
+    /** Seeds one conversation on a live listing and one on a listing with a deal in progress. */
+    void seed(Buyer buyer, Listing liveListing, Listing closedListing) {
+<span class="fc" id="L91">        ChatThread live = getOrCreate(buyer, liveListing);</span>
+<span class="fc" id="L92">        send(live, buyer, &quot;Hi! Is this still available?&quot;);</span>
+<span class="fc" id="L93">        send(live, liveListing.getSeller(), &quot;Yes it is. When can you meet?&quot;);</span>
+
+<span class="fc" id="L95">        ChatThread closed = getOrCreate(buyer, closedListing);</span>
+<span class="fc" id="L96">        send(closed, buyer, &quot;Thanks for the smooth deal!&quot;);</span>
+<span class="fc" id="L97">    }</span>
+
+    private Message append(ChatThread thread, Message message) {
+<span class="fc" id="L100">        String key = key(thread);</span>
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        boolean newThread = !threads.containsKey(key);</span>
+<span class="fc" id="L102">        db.inTransaction(() -&gt; {</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">            if (newThread) {</span>
+<span class="fc" id="L104">                saveThread(thread);</span>
+            }
+<span class="fc" id="L106">            DealRequest request = message.getDealRequest();</span>
+<span class="fc" id="L107">            db.update(&quot;INSERT INTO messages (buyer_username, listing_id, sender_username, content,&quot;</span>
+                            + &quot; sent_time, deal_request_id) VALUES (?, ?, ?, ?, ?, ?)&quot;,
+<span class="fc" id="L109">                    thread.getBuyer().getUsername().toLowerCase(), thread.getListing().getId(),</span>
+<span class="fc" id="L110">                    message.getSenderUsername().toLowerCase(), message.getContent(),</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">                    message.getSentTime(), request == null ? null : request.getId());</span>
+<span class="fc" id="L112">        });</span>
+        // Only after the save succeeded, so memory never holds a thread or message the database lacks.
+        // Keep the canonical thread if an equal key was already opened.
+<span class="fc" id="L115">        threads.putIfAbsent(key, thread);</span>
+<span class="fc" id="L116">        messages.computeIfAbsent(key, ignored -&gt; new ArrayList&lt;&gt;()).add(message);</span>
+<span class="fc" id="L117">        return message;</span>
+    }
+
+    private void saveThread(ChatThread thread) {
+<span class="fc" id="L121">        db.update(&quot;INSERT OR IGNORE INTO chat_threads (buyer_username, listing_id) VALUES (?, ?)&quot;,</span>
+<span class="fc" id="L122">                thread.getBuyer().getUsername().toLowerCase(), thread.getListing().getId());</span>
+<span class="fc" id="L123">    }</span>
+
+    /**
+     * Rebuilds threads in the order they were opened and their messages in send order, on the
+     * already loaded users, listings and deal requests (a Formal Offer links its request).
+     */
+    synchronized void load(UserStore users, ListingStore listings, DealStore deals) {
+<span class="fc" id="L130">        db.query(&quot;SELECT buyer_username, listing_id FROM chat_threads ORDER BY rowid&quot;, row -&gt; {</span>
+<span class="fc" id="L131">            Buyer buyer = (Buyer) require(users.find(row.getString(&quot;buyer_username&quot;)), &quot;buyer&quot;, row.getString(1));</span>
+<span class="fc" id="L132">            Listing listing = require(listings.find(row.getString(&quot;listing_id&quot;)), &quot;listing&quot;, row.getString(2));</span>
+<span class="fc" id="L133">            ChatThread thread = new ChatThread(buyer, listing);</span>
+<span class="fc" id="L134">            threads.put(key(thread), thread);</span>
+<span class="fc" id="L135">            return thread;</span>
+        });
+<span class="fc" id="L137">        db.query(&quot;SELECT * FROM messages ORDER BY id&quot;, row -&gt; {</span>
+<span class="fc" id="L138">            String key = row.getString(&quot;buyer_username&quot;) + &quot;|&quot; + row.getString(&quot;listing_id&quot;);</span>
+<span class="fc" id="L139">            String requestId = row.getString(&quot;deal_request_id&quot;);</span>
+<span class="fc" id="L140">            Message message = Message.restore(row.getString(&quot;content&quot;),</span>
+<span class="fc" id="L141">                    Database.dateTime(row, &quot;sent_time&quot;),</span>
+<span class="fc" id="L142">                    require(users.find(row.getString(&quot;sender_username&quot;)), &quot;sender&quot;, row.getString(&quot;sender_username&quot;)),</span>
+<span class="fc bfc" id="L143" title="All 2 branches covered.">                    requestId == null ? null : require(deals.findRequest(requestId), &quot;request&quot;, requestId));</span>
+<span class="fc" id="L144">            messages.computeIfAbsent(key, ignored -&gt; new ArrayList&lt;&gt;()).add(message);</span>
+<span class="fc" id="L145">            return message;</span>
+        });
+<span class="fc" id="L147">    }</span>
+
+    private static &lt;T&gt; T require(T found, String what, String id) {
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">        if (found == null) {</span>
+<span class="nc" id="L151">            throw new IllegalStateException(&quot;Saved chat refers to unknown &quot; + what + &quot; &quot; + id);</span>
+        }
+<span class="fc" id="L153">        return found;</span>
+    }
+
+    private static String key(ChatThread thread) {
+<span class="fc" id="L157">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
+<span class="fc" id="L158">        return key(thread.getBuyer(), thread.getListing());</span>
+    }
+
+    private static String key(Buyer buyer, Listing listing) {
+<span class="fc" id="L162">        Objects.requireNonNull(buyer, &quot;buyer&quot;);</span>
+<span class="fc" id="L163">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L164">        String listingId = Objects.requireNonNull(listing.getId(), &quot;listing id&quot;);</span>
+<span class="fc" id="L165">        return buyer.getUsername().toLowerCase() + &quot;|&quot; + listingId;</span>
+    }
+
+    private static boolean sameUser(String expected, String actual) {
+<span class="pc bpc" id="L169" title="2 of 6 branches missed.">        return expected != null &amp;&amp; actual != null &amp;&amp; expected.equalsIgnoreCase(actual);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LoginGate.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">LoginGate.java</span></div><h1>LoginGate.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+
+/**
+ * Pure credential-gate decision shared by the Buyer, Seller and Admin login portals.
+ * The caller resolves the username to a {@link User}; this class only decides whether
+ * that account may enter the requested portal. No UI or JavaFX dependency.
+ *
+ * &lt;p&gt;Check order is deliberate and matches the portals' original inline checks:
+ * missing account, then wrong portal, then wrong password, then deleted account, then
+ * deactivated account. Keeping the password check before the account-state checks avoids
+ * revealing account state to someone who does not know the password.
+ */
+public final class LoginGate {
+
+    /** The result of one login attempt; the caller maps it to a message. */
+<span class="fc" id="L19">    public enum Outcome {</span>
+<span class="fc" id="L20">        OK,</span>
+<span class="fc" id="L21">        USER_NOT_FOUND,</span>
+<span class="fc" id="L22">        WRONG_PORTAL,</span>
+<span class="fc" id="L23">        WRONG_PASSWORD,</span>
+<span class="fc" id="L24">        DELETED,</span>
+<span class="fc" id="L25">        DISABLED</span>
+    }
+
+    private LoginGate() {
+    }
+
+    /**
+     * Decides whether the account may enter the portal.
+     *
+     * @param user         the account resolved from the entered username, or {@code null}
+     * @param expectedRole the role accepted by the portal being used
+     * @param rawPassword  the plaintext password entered by the user
+     * @return OK, or the first check that failed
+     */
+    public static Outcome check(User user, UserRole expectedRole, String rawPassword) {
+<span class="fc bfc" id="L40" title="All 2 branches covered.">        if (user == null) {</span>
+<span class="fc" id="L41">            return Outcome.USER_NOT_FOUND;</span>
+        }
+<span class="fc bfc" id="L43" title="All 2 branches covered.">        if (user.getRole() != expectedRole) {</span>
+<span class="fc" id="L44">            return Outcome.WRONG_PORTAL;</span>
+        }
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        if (!PasswordHasher.verify(rawPassword, user.getPasswordHash())) {</span>
+<span class="fc" id="L47">            return Outcome.WRONG_PASSWORD;</span>
+        }
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        if (user.isDeleted()) {</span>
+<span class="fc" id="L50">            return Outcome.DELETED;</span>
+        }
+<span class="fc bfc" id="L52" title="All 2 branches covered.">        if (!user.isActive()) {</span>
+<span class="fc" id="L53">            return Outcome.DISABLED;</span>
+        }
+<span class="fc" id="L55">        return Outcome.OK;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

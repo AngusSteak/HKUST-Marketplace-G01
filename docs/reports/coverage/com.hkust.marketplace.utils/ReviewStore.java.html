@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReviewStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ReviewStore.java</span></div><h1>ReviewStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Review;
+import com.hkust.marketplace.persistence.Database;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+/**
+ * Reviews. Seller ratings are derived from the visible ones at read time. Every review is
+ * saved to the {@code reviews} table when added, later changes (hidden, seller reply) by
+ * {@link #save}; {@link #load()} rebuilds them at startup.
+ */
+public class ReviewStore {
+
+<span class="fc" id="L20">    private final List&lt;Review&gt; reviews = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L21">    private final AtomicInteger idCounter = new AtomicInteger(1);</span>
+    private final Database db;
+
+<span class="fc" id="L24">    ReviewStore(Database db) {</span>
+<span class="fc" id="L25">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L26">    }</span>
+
+    /** The visible reviews of one seller, in the order they were written. */
+    public synchronized List&lt;Review&gt; forSeller(String username) {
+<span class="fc" id="L30">        return reviews.stream()</span>
+<span class="fc bfc" id="L31" title="All 4 branches covered.">                .filter(r -&gt; r.getSellerUsername().equalsIgnoreCase(username) &amp;&amp; !r.isHidden())</span>
+<span class="fc" id="L32">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Average over the seller's visible (non-hidden) reviews. Empty when there are no
+     * visible reviews, so &quot;no rating yet&quot; stays distinguishable from a real 0.0 rating.
+     */
+    public synchronized OptionalDouble averageRating(String sellerUsername) {
+<span class="fc" id="L40">        return forSeller(sellerUsername).stream()</span>
+<span class="fc" id="L41">                .mapToInt(Review::getRating)</span>
+<span class="fc" id="L42">                .average();</span>
+    }
+
+    /** Number of visible (non-hidden) reviews behind {@link #averageRating}. */
+    public synchronized int visibleCount(String sellerUsername) {
+<span class="fc" id="L47">        return forSeller(sellerUsername).size();</span>
+    }
+
+    /** Every review, for the admin review list. */
+    public synchronized List&lt;Review&gt; all() {
+<span class="fc" id="L52">        return new ArrayList&lt;&gt;(reviews);</span>
+    }
+
+    /** Saves a new review. */
+    public synchronized void add(Review r) {
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">        if (r.getId() == null) {</span>
+<span class="fc" id="L58">            r.setId(&quot;R&quot; + idCounter.getAndIncrement());</span>
+        }
+        // deal_id is UNIQUE, so the database itself refuses a second review of the same deal.
+<span class="fc" id="L61">        db.update(&quot;INSERT INTO reviews (id, deal_id, seller_username, buyer_username, listing_title, rating,&quot;</span>
+                        + &quot; comment, seller_reply, hidden, flagged, created_at)&quot;
+                        + &quot; VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;,
+<span class="fc" id="L64">                r.getId(), r.getDealId(), r.getSellerUsername().toLowerCase(), r.getBuyerUsername().toLowerCase(),</span>
+<span class="fc" id="L65">                r.getListingTitle(), r.getRating(), r.getComment(), r.getSellerReply(), r.isHidden(),</span>
+<span class="fc" id="L66">                r.isFlagged(), r.getCreatedAt());</span>
+        // Only once saved: inside a transaction that later rolls back, the review never appears.
+<span class="fc" id="L68">        db.afterCommit(() -&gt; {</span>
+<span class="fc" id="L69">            synchronized (this) {</span>
+<span class="fc" id="L70">                reviews.add(r);</span>
+<span class="fc" id="L71">            }</span>
+<span class="fc" id="L72">        });</span>
+<span class="fc" id="L73">    }</span>
+
+    /** The review of this deal, or {@code null} if it has not been reviewed. */
+    public synchronized Review forDeal(String dealId) {
+<span class="pc bpc" id="L77" title="1 of 4 branches missed.">        return reviews.stream().filter(r -&gt; dealId != null &amp;&amp; dealId.equals(r.getDealId())).findFirst().orElse(null);</span>
+    }
+
+    /** Every review the buyer has written, newest first, including ones the admin hid. */
+    public synchronized List&lt;Review&gt; byBuyer(String username) {
+<span class="fc" id="L82">        return reviews.stream()</span>
+<span class="fc" id="L83">                .filter(r -&gt; r.getBuyerUsername().equalsIgnoreCase(username))</span>
+<span class="fc" id="L84">                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())</span>
+<span class="fc" id="L85">                .collect(Collectors.toList());</span>
+    }
+
+    /** Saves a review's changeable fields: hidden (admin), flagged (seller) and the seller's reply. */
+    public synchronized void save(Review r) {
+<span class="fc bfc" id="L90" title="All 2 branches covered.">        if (!reviews.contains(r)) {</span>
+<span class="fc" id="L91">            throw new IllegalArgumentException(&quot;Unknown review: &quot; + r.getId());</span>
+        }
+<span class="fc" id="L93">        db.update(&quot;UPDATE reviews SET hidden = ?, flagged = ?, seller_reply = ? WHERE id = ?&quot;,</span>
+<span class="fc" id="L94">                r.isHidden(), r.isFlagged(), r.getSellerReply(), r.getId());</span>
+<span class="fc" id="L95">    }</span>
+
+    /** Rebuilds the saved reviews in the order added and resumes the {@code R} id counter. */
+    synchronized void load() {
+<span class="fc" id="L99">        db.query(&quot;SELECT * FROM reviews ORDER BY CAST(substr(id, 2) AS INTEGER)&quot;, row -&gt; {</span>
+<span class="fc" id="L100">            Review r = new Review();</span>
+<span class="fc" id="L101">            r.setId(row.getString(&quot;id&quot;));</span>
+<span class="fc" id="L102">            r.setSellerUsername(row.getString(&quot;seller_username&quot;));</span>
+<span class="fc" id="L103">            r.setBuyerUsername(row.getString(&quot;buyer_username&quot;));</span>
+<span class="fc" id="L104">            r.setListingTitle(row.getString(&quot;listing_title&quot;));</span>
+<span class="fc" id="L105">            r.setRating(row.getInt(&quot;rating&quot;));</span>
+<span class="fc" id="L106">            r.setComment(row.getString(&quot;comment&quot;));</span>
+<span class="fc" id="L107">            r.setSellerReply(row.getString(&quot;seller_reply&quot;));</span>
+<span class="fc" id="L108">            r.setDealId(row.getString(&quot;deal_id&quot;));</span>
+<span class="fc" id="L109">            r.setHidden(Database.bool(row, &quot;hidden&quot;));</span>
+<span class="fc" id="L110">            r.setFlagged(Database.bool(row, &quot;flagged&quot;));</span>
+<span class="fc" id="L111">            r.setCreatedAt(Database.dateTime(row, &quot;created_at&quot;));</span>
+<span class="fc" id="L112">            reviews.add(r);</span>
+<span class="fc" id="L113">            idCounter.set(Math.max(idCounter.get(), Integer.parseInt(r.getId().substring(1)) + 1));</span>
+<span class="fc" id="L114">            return r;</span>
+        });
+<span class="fc" id="L116">    }</span>
+
+    void seed() {
+<span class="fc" id="L119">        Review review = new Review();</span>
+<span class="fc" id="L120">        review.setSellerUsername(&quot;charlie&quot;);</span>
+<span class="fc" id="L121">        review.setBuyerUsername(&quot;bob&quot;);</span>
+<span class="fc" id="L122">        review.setListingTitle(&quot;Old Chemistry Book&quot;);</span>
+<span class="fc" id="L123">        review.setRating(5);</span>
+<span class="fc" id="L124">        review.setComment(&quot;Very smooth transaction, book in excellent condition!&quot;);</span>
+<span class="fc" id="L125">        add(review);</span>
+<span class="fc" id="L126">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

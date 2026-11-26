@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AdminFilters.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">AdminFilters.java</span></div><h1>AdminFilters.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.Review;
+import com.hkust.marketplace.models.User;
+
+import java.time.LocalDate;
+import java.util.Locale;
+
+/**
+ * Filter predicates for the admin deals table and review list (SRS UC-3.5, UC-3.6). Kept out
+ * of the JavaFX controller so the exact matching rules can be tested without a toolkit.
+ */
+public final class AdminFilters {
+
+    private AdminFilters() {
+    }
+
+    /**
+     * Matches the review list filters (SRS UC-3.6): keyword over seller, buyer and comment, then
+     * a star score and a visibility state.
+     *
+     * @param review the review to test
+     * @param keyword text to find in the seller, buyer or comment; blank means any
+     * @param scoreIndex 0 for &quot;All scores&quot;, otherwise 1 for 5 stars down to 5 for 1 star
+     * @param visibility &quot;All reviews&quot;, &quot;Visible&quot;, &quot;Hidden&quot; or &quot;Flagged&quot;
+     * @return {@code true} when the review passes every filter
+     */
+    public static boolean matchesReview(Review review, String keyword, int scoreIndex, String visibility) {
+<span class="fc" id="L30">        String text = normalise(keyword);</span>
+<span class="fc bfc" id="L31" title="All 2 branches covered.">        if (!text.isEmpty()</span>
+<span class="fc bfc" id="L32" title="All 2 branches covered.">                &amp;&amp; !contains(review.getSellerUsername(), text)</span>
+<span class="fc bfc" id="L33" title="All 2 branches covered.">                &amp;&amp; !contains(review.getBuyerUsername(), text)</span>
+<span class="fc bfc" id="L34" title="All 2 branches covered.">                &amp;&amp; !contains(review.getComment(), text)) {</span>
+<span class="fc" id="L35">            return false;</span>
+        }
+<span class="fc bfc" id="L37" title="All 2 branches covered.">        int wanted = scoreIndex == 0 ? 0 : 6 - scoreIndex;</span>
+<span class="fc bfc" id="L38" title="All 4 branches covered.">        if (wanted != 0 &amp;&amp; review.getRating() != wanted) {</span>
+<span class="fc" id="L39">            return false;</span>
+        }
+<span class="fc bfc" id="L41" title="All 2 branches covered.">        if (&quot;Hidden&quot;.equals(visibility)) {</span>
+<span class="fc" id="L42">            return review.isHidden();</span>
+        }
+<span class="fc bfc" id="L44" title="All 2 branches covered.">        if (&quot;Visible&quot;.equals(visibility)) {</span>
+<span class="fc bfc" id="L45" title="All 2 branches covered.">            return !review.isHidden();</span>
+        }
+<span class="fc bfc" id="L47" title="All 2 branches covered.">        if (&quot;Flagged&quot;.equals(visibility)) {</span>
+<span class="fc bfc" id="L48" title="All 4 branches covered.">            return review.isFlagged() &amp;&amp; !review.isHidden();</span>
+        }
+<span class="fc" id="L50">        return true;</span>
+    }
+
+    /**
+     * Matches the deals table filters (SRS UC-3.5): keyword over title and both usernames, deal
+     * type, status, and a date range that matches either the start or the end date.
+     *
+     * @param deal the deal to test
+     * @param keyword text to find in the title or usernames; blank means any
+     * @param type the exact deal type, or &quot;All types&quot;/{@code null}
+     * @param status the exact deal status, or &quot;All statuses&quot;/{@code null}
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
+     * @return {@code true} when the deal passes every filter
+     */
+    public static boolean matchesDeal(Deal deal, String keyword, String type, String status,
+                                      LocalDate from, LocalDate to) {
+<span class="fc" id="L67">        String text = normalise(keyword);</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        if (!text.isEmpty()</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getListing().getTitle(), text)</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getBuyerUsername(), text)</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getSellerUsername(), text)) {</span>
+<span class="fc" id="L72">            return false;</span>
+        }
+<span class="pc bpc" id="L74" title="1 of 6 branches missed.">        if (type != null &amp;&amp; !type.equals(&quot;All types&quot;) &amp;&amp; !type.equals(deal.getDealType().name())) {</span>
+<span class="fc" id="L75">            return false;</span>
+        }
+<span class="pc bpc" id="L77" title="1 of 6 branches missed.">        if (status != null &amp;&amp; !status.equals(&quot;All statuses&quot;) &amp;&amp; !status.equals(deal.getStatus().name())) {</span>
+<span class="fc" id="L78">            return false;</span>
+        }
+<span class="fc bfc" id="L80" title="All 4 branches covered.">        if (from == null &amp;&amp; to == null) {</span>
+<span class="fc" id="L81">            return true;</span>
+        }
+<span class="fc" id="L83">        LocalDate start = deal.getStartDate().toLocalDate();</span>
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        LocalDate end = deal.getCompletedDate() != null ? deal.getCompletedDate().toLocalDate()</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">                : deal.getDueDate() != null ? deal.getDueDate().toLocalDate() : null;</span>
+<span class="pc bpc" id="L86" title="3 of 6 branches missed.">        return inRange(start, from, to) || (end != null &amp;&amp; inRange(end, from, to));</span>
+    }
+
+    /**
+     * A historical record labels a soft-deleted account &quot;deleted user&quot; (SRS UC-3.3).
+     *
+     * @param user the account, or {@code null} when it no longer exists
+     * @param username the username to fall back to
+     * @return the label shown in historical tables
+     */
+    public static String partyLabel(User user, String username) {
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if (user == null) {</span>
+<span class="fc" id="L98">            return username;</span>
+        }
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        return user.isDeleted() ? &quot;deleted user&quot; : user.getFullName() + &quot; (@&quot; + username + &quot;)&quot;;</span>
+    }
+
+    static boolean inRange(LocalDate date, LocalDate from, LocalDate to) {
+<span class="pc bpc" id="L104" title="1 of 8 branches missed.">        return (from == null || !date.isBefore(from)) &amp;&amp; (to == null || !date.isAfter(to));</span>
+    }
+
+    private static boolean contains(String value, String keyword) {
+<span class="pc bpc" id="L108" title="1 of 4 branches missed.">        return value != null &amp;&amp; value.toLowerCase(Locale.ROOT).contains(keyword);</span>
+    }
+
+    private static String normalise(String text) {
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        return text == null ? &quot;&quot; : text.trim().toLowerCase(Locale.ROOT);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LendListing.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">LendListing.java</span></div><h1>LendListing.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.time.Duration;
+
+/** A listing lent for a fixed period (SRS UC-1.4). */
+public final class LendListing extends Listing {
+    private Duration lendingDuration;
+
+    /**
+     * Creates a lend listing.
+     *
+     * @param seller the owning seller
+     * @param title the listing title
+     * @param description the listing description
+     * @param category the category
+     * @param condition the item condition
+     * @param meetupLocation where the item is handed over
+     * @param lendingDuration how long the item may be borrowed
+     */
+    public LendListing(Seller seller, String title, String description, Category category,
+                       Condition condition, Location meetupLocation, Duration lendingDuration) {
+<span class="fc" id="L22">        super(seller, title, description, category, condition, meetupLocation);</span>
+<span class="fc" id="L23">        setLendingDuration(lendingDuration);</span>
+<span class="fc" id="L24">    }</span>
+
+    public Duration getLendingDuration() {
+<span class="fc" id="L27">        return lendingDuration;</span>
+    }
+
+    /** Admin edit (SRS UC-3.7); the listing keeps its type and seller. */
+    public void setLendingDuration(Duration lendingDuration) {
+<span class="fc" id="L32">        this.lendingDuration = LendingRules.requireLendingDuration(lendingDuration);</span>
+<span class="fc" id="L33">    }</span>
+
+    @Override
+    public ListingType getType() {
+<span class="fc" id="L37">        return ListingType.LEND;</span>
+    }
+
+    @Override
+    public String getPriceDisplay() {
+<span class="nc" id="L42">        return &quot;Borrow&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

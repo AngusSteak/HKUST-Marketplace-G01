@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReportStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">ReportStore.java</span></div><h1>ReportStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingReport;
+import com.hkust.marketplace.models.ReportStatus;
+import com.hkust.marketplace.persistence.Database;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Listing reports. Filing creates an Open report; only the admin resolves them. Reports are
+ * saved to the {@code listing_reports} table when filed and when resolved; {@link #load}
+ * rebuilds them at startup. Resolve through this store, not {@link ListingReport#resolve}
+ * directly, so the resolution is saved.
+ */
+public class ReportStore {
+
+<span class="fc" id="L22">    private final List&lt;ListingReport&gt; reports = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L23">    private final AtomicInteger idCounter = new AtomicInteger(1);</span>
+    private final Database db;
+
+<span class="fc" id="L26">    ReportStore(Database db) {</span>
+<span class="fc" id="L27">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L28">    }</span>
+
+    /** Files a report; the listing is unchanged until an admin decides. */
+    public synchronized ListingReport fileReport(Buyer buyer, Listing listing, String reason) {
+<span class="fc" id="L32">        ListingReport report = new ListingReport(</span>
+<span class="fc" id="L33">                &quot;RPT&quot; + idCounter.get(), buyer, listing, reason);</span>
+<span class="fc" id="L34">        db.update(&quot;INSERT INTO listing_reports (id, buyer_username, listing_id, reason, reported_time,&quot;</span>
+                        + &quot; status, resolution) VALUES (?, ?, ?, ?, ?, ?, ?)&quot;,
+<span class="fc" id="L36">                report.getId(), report.getReporterUsername().toLowerCase(), listing.getId(),</span>
+<span class="fc" id="L37">                report.getReason(), report.getReportedTime(), report.getStatus(), report.getResolution());</span>
+<span class="fc" id="L38">        idCounter.incrementAndGet();</span>
+        // Only once saved, so a report filed inside a transaction that rolls back never appears.
+<span class="fc" id="L40">        db.afterCommit(() -&gt; {</span>
+<span class="fc" id="L41">            synchronized (this) {</span>
+<span class="fc" id="L42">                reports.add(report);</span>
+<span class="fc" id="L43">            }</span>
+<span class="fc" id="L44">        });</span>
+<span class="fc" id="L45">        return report;</span>
+    }
+
+    /** Resolves one report with a note and saves it. */
+    public synchronized void resolve(ListingReport report, String resolution) {
+<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        if (!reports.contains(report)) {</span>
+<span class="nc" id="L51">            throw new IllegalArgumentException(&quot;Unknown report: &quot; + report.getId());</span>
+        }
+<span class="fc" id="L53">        resolveSaved(List.of(report), resolution);</span>
+<span class="fc" id="L54">    }</span>
+
+    /**
+     * Open reports on one listing, in filing order (SRS UC-3.7). Matched by listing id, not
+     * object identity, so reports survive the listing object being replaced (e.g. on edit).
+     */
+    public synchronized List&lt;ListingReport&gt; openReports(Listing listing) {
+<span class="fc" id="L61">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L62">        String listingId = Objects.requireNonNull(listing.getId(), &quot;listing id&quot;);</span>
+<span class="fc" id="L63">        return reports.stream()</span>
+<span class="fc bfc" id="L64" title="All 4 branches covered.">                .filter(r -&gt; listingId.equals(r.getListing().getId()) &amp;&amp; r.getStatus() == ReportStatus.OPEN)</span>
+<span class="fc" id="L65">                .toList();</span>
+    }
+
+    /** Resolves every open report on the listing; returns how many were resolved. */
+    public synchronized int resolveAll(Listing listing, String resolution) {
+<span class="pc bpc" id="L70" title="1 of 4 branches missed.">        if (resolution == null || resolution.isBlank()) {</span>
+<span class="fc" id="L71">            throw new IllegalArgumentException(&quot;Resolution must not be blank&quot;);</span>
+        }
+<span class="fc" id="L73">        List&lt;ListingReport&gt; open = openReports(listing);</span>
+<span class="fc" id="L74">        resolveSaved(open, resolution);</span>
+<span class="fc" id="L75">        return open.size();</span>
+    }
+
+    /**
+     * Saves the reports as resolved in one transaction, then updates them in memory, so a
+     * failed save changes nothing in either place.
+     */
+    private void resolveSaved(List&lt;ListingReport&gt; toResolve, String resolution) {
+<span class="pc bpc" id="L83" title="2 of 4 branches missed.">        if (resolution == null || resolution.isBlank()) {</span>
+<span class="nc" id="L84">            throw new IllegalArgumentException(&quot;Resolution must not be blank&quot;);</span>
+        }
+<span class="fc" id="L86">        String note = resolution.trim();</span>
+<span class="fc" id="L87">        db.inTransaction(() -&gt; toResolve.forEach(r -&gt; db.update(</span>
+                &quot;UPDATE listing_reports SET status = ?, resolution = ? WHERE id = ?&quot;,
+<span class="fc" id="L89">                ReportStatus.RESOLVED, note, r.getId())));</span>
+<span class="fc" id="L90">        toResolve.forEach(r -&gt; r.resolve(note));</span>
+<span class="fc" id="L91">    }</span>
+
+    /** Every report, in the order it was filed. */
+    public synchronized List&lt;ListingReport&gt; all() {
+<span class="fc" id="L95">        return List.copyOf(reports);</span>
+    }
+
+    /** Rebuilds saved reports in filing order and resumes the {@code RPT} id counter. */
+    synchronized void load(UserStore users, ListingStore listings) {
+<span class="fc" id="L100">        db.query(&quot;SELECT * FROM listing_reports ORDER BY CAST(substr(id, 4) AS INTEGER)&quot;, row -&gt; {</span>
+<span class="fc" id="L101">            String id = row.getString(&quot;id&quot;);</span>
+<span class="pc bpc" id="L102" title="1 of 2 branches missed.">            if (!(users.find(row.getString(&quot;buyer_username&quot;)) instanceof Buyer buyer)) {</span>
+<span class="nc" id="L103">                throw new IllegalStateException(&quot;Report &quot; + id + &quot; has unknown buyer&quot;);</span>
+            }
+<span class="fc" id="L105">            Listing listing = listings.find(row.getString(&quot;listing_id&quot;));</span>
+<span class="pc bpc" id="L106" title="1 of 2 branches missed.">            if (listing == null) {</span>
+<span class="nc" id="L107">                throw new IllegalStateException(&quot;Report &quot; + id + &quot; is on unknown listing&quot;);</span>
+            }
+<span class="fc" id="L109">            ListingReport report = new ListingReport(id, buyer, listing, row.getString(&quot;reason&quot;),</span>
+<span class="fc" id="L110">                    Database.dateTime(row, &quot;reported_time&quot;), ReportStatus.valueOf(row.getString(&quot;status&quot;)),</span>
+<span class="fc" id="L111">                    row.getString(&quot;resolution&quot;));</span>
+<span class="fc" id="L112">            reports.add(report);</span>
+<span class="fc" id="L113">            idCounter.set(Math.max(idCounter.get(), Integer.parseInt(id.substring(3)) + 1));</span>
+<span class="fc" id="L114">            return report;</span>
+        });
+<span class="fc" id="L116">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

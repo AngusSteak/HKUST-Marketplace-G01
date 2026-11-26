@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">UserStore.java</span></div><h1>UserStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.Admin;
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.PasswordRule;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+import com.hkust.marketplace.persistence.Database;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Accounts, keyed by lower-case username. Accounts are kept in memory and every change is
+ * written to the {@code users} table and loaded back at startup ({@link #load()}). They
+ * survive a restart once the reset-on-start switch is turned off (#59).
+ *
+ * &lt;p&gt;Change an account's fields, then call {@link #save(User)}; never change a {@code User}
+ * and skip the store.
+ */
+public class UserStore {
+
+<span class="fc" id="L33">    private final Map&lt;String, User&gt; users = new LinkedHashMap&lt;&gt;();</span>
+    private final Database db;
+
+<span class="fc" id="L36">    UserStore(Database db) {</span>
+<span class="fc" id="L37">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L38">    }</span>
+
+    /** Whether the username is already taken, ignoring case. */
+    public boolean usernameExists(String username) {
+<span class="fc" id="L42">        return users.containsKey(username.toLowerCase());</span>
+    }
+
+    /** The account with this username, or {@code null}. */
+    public User find(String username) {
+<span class="fc" id="L47">        return users.get(username.toLowerCase());</span>
+    }
+
+    /**
+     * Adds a new account and saves it. Usernames are unique across roles (ADR-0003): first
+     * registration wins, so a duplicate can never replace the existing account.
+     *
+     * @return false if the username was already taken (nothing is saved)
+     */
+    public boolean register(User user) {
+<span class="fc" id="L57">        String key = user.getUsername().toLowerCase();</span>
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        if (users.containsKey(key)) {</span>
+<span class="fc" id="L59">            return false;</span>
+        }
+<span class="fc" id="L61">        db.inTransaction(() -&gt; {</span>
+<span class="fc" id="L62">            db.update(&quot;INSERT INTO users (username, full_name, password_hash, role, active, deleted,&quot;</span>
+                            + &quot; created_at, residence_hall, bio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;,
+<span class="fc" id="L64">                    key, user.getFullName(), user.getPasswordHash(), user.getRole(), user.isActive(),</span>
+<span class="fc" id="L65">                    user.isDeleted(), user.getCreatedAt(), residenceHall(user), bio(user));</span>
+<span class="fc" id="L66">            saveMeetupLocations(key, user);</span>
+<span class="fc" id="L67">        });</span>
+<span class="fc" id="L68">        users.put(key, user);</span>
+<span class="fc" id="L69">        return true;</span>
+    }
+
+    /**
+     * Saves every changeable field of an existing account: full name, password hash, active,
+     * deleted, residence hall, bio and preferred meet-up locations. The username and role
+     * never change.
+     */
+    public void save(User user) {
+<span class="fc" id="L78">        String key = user.getUsername().toLowerCase();</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        if (users.get(key) != user) {</span>
+<span class="fc" id="L80">            throw new IllegalArgumentException(&quot;Unknown account: &quot; + user.getUsername());</span>
+        }
+<span class="fc" id="L82">        db.inTransaction(() -&gt; {</span>
+<span class="fc" id="L83">            db.update(&quot;UPDATE users SET full_name = ?, password_hash = ?, active = ?, deleted = ?,&quot;</span>
+                            + &quot; residence_hall = ?, bio = ? WHERE username = ?&quot;,
+<span class="fc" id="L85">                    user.getFullName(), user.getPasswordHash(), user.isActive(), user.isDeleted(),</span>
+<span class="fc" id="L86">                    residenceHall(user), bio(user), key);</span>
+<span class="fc" id="L87">            db.update(&quot;DELETE FROM seller_meetup_locations WHERE username = ?&quot;, key);</span>
+<span class="fc" id="L88">            saveMeetupLocations(key, user);</span>
+<span class="fc" id="L89">        });</span>
+<span class="fc" id="L90">    }</span>
+
+    /** Reads every saved account back into memory. Called once at startup. */
+    void load() {
+<span class="fc" id="L94">        users.clear();</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">        for (User user : db.query(&quot;SELECT * FROM users ORDER BY rowid&quot;, UserStore::toUser)) {</span>
+<span class="fc" id="L96">            users.put(user.getUsername(), user);</span>
+<span class="fc" id="L97">        }</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        for (String[] row : db.query(&quot;SELECT username, location FROM seller_meetup_locations&quot;,</span>
+<span class="fc" id="L99">                rows -&gt; new String[]{rows.getString(&quot;username&quot;), rows.getString(&quot;location&quot;)})) {</span>
+<span class="pc bpc" id="L100" title="1 of 2 branches missed.">            if (users.get(row[0]) instanceof Seller seller) {</span>
+<span class="fc" id="L101">                Set&lt;Location&gt; locations = EnumSet.noneOf(Location.class);</span>
+<span class="fc" id="L102">                locations.addAll(seller.getPreferredMeetup());</span>
+<span class="fc" id="L103">                locations.add(Location.valueOf(row[1]));</span>
+<span class="fc" id="L104">                seller.setPreferredMeetup(locations);</span>
+            }
+<span class="fc" id="L106">        }</span>
+<span class="fc" id="L107">    }</span>
+
+    private static User toUser(ResultSet row) throws SQLException {
+<span class="fc" id="L110">        String username = row.getString(&quot;username&quot;);</span>
+<span class="fc" id="L111">        String fullName = row.getString(&quot;full_name&quot;);</span>
+<span class="fc" id="L112">        String hash = row.getString(&quot;password_hash&quot;);</span>
+<span class="fc" id="L113">        UserRole role = UserRole.valueOf(row.getString(&quot;role&quot;));</span>
+<span class="fc bfc" id="L114" title="All 3 branches covered.">        User user = switch (role) {</span>
+<span class="fc" id="L115">            case ADMIN -&gt; new Admin(username, fullName, hash, role);</span>
+            case BUYER -&gt; {
+<span class="fc" id="L117">                Buyer buyer = new Buyer(username, fullName, hash, role);</span>
+<span class="fc" id="L118">                buyer.setResidenceHall(row.getString(&quot;residence_hall&quot;));</span>
+<span class="fc" id="L119">                yield buyer;</span>
+            }
+            case SELLER -&gt; {
+<span class="fc" id="L122">                Seller seller = new Seller(username, fullName, hash, role);</span>
+<span class="fc" id="L123">                seller.setBio(row.getString(&quot;bio&quot;));</span>
+<span class="fc" id="L124">                yield seller;</span>
+            }
+        };
+<span class="fc" id="L127">        user.setActive(Database.bool(row, &quot;active&quot;));</span>
+<span class="fc" id="L128">        user.setDeleted(Database.bool(row, &quot;deleted&quot;));</span>
+<span class="fc" id="L129">        user.setCreatedAt(Database.dateTime(row, &quot;created_at&quot;));</span>
+<span class="fc" id="L130">        return user;</span>
+    }
+
+    private void saveMeetupLocations(String key, User user) {
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        if (user instanceof Seller seller) {</span>
+<span class="fc bfc" id="L135" title="All 2 branches covered.">            for (Location location : seller.getPreferredMeetup()) {</span>
+<span class="fc" id="L136">                db.update(&quot;INSERT INTO seller_meetup_locations (username, location) VALUES (?, ?)&quot;,</span>
+                        key, location);
+<span class="fc" id="L138">            }</span>
+        }
+<span class="fc" id="L140">    }</span>
+
+    private static String residenceHall(User user) {
+<span class="fc bfc" id="L143" title="All 2 branches covered.">        return user instanceof Buyer buyer ? buyer.getResidenceHall() : null;</span>
+    }
+
+    private static String bio(User user) {
+<span class="fc bfc" id="L147" title="All 2 branches covered.">        return user instanceof Seller seller ? seller.getBio() : null;</span>
+    }
+
+    /** Active and disabled accounts only; soft-deleted accounts stay in {@link #find}. */
+    public Collection&lt;User&gt; all() {
+<span class="fc" id="L152">        return users.values().stream()</span>
+<span class="fc bfc" id="L153" title="All 2 branches covered.">                .filter(u -&gt; !u.isDeleted())</span>
+<span class="fc" id="L154">                .collect(Collectors.toList());</span>
+    }
+
+    /** Every account with this role, in registration order. */
+    public List&lt;User&gt; byRole(UserRole role) {
+<span class="fc" id="L159">        return all().stream()</span>
+<span class="fc bfc" id="L160" title="All 2 branches covered.">                .filter(u -&gt; u.getRole() == role)</span>
+<span class="fc" id="L161">                .collect(Collectors.toList());</span>
+    }
+
+    /** Label for a username stored in a historical record (review, deal, chat). */
+    public String historicalLabel(String username) {
+<span class="fc" id="L166">        User user = find(username);</span>
+<span class="pc bpc" id="L167" title="1 of 4 branches missed.">        return user != null &amp;&amp; user.isDeleted() ? &quot;deleted user&quot; : &quot;@&quot; + username;</span>
+    }
+
+    void seed() {
+<span class="fc" id="L171">        Admin admin = new Admin(&quot;admin&quot;, &quot;System Admin&quot;, PasswordHasher.hash(&quot;admin123&quot;), UserRole.ADMIN);</span>
+<span class="fc" id="L172">        admin.setFullName(&quot;HKUST Marketplace Admin&quot;);</span>
+<span class="fc" id="L173">        register(admin);</span>
+
+<span class="fc" id="L175">        Buyer buyer1 = new Buyer(&quot;alice&quot;, &quot;Alice Chan&quot;, PasswordHasher.hash(&quot;password1&quot;), UserRole.BUYER);</span>
+<span class="fc" id="L176">        buyer1.setResidenceHall(&quot;Hall 3&quot;);</span>
+<span class="fc" id="L177">        register(buyer1);</span>
+
+<span class="fc" id="L179">        Buyer buyer2 = new Buyer(&quot;bob&quot;, &quot;Bob Wong&quot;, PasswordHasher.hash(&quot;password1&quot;), UserRole.BUYER);</span>
+<span class="fc" id="L180">        buyer2.setResidenceHall(&quot;Off-campus&quot;);</span>
+<span class="fc" id="L181">        register(buyer2);</span>
+
+<span class="fc" id="L183">        Seller seller1 = new Seller(&quot;charlie&quot;, &quot;Charlie Lee&quot;, PasswordHasher.hash(&quot;password1&quot;), UserRole.SELLER);</span>
+<span class="fc" id="L184">        seller1.setBio(&quot;Final year CSE student selling textbooks and gadgets.&quot;);</span>
+<span class="fc" id="L185">        seller1.setPreferredMeetup(EnumSet.of(Location.LIBRARY));</span>
+<span class="fc" id="L186">        register(seller1);</span>
+
+<span class="fc" id="L188">        Seller seller2 = new Seller(&quot;diana&quot;, &quot;Diana Ng&quot;, PasswordHasher.hash(&quot;password1&quot;), UserRole.SELLER);</span>
+<span class="fc" id="L189">        seller2.setBio(&quot;Selling furniture and kitchen items before graduation.&quot;);</span>
+<span class="fc" id="L190">        seller2.setPreferredMeetup(EnumSet.of(Location.UG_HALL_V));</span>
+<span class="fc" id="L191">        register(seller2);</span>
+<span class="fc" id="L192">    }</span>
+
+    /**
+     * Checks a password against UC-1.1 A3. Returns every rule that failed, so the caller
+     * can report all problems at once; an empty set means the password is acceptable.
+     */
+    public static Set&lt;PasswordRule&gt; checkPasswordStrength(String password, String username) {
+<span class="fc bfc" id="L199" title="All 2 branches covered.">        String pwd = password == null ? &quot;&quot; : password;</span>
+<span class="fc" id="L200">        EnumSet&lt;PasswordRule&gt; failed = EnumSet.noneOf(PasswordRule.class);</span>
+
+<span class="fc bfc" id="L202" title="All 4 branches covered.">        if (pwd.length() &lt; 8 || pwd.length() &gt; 64) failed.add(PasswordRule.LENGTH);</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        if (pwd.chars().noneMatch(Character::isUpperCase)) failed.add(PasswordRule.UPPERCASE);</span>
+<span class="fc bfc" id="L204" title="All 2 branches covered.">        if (pwd.chars().noneMatch(Character::isLowerCase)) failed.add(PasswordRule.LOWERCASE);</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        if (pwd.chars().noneMatch(Character::isDigit)) failed.add(PasswordRule.DIGIT);</span>
+<span class="pc bpc" id="L206" title="1 of 6 branches missed.">        if (pwd.chars().noneMatch(c -&gt; !Character.isLetterOrDigit(c) &amp;&amp; !Character.isWhitespace(c))) {</span>
+<span class="fc" id="L207">            failed.add(PasswordRule.SPECIAL);</span>
+        }
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        if (pwd.chars().anyMatch(Character::isWhitespace)) failed.add(PasswordRule.NO_SPACES);</span>
+<span class="pc bpc" id="L210" title="1 of 4 branches missed.">        if (username != null &amp;&amp; pwd.equalsIgnoreCase(username)) failed.add(PasswordRule.NOT_USERNAME);</span>
+
+<span class="fc" id="L212">        return failed;</span>
+    }
+
+    /** Human-readable, single-message form for the registration forms. */
+    public static String formatPasswordErrors(Set&lt;PasswordRule&gt; failed) {
+<span class="fc" id="L217">        return failed.stream()</span>
+<span class="fc" id="L218">                .map(PasswordRule::getMessage)</span>
+<span class="fc" id="L219">                .collect(Collectors.joining(&quot; &quot;));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

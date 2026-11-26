@@ -8,7 +8,7 @@
     <artifactId>marketplace</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>HKUST Marketplace</name>
-    <description>HKUST Campus Marketplace - Frontend Demo / Skeleton (JavaFX)</description>
+    <description>HKUST Campus Marketplace - JavaFX desktop app with local SQLite storage</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -103,11 +103,18 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
             </plugin>
-            <!-- Code coverage report: target/site/jacoco/index.html (see README) -->
+            <!-- Code coverage report: target/site/jacoco/index.html (see README).
+                 JavaFX controllers are the UI layer and are covered lightly; measure the
+                 tested business logic (models, services/utils, persistence, forms). -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>${jacoco.version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>com/hkust/marketplace/controllers/**</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

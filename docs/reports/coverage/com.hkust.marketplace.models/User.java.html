@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>User.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.models</a> &gt; <span class="el_source">User.java</span></div><h1>User.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.models;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+/**
+ * Abstract base for every marketplace account. Carries only the identity and credential
+ * state common to Buyer, Seller and Admin, plus the role discriminator used for portal
+ * routing (ADR-0001). Role-specific state lives on the subtypes.
+ * Simple in-memory user model (no persistence).
+ * TODO: Replace with real entity + repository when backend is added.
+ */
+public abstract class User {
+    private String username;
+    private String fullName;
+    private String passwordHash; // BCrypt hash produced by PasswordHasher; plaintext is never stored
+    private final UserRole role;
+    // Activity 1: isActive
+<span class="fc" id="L19">    private boolean active = true;</span>
+    // Soft delete: the account cannot log in, but historical records still refer to it.
+<span class="fc" id="L21">    private boolean deleted = false;</span>
+    // Activity 1: registeredDate
+    private LocalDateTime createdAt;
+
+<span class="fc" id="L25">    protected User(String username, String fullName, String password, UserRole role) {</span>
+<span class="fc" id="L26">        this.username = username;</span>
+<span class="fc" id="L27">        this.fullName = fullName;</span>
+<span class="fc" id="L28">        this.passwordHash = password; // Callers pass an already-hashed password (see PasswordHasher)</span>
+<span class="fc" id="L29">        this.role = Objects.requireNonNull(role, &quot;role must not be null&quot;);</span>
+<span class="fc" id="L30">        this.createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L31">    }</span>
+
+    // Getters &amp; Setters
+<span class="fc" id="L34">    public String getUsername() { return username; }</span>
+<span class="nc" id="L35">    public void setUsername(String username) { this.username = username; }</span>
+
+<span class="fc" id="L37">    public String getFullName() { return fullName; }</span>
+<span class="fc" id="L38">    public void setFullName(String fullName) { this.fullName = fullName; }</span>
+
+<span class="fc" id="L40">    public String getPasswordHash() { return passwordHash; }</span>
+<span class="fc" id="L41">    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }</span>
+
+<span class="fc" id="L43">    public UserRole getRole() { return role; }</span>
+
+<span class="fc" id="L45">    public boolean isActive() { return active; }</span>
+<span class="fc" id="L46">    public void setActive(boolean active) { this.active = active; }</span>
+
+<span class="fc" id="L48">    public boolean isDeleted() { return deleted; }</span>
+<span class="fc" id="L49">    public void setDeleted(boolean deleted) { this.deleted = deleted; }</span>
+
+    /**
+     * How historical deals, reviews and chats label this account after a soft delete.
+     *
+     * @return the full name, or &quot;deleted user&quot; after a soft delete
+     */
+<span class="fc bfc" id="L56" title="All 2 branches covered.">    public String getDisplayName() { return deleted ? &quot;deleted user&quot; : fullName; }</span>
+
+<span class="fc" id="L58">    public LocalDateTime getCreatedAt() { return createdAt; }</span>
+<span class="fc" id="L59">    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L63">        return fullName + &quot; (@&quot; + username + &quot;)&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

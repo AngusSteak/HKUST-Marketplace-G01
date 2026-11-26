@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MyDealsService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">MyDealsService.java</span></div><h1>MyDealsService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealLifecycle;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.DealStatus;
+import com.hkust.marketplace.models.DealType;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.models.NotificationRef;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.models.UserRole;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Manage My Deals (SRS UC-1.6): the buyer answers a seller's counter-offer, returns a borrowed
+ * item or marks a purchase or claim complete. Every change goes through {@link DealLifecycle}
+ * (which saves it) and the other party is notified.
+ *
+ * &lt;p&gt;Refusals throw with a message for the buyer: {@link SecurityException} if the actor is not
+ * the active buyer of that request or deal, {@link IllegalStateException} if the action no
+ * longer applies (including A2 and A3, which change state before refusing).
+ */
+public final class MyDealsService {
+
+    /** SRS UC-1.6 A2; the request has been declined when this is thrown. */
+    public static final String COUNTER_NO_LONGER_VALID =
+            &quot;Sorry, this counter-offer can no longer be accepted because the item is no longer available.&quot;
+                    + &quot; Your request has been declined.&quot;;
+    /** SRS UC-1.6 A3. */
+    public static final String ALREADY_AUTO_RETURNED =
+            &quot;This item was already returned automatically because its due date has passed.&quot;;
+
+<span class="fc" id="L44">    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern(&quot;d MMM yyyy HH:mm&quot;);</span>
+
+    private final DummyDataService data;
+    private final Clock clock;
+
+    /** Creates the service with the system clock. */
+    public MyDealsService(DummyDataService data) {
+<span class="fc" id="L51">        this(data, Clock.systemDefaultZone());</span>
+<span class="fc" id="L52">    }</span>
+
+    /** Uses {@code clock} for &quot;now&quot; when deciding whether a loan is overdue, so tests can fix it. */
+<span class="fc" id="L55">    MyDealsService(DummyDataService data, Clock clock) {</span>
+<span class="fc" id="L56">        this.data = Objects.requireNonNull(data, &quot;data&quot;);</span>
+<span class="fc" id="L57">        this.clock = Objects.requireNonNull(clock, &quot;clock&quot;);</span>
+<span class="fc" id="L58">    }</span>
+
+    // ---------- Respond to counter (step 3.2) ----------
+
+    /**
+     * Accepts the seller's counter: the request becomes Accepted with the countered terms, a deal
+     * opens, the listing is Reserved or Lent, and the other open requests on it are declined.
+     * If the listing is no longer available the request is declined instead (A2).
+     */
+    public Deal acceptCounter(User actor, DealRequest request) {
+<span class="fc" id="L68">        Buyer buyer = requireOwnCounter(actor, request);</span>
+<span class="fc" id="L69">        Listing listing = request.getListing();</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">        if (!ListingSearch.isBrowsable(listing)) {</span>
+<span class="fc" id="L71">            throw declineBecauseUnavailable(request);</span>
+        }
+<span class="fc" id="L73">        List&lt;DealRequest&gt; othersOpen = lifecycle().requestsFor(listing).stream()</span>
+<span class="fc bfc" id="L74" title="All 4 branches covered.">                .filter(r -&gt; r != request &amp;&amp; isOpen(r))</span>
+<span class="fc" id="L75">                .toList();</span>
+        Deal deal;
+        try {
+<span class="fc" id="L78">            deal = lifecycle().acceptCounter(request);</span>
+<span class="nc" id="L79">        } catch (IllegalStateException e) {</span>
+            // Another request on the listing was accepted first.
+<span class="nc" id="L81">            throw declineBecauseUnavailable(request);</span>
+<span class="fc" id="L82">        }</span>
+<span class="fc" id="L83">        notify(request.getSellerUsername(), NotificationCategory.NEW_REQUEST,</span>
+<span class="fc" id="L84">                buyer.getDisplayName() + &quot; accepted your counter-offer (&quot; + terms(request) + &quot;) for '&quot;</span>
+<span class="fc" id="L85">                        + listing.getTitle() + &quot;'.&quot;, NotificationRef.Target.DEAL, deal.getId());</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        for (DealRequest other : othersOpen) {</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">            if (other.getStatus() == RequestStatus.DECLINED) {</span>
+<span class="fc" id="L88">                notify(other.getBuyerUsername(), NotificationCategory.OFFER_UPDATE,</span>
+<span class="fc" id="L89">                        &quot;Your request for '&quot; + listing.getTitle() + &quot;' was declined because the item is no longer&quot;</span>
+<span class="fc" id="L90">                                + &quot; available.&quot;, NotificationRef.Target.REQUEST, other.getId());</span>
+            }
+<span class="fc" id="L92">        }</span>
+<span class="fc" id="L93">        return deal;</span>
+    }
+
+    /** Declines the seller's counter; the request is Declined and the seller is told. */
+    public DealRequest declineCounter(User actor, DealRequest request) {
+<span class="fc" id="L98">        Buyer buyer = requireOwnCounter(actor, request);</span>
+<span class="fc" id="L99">        lifecycle().decline(request);</span>
+<span class="fc" id="L100">        notify(request.getSellerUsername(), NotificationCategory.NEW_REQUEST,</span>
+<span class="fc" id="L101">                buyer.getDisplayName() + &quot; declined your counter-offer for '&quot; + request.getListing().getTitle() + &quot;'.&quot;,</span>
+<span class="fc" id="L102">                NotificationRef.Target.REQUEST, request.getId());</span>
+<span class="fc" id="L103">        return request;</span>
+    }
+
+    // ---------- Return item (step 3.3) ----------
+
+    /**
+     * Returns a borrowed item: the deal is Returned with today's date, the listing is Live again
+     * and the seller is told. If the due date has passed the loan is auto-returned instead (or
+     * already was) and the buyer is told so (A3).
+     */
+    public Deal returnItem(User actor, Deal deal) {
+<span class="fc" id="L114">        Buyer buyer = requireOwnDeal(actor, deal);</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        if (deal.getDealType() != DealType.LENT) {</span>
+<span class="fc" id="L116">            throw new IllegalStateException(&quot;Only a borrowed item can be returned.&quot;);</span>
+        }
+<span class="fc bfc" id="L118" title="All 2 branches covered.">        if (deal.getStatus() == DealStatus.AUTO_RETURNED) {</span>
+<span class="fc" id="L119">            throw new IllegalStateException(ALREADY_AUTO_RETURNED);</span>
+        }
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if (deal.getStatus() != DealStatus.ACTIVE) {</span>
+<span class="nc" id="L122">            throw new IllegalStateException(&quot;This item has already been returned.&quot;);</span>
+        }
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        if (!LocalDateTime.now(clock).isBefore(deal.getDueDate())) {</span>
+<span class="fc" id="L125">            autoReturn(deal);</span>
+<span class="fc" id="L126">            throw new IllegalStateException(ALREADY_AUTO_RETURNED);</span>
+        }
+<span class="fc" id="L128">        lifecycle().returnItem(deal);</span>
+<span class="fc" id="L129">        notify(deal.getSellerUsername(), NotificationCategory.DEAL_COMPLETED,</span>
+<span class="fc" id="L130">                buyer.getDisplayName() + &quot; returned '&quot; + deal.getListing().getTitle() + &quot;'. It is live again.&quot;,</span>
+<span class="fc" id="L131">                NotificationRef.Target.DEAL, deal.getId());</span>
+<span class="fc" id="L132">        return deal;</span>
+    }
+
+    /**
+     * Auto-returns an overdue loan (SRS UC-1.6 special requirements): the deal is Auto-Returned,
+     * the listing Live again, and both parties are told. A system action with no actor, also
+     * used by the due-date timer (#22). Does nothing if the loan is no longer active.
+     *
+     * @return whether the loan was auto-returned now
+     */
+    public boolean autoReturn(Deal deal) {
+<span class="fc" id="L143">        Objects.requireNonNull(deal, &quot;deal&quot;);</span>
+<span class="pc bpc" id="L144" title="1 of 4 branches missed.">        if (deal.getDealType() != DealType.LENT || deal.getStatus() != DealStatus.ACTIVE) {</span>
+<span class="fc" id="L145">            return false;</span>
+        }
+<span class="fc" id="L147">        lifecycle().autoReturn(deal);</span>
+<span class="fc" id="L148">        String title = deal.getListing().getTitle();</span>
+<span class="fc" id="L149">        notify(deal.getBuyerUsername(), NotificationCategory.BORROW_REMINDER,</span>
+<span class="fc" id="L150">                &quot;'&quot; + title + &quot;' was due &quot; + deal.getDueDate().format(WHEN) + &quot; and has been marked as returned.&quot;,</span>
+<span class="fc" id="L151">                NotificationRef.Target.DEAL, deal.getId());</span>
+<span class="fc" id="L152">        notify(deal.getSellerUsername(), NotificationCategory.DEAL_COMPLETED,</span>
+<span class="fc" id="L153">                &quot;The loan of '&quot; + title + &quot;' to &quot; + deal.getBuyerDisplayName()</span>
+                        + &quot; passed its due date and was marked as returned. It is live again.&quot;,
+<span class="fc" id="L155">                NotificationRef.Target.DEAL, deal.getId());</span>
+<span class="fc" id="L156">        return true;</span>
+    }
+
+    // ---------- Mark complete (step 3.4) ----------
+
+    /**
+     * The buyer confirms receiving a purchased or claimed item: the deal is Completed and the
+     * listing Sold or Given, and the seller is told. The screen then prompts for a rating.
+     */
+    public Deal markComplete(User actor, Deal deal) {
+<span class="fc" id="L166">        Buyer buyer = requireOwnDeal(actor, deal);</span>
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        if (deal.getDealType() == DealType.LENT) {</span>
+<span class="fc" id="L168">            throw new IllegalStateException(&quot;A borrowed item is returned, not marked complete.&quot;);</span>
+        }
+<span class="fc bfc" id="L170" title="All 2 branches covered.">        if (deal.getStatus() != DealStatus.ACTIVE) {</span>
+<span class="fc" id="L171">            throw new IllegalStateException(&quot;This deal is already &quot; + deal.getStatus().name().toLowerCase() + &quot;.&quot;);</span>
+        }
+<span class="fc" id="L173">        lifecycle().complete(deal);</span>
+<span class="fc" id="L174">        notify(deal.getSellerUsername(), NotificationCategory.DEAL_COMPLETED,</span>
+<span class="fc" id="L175">                buyer.getDisplayName() + &quot; received '&quot; + deal.getListing().getTitle() + &quot;'. The deal is complete.&quot;,</span>
+<span class="fc" id="L176">                NotificationRef.Target.DEAL, deal.getId());</span>
+<span class="fc" id="L177">        return deal;</span>
+    }
+
+    // ---------- Internals ----------
+
+    private DealLifecycle lifecycle() {
+<span class="fc" id="L183">        return data.deals().lifecycle();</span>
+    }
+
+    /** A2: declines the request and returns the exception that tells the buyer why. */
+    private IllegalStateException declineBecauseUnavailable(DealRequest request) {
+<span class="fc" id="L188">        lifecycle().decline(request);</span>
+<span class="fc" id="L189">        notify(request.getSellerUsername(), NotificationCategory.NEW_REQUEST,</span>
+<span class="fc" id="L190">                request.getBuyerDisplayName() + &quot;'s request for '&quot; + request.getListing().getTitle()</span>
+                        + &quot;' was declined: the counter-offer could not be accepted because the item is no longer&quot;
+<span class="fc" id="L192">                        + &quot; available.&quot;, NotificationRef.Target.REQUEST, request.getId());</span>
+<span class="fc" id="L193">        return new IllegalStateException(COUNTER_NO_LONGER_VALID);</span>
+    }
+
+    private Buyer requireOwnCounter(User actor, DealRequest request) {
+<span class="fc" id="L197">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc" id="L198">        Buyer buyer = requireBuyer(actor, request.getBuyerUsername());</span>
+<span class="fc bfc" id="L199" title="All 2 branches covered.">        if (request.getStatus() != RequestStatus.COUNTERED) {</span>
+<span class="fc" id="L200">            throw new IllegalStateException(&quot;There is no counter-offer to respond to on this request.&quot;);</span>
+        }
+<span class="fc" id="L202">        return buyer;</span>
+    }
+
+    private Buyer requireOwnDeal(User actor, Deal deal) {
+<span class="fc" id="L206">        Objects.requireNonNull(deal, &quot;deal&quot;);</span>
+<span class="fc" id="L207">        return requireBuyer(actor, deal.getBuyerUsername());</span>
+    }
+
+    private static Buyer requireBuyer(User actor, String owner) {
+<span class="fc" id="L211">        Buyer buyer = (Buyer) AccessControl.require(actor, UserRole.BUYER);</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">        if (!buyer.getUsername().equalsIgnoreCase(owner)) {</span>
+<span class="fc" id="L213">            throw new SecurityException(&quot;This is not your deal.&quot;);</span>
+        }
+<span class="fc" id="L215">        return buyer;</span>
+    }
+
+    private static boolean isOpen(DealRequest request) {
+<span class="pc bpc" id="L219" title="1 of 4 branches missed.">        return request.getStatus() == RequestStatus.PENDING || request.getStatus() == RequestStatus.COUNTERED;</span>
+    }
+
+    /** The agreed terms in words: a price, or a borrow period. */
+    static String terms(DealRequest request) {
+<span class="fc bfc" id="L224" title="All 2 branches covered.">        if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L225">            return new Money(offer.agreedPrice()).getDisplay();</span>
+        }
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">        if (request instanceof BorrowRequest borrow) {</span>
+<span class="fc" id="L228">            return borrow.agreedStart().format(WHEN) + &quot; to &quot; + borrow.agreedEnd().format(WHEN);</span>
+        }
+<span class="nc" id="L230">        return &quot;claim&quot;;</span>
+    }
+
+    private void notify(String recipient, NotificationCategory category, String message,
+                        NotificationRef.Target target, String id) {
+<span class="fc" id="L235">        data.notifications().notify(recipient, category, message, new NotificationRef(target, id));</span>
+<span class="fc" id="L236">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

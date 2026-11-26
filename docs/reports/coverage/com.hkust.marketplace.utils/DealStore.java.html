@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DealStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">DealStore.java</span></div><h1>DealStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Buyer;
+import com.hkust.marketplace.models.Deal;
+import com.hkust.marketplace.models.DealLifecycle;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.DealStatus;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.persistence.Database;
+
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.Predicate;
+
+/**
+ * Deal requests and deals. All state changes go through {@link #lifecycle()}; after every
+ * transition this store saves the listing's requests, deals and status to the
+ * {@code deal_requests}, {@code deals} and {@code listings} tables, and {@link #load} rebuilds
+ * them at startup. Otherwise it only answers queries for the portals.
+ */
+public class DealStore {
+
+<span class="fc" id="L34">    private final DealLifecycle lifecycle = new DealLifecycle();</span>
+    private final Database db;
+    private final ListingStore listings;
+
+<span class="fc" id="L38">    DealStore(Database db, ListingStore listings) {</span>
+<span class="fc" id="L39">        this.db = Objects.requireNonNull(db, &quot;db&quot;);</span>
+<span class="fc" id="L40">        this.listings = Objects.requireNonNull(listings, &quot;listings&quot;);</span>
+<span class="fc" id="L41">        lifecycle.setListener(this::save);</span>
+<span class="fc" id="L42">    }</span>
+
+    /** The transition engine; use it to submit, counter, accept, return or complete. */
+    public DealLifecycle lifecycle() {
+<span class="fc" id="L46">        return lifecycle;</span>
+    }
+
+    /** Every request, in submit order. */
+    public List&lt;DealRequest&gt; allRequests() {
+<span class="fc" id="L51">        return lifecycle.requests();</span>
+    }
+
+    /** Every deal, in the order the requests were accepted. */
+    public List&lt;Deal&gt; allDeals() {
+<span class="fc" id="L56">        return lifecycle.deals();</span>
+    }
+
+    /** A request by id (e.g. the one behind a Formal Offer message), or {@code null}. */
+    public DealRequest findRequest(String id) {
+<span class="fc" id="L61">        return lifecycle.findRequest(id);</span>
+    }
+
+    /** Every request the buyer has made, in submit order. */
+    public List&lt;DealRequest&gt; requestsByBuyer(String username) {
+<span class="fc" id="L66">        return lifecycle.requests().stream()</span>
+<span class="fc" id="L67">                .filter(byUser(username, DealRequest::getBuyerUsername))</span>
+<span class="fc" id="L68">                .toList();</span>
+    }
+
+    /** Every request made on the seller's listings, in submit order. */
+    public List&lt;DealRequest&gt; requestsForSeller(String username) {
+<span class="fc" id="L73">        return lifecycle.requests().stream()</span>
+<span class="fc" id="L74">                .filter(byUser(username, DealRequest::getSellerUsername))</span>
+<span class="fc" id="L75">                .toList();</span>
+    }
+
+    /** Every deal the buyer is part of, in the order the deals were accepted. */
+    public List&lt;Deal&gt; dealsForBuyer(String username) {
+<span class="fc" id="L80">        return lifecycle.deals().stream()</span>
+<span class="fc" id="L81">                .filter(d -&gt; username.equalsIgnoreCase(d.getBuyerUsername()))</span>
+<span class="fc" id="L82">                .toList();</span>
+    }
+
+    /** Every deal the seller is part of, in the order the deals were accepted. */
+    public List&lt;Deal&gt; dealsForSeller(String username) {
+<span class="fc" id="L87">        return lifecycle.deals().stream()</span>
+<span class="fc" id="L88">                .filter(d -&gt; username.equalsIgnoreCase(d.getSellerUsername()))</span>
+<span class="fc" id="L89">                .toList();</span>
+    }
+
+    /** The buyer's requests still waiting on a response: Pending or Countered (My Deals). */
+    public List&lt;DealRequest&gt; openRequestsByBuyer(String username) {
+<span class="fc" id="L94">        return requestsByBuyer(username).stream()</span>
+<span class="pc bpc" id="L95" title="1 of 4 branches missed.">                .filter(r -&gt; r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)</span>
+<span class="fc" id="L96">                .toList();</span>
+    }
+
+    /** The buyer's deals in progress (My Deals). */
+    public List&lt;Deal&gt; activeDealsForBuyer(String username) {
+<span class="fc" id="L101">        return dealsForBuyer(username).stream()</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">                .filter(d -&gt; d.getStatus() == DealStatus.ACTIVE)</span>
+<span class="fc" id="L103">                .toList();</span>
+    }
+
+    /** The buyer's finished deals, most recently finished first (Deal History). */
+    public List&lt;Deal&gt; pastDealsForBuyer(String username) {
+<span class="fc" id="L108">        List&lt;Deal&gt; past = new ArrayList&lt;&gt;(dealsForBuyer(username).stream()</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">                .filter(d -&gt; d.getStatus() != DealStatus.ACTIVE)</span>
+<span class="fc" id="L110">                .toList());</span>
+        // Newest-created first, then a stable sort by finish time, so ties keep the newer deal on top.
+<span class="fc" id="L112">        Collections.reverse(past);</span>
+<span class="fc" id="L113">        past.sort(Comparator.comparing(Deal::getCompletedDate).reversed());</span>
+<span class="fc" id="L114">        return List.copyOf(past);</span>
+    }
+
+    // ---------- Persistence ----------
+
+    /** Saves the listing's requests and deals, then the listing itself (its status changed). */
+    private void save(Listing listing) {
+<span class="fc" id="L121">        db.inTransaction(() -&gt; {</span>
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            for (DealRequest request : lifecycle.requestsFor(listing)) {</span>
+<span class="fc" id="L123">                saveRequest(request);</span>
+<span class="fc" id="L124">            }</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">            for (Deal deal : lifecycle.deals()) {</span>
+<span class="fc bfc" id="L126" title="All 2 branches covered.">                if (deal.getListing().getId().equals(listing.getId())) {</span>
+<span class="fc" id="L127">                    saveDeal(deal);</span>
+                }
+<span class="fc" id="L129">            }</span>
+<span class="fc" id="L130">            listings.update(listing);</span>
+<span class="fc" id="L131">        });</span>
+<span class="fc" id="L132">    }</span>
+
+    private void saveRequest(DealRequest request) {
+<span class="fc" id="L135">        BigDecimal offered = null, counter = null;</span>
+<span class="fc" id="L136">        LocalDateTime start = null, end = null, counterStart = null, counterEnd = null;</span>
+        String type;
+<span class="fc bfc" id="L138" title="All 2 branches covered.">        if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L139">            type = &quot;OFFER&quot;;</span>
+<span class="fc" id="L140">            offered = offer.getOfferedPrice();</span>
+<span class="fc" id="L141">            counter = offer.getCounterPrice();</span>
+<span class="fc bfc" id="L142" title="All 2 branches covered.">        } else if (request instanceof BorrowRequest borrow) {</span>
+<span class="fc" id="L143">            type = &quot;BORROW&quot;;</span>
+<span class="fc" id="L144">            start = borrow.getStartDate();</span>
+<span class="fc" id="L145">            end = borrow.getEndDate();</span>
+<span class="fc" id="L146">            counterStart = borrow.getCounterStart();</span>
+<span class="fc" id="L147">            counterEnd = borrow.getCounterEnd();</span>
+        } else {
+<span class="fc" id="L149">            type = &quot;CLAIM&quot;;</span>
+        }
+<span class="fc" id="L151">        db.update(&quot;INSERT INTO deal_requests (id, type, buyer_username, listing_id, submitted_time, status,&quot;</span>
+                        + &quot; offered_price, counter_price, start_date, end_date, counter_start, counter_end)&quot;
+                        + &quot; VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;
+                        + &quot; ON CONFLICT (id) DO UPDATE SET status = excluded.status,&quot;
+                        + &quot; counter_price = excluded.counter_price, counter_start = excluded.counter_start,&quot;
+                        + &quot; counter_end = excluded.counter_end&quot;,
+<span class="fc" id="L157">                request.getId(), type, request.getBuyerUsername().toLowerCase(), request.getListing().getId(),</span>
+<span class="fc" id="L158">                request.getSubmittedTime(), request.getStatus(), offered, counter, start, end,</span>
+                counterStart, counterEnd);
+<span class="fc" id="L160">    }</span>
+
+    private void saveDeal(Deal deal) {
+<span class="fc" id="L163">        db.update(&quot;INSERT INTO deals (id, request_id, start_date, due_date, completed_date, status)&quot;</span>
+                        + &quot; VALUES (?, ?, ?, ?, ?, ?)&quot;
+                        + &quot; ON CONFLICT (id) DO UPDATE SET completed_date = excluded.completed_date,&quot;
+                        + &quot; status = excluded.status&quot;,
+<span class="fc" id="L167">                deal.getId(), deal.getRequest().getId(), deal.getStartDate(), deal.getDueDate(),</span>
+<span class="fc" id="L168">                deal.getCompletedDate(), deal.getStatus());</span>
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * Rebuilds the saved requests and deals, in the order they were made, on the already loaded
+     * users and listings. Pending claims and active deals hold their listings again, so the
+     * &quot;first claim wins&quot; and &quot;one active deal per listing&quot; rules still hold after a restart.
+     */
+    void load(UserStore users, ListingStore listingStore) {
+<span class="fc" id="L177">        db.query(&quot;SELECT * FROM deal_requests ORDER BY CAST(substr(id, 2) AS INTEGER)&quot;,</span>
+<span class="fc" id="L178">                row -&gt; restoreRequest(row, users, listingStore));</span>
+<span class="fc" id="L179">        db.query(&quot;SELECT * FROM deals ORDER BY CAST(substr(id, 2) AS INTEGER)&quot;, row -&gt; lifecycle.restoreDeal(</span>
+<span class="fc" id="L180">                row.getString(&quot;id&quot;),</span>
+<span class="fc" id="L181">                lifecycle.findRequest(row.getString(&quot;request_id&quot;)),</span>
+<span class="fc" id="L182">                Database.dateTime(row, &quot;start_date&quot;),</span>
+<span class="fc" id="L183">                Database.dateTime(row, &quot;completed_date&quot;),</span>
+<span class="fc" id="L184">                DealStatus.valueOf(row.getString(&quot;status&quot;))));</span>
+<span class="fc" id="L185">    }</span>
+
+    private DealRequest restoreRequest(ResultSet row, UserStore users, ListingStore listingStore)
+            throws SQLException {
+<span class="fc" id="L189">        String id = row.getString(&quot;id&quot;);</span>
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">        if (!(users.find(row.getString(&quot;buyer_username&quot;)) instanceof Buyer buyer)) {</span>
+<span class="nc" id="L191">            throw new IllegalStateException(&quot;Request &quot; + id + &quot; has unknown buyer &quot;</span>
+<span class="nc" id="L192">                    + row.getString(&quot;buyer_username&quot;));</span>
+        }
+<span class="fc" id="L194">        Listing listing = listingStore.find(row.getString(&quot;listing_id&quot;));</span>
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">        if (listing == null) {</span>
+<span class="nc" id="L196">            throw new IllegalStateException(&quot;Request &quot; + id + &quot; is on unknown listing &quot;</span>
+<span class="nc" id="L197">                    + row.getString(&quot;listing_id&quot;));</span>
+        }
+<span class="fc" id="L199">        LocalDateTime submitted = Database.dateTime(row, &quot;submitted_time&quot;);</span>
+<span class="fc" id="L200">        RequestStatus status = RequestStatus.valueOf(row.getString(&quot;status&quot;));</span>
+<span class="pc bpc" id="L201" title="1 of 4 branches missed.">        return switch (row.getString(&quot;type&quot;)) {</span>
+<span class="fc" id="L202">            case &quot;OFFER&quot; -&gt; lifecycle.restoreOffer(id, buyer, listing, Database.decimal(row, &quot;offered_price&quot;),</span>
+<span class="fc" id="L203">                    Database.decimal(row, &quot;counter_price&quot;), submitted, status);</span>
+<span class="fc" id="L204">            case &quot;BORROW&quot; -&gt; lifecycle.restoreBorrow(id, buyer, listing,</span>
+<span class="fc" id="L205">                    Database.dateTime(row, &quot;start_date&quot;), Database.dateTime(row, &quot;end_date&quot;),</span>
+<span class="fc" id="L206">                    Database.dateTime(row, &quot;counter_start&quot;), Database.dateTime(row, &quot;counter_end&quot;),</span>
+                    submitted, status);
+<span class="fc" id="L208">            case &quot;CLAIM&quot; -&gt; lifecycle.restoreClaim(id, buyer, listing, submitted, status);</span>
+<span class="nc" id="L209">            default -&gt; throw new IllegalStateException(&quot;Unknown request type &quot; + row.getString(&quot;type&quot;));</span>
+        };
+    }
+
+    private static Predicate&lt;DealRequest&gt; byUser(String username,
+                                                 Function&lt;DealRequest, String&gt; field) {
+<span class="fc" id="L215">        return r -&gt; username.equalsIgnoreCase(field.apply(r));</span>
+    }
+
+    /**
+     * Seeds demo requests and deals through the lifecycle, so the statuses are consistent:
+     * &lt;ul&gt;
+     *   &lt;li&gt;alice: HK$160 offer on the Calculus Textbook, accepted (listing RESERVED)&lt;/li&gt;
+     *   &lt;li&gt;alice: pending claim on the IKEA Desk Lamp giveaway (listing RESERVED)&lt;/li&gt;
+     *   &lt;li&gt;bob: earlier loan of the TI-84 calculator, returned and completed (history)&lt;/li&gt;
+     *   &lt;li&gt;bob: new pending borrow request on the TI-84 (listing stays LIVE)&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    void seed(Buyer alice, Buyer bob, Listing textbook, Listing lamp, Listing calculator) {
+<span class="fc" id="L228">        lifecycle.accept(lifecycle.submitOffer(alice, textbook, new BigDecimal(&quot;160&quot;)));</span>
+
+<span class="fc" id="L230">        lifecycle.submitClaim(alice, lamp);</span>
+
+        // Start a minute ahead: the lifecycle reads its own clock, which is later than `now`.
+<span class="fc" id="L233">        LocalDateTime now = LocalDateTime.now();</span>
+<span class="fc" id="L234">        Deal pastLoan = lifecycle.accept(</span>
+<span class="fc" id="L235">                lifecycle.submitBorrow(bob, calculator, now.plusMinutes(1), now.plusDays(14)));</span>
+<span class="fc" id="L236">        lifecycle.returnItem(pastLoan);</span>
+<span class="fc" id="L237">        lifecycle.complete(pastLoan);</span>
+
+<span class="fc" id="L239">        lifecycle.submitBorrow(bob, calculator, now.plusDays(1), now.plusDays(30));</span>
+<span class="fc" id="L240">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
