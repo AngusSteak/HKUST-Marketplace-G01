@@ -13,7 +13,7 @@ $env:JAVA_HOME="C:\Users\hosze\.jdks\ms-21.0.12.1"
 Maximise the window. Keep these open in a browser on a second desktop as backup:
 
 - `docs/screenshots/` (all screens)
-- `docs/reports/coverage/index.html` (78.7% branch)
+- `docs/reports/coverage/index.html` (78.0% branch on measured code; controllers not counted)
 - `docs/javadoc/index.html`
 
 ## 8-minute path
@@ -29,7 +29,7 @@ Maximise the window. Keep these open in a browser on a second desktop as backup:
 | 5:00 | Seller Stats and Reviews | Views/offers/deals/rating; bar and pie charts; reply to review. |
 | 6:00 | Admin `admin` → Listing Review → approve/reject | Rejection reason is stored and notifies the seller. |
 | 7:00 | Admin Manage Users → deactivate/reactivate | Role checks and account state; soft delete keeps history. |
-| 7:30 | Technical close | 503 tests, 0 failures; 78.7% branch; RBAC in services; synchronized claim; BCrypt; SQLite. |
+| 7:30 | Technical close | 568 tests, 0 failures; 78.0% branch (measured code); RBAC in services; synchronized claim; BCrypt; SQLite. |
 
 If a screen fails: close the app and walk `docs/screenshots/` instead. Do not debug live.
 
@@ -39,6 +39,6 @@ If a screen fails: close the app and walk `docs/screenshots/` instead. Do not de
 - **Two buyers claim one giveaway?** `DealLifecycle` is synchronized and re-checks status inside the lock; the first wins.
 - **Passwords?** BCrypt cost 12, only hashes stored.
 - **Admin deletes a user?** Soft delete: listings hidden, open requests declined, history keeps "deleted user".
-- **Coverage?** 78.7% branch on business logic; JavaFX controllers excluded as UI wiring and documented in `pom.xml`.
+- **Coverage?** 78.0% branch on business logic; the JavaFX controllers are excluded from JaCoCo, so the whole-project figure is about 44% and is stated in `docs/reports/coverage.md`.
 
 Known gaps to admit if asked: no date filter in Admin Seller Ratings; no per-thread chat search; auto-return shown by tests, not a live 5-second loan; seeded listings have no photos.

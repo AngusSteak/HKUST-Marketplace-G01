@@ -42,135 +42,189 @@ import java.util.Map;
     private String rawPrice;
     private String rawDurationDays;
     private String rawDurationHours;
+    private String rawDurationMinutes;
     private String rawDurationSeconds;
 
-<span class="fc" id="L47">    private final List&lt;PhotoDraft&gt; chosenPhotos = new ArrayList&lt;&gt;();</span>
-<span class="fc" id="L48">    private List&lt;String&gt; photoPaths = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L48">    private final List&lt;PhotoDraft&gt; chosenPhotos = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L49">    private List&lt;String&gt; photoPaths = new ArrayList&lt;&gt;();</span>
 
     // --- Common fields -------------------------------------------------------------
 
     public ListingType getType() {
-<span class="fc" id="L53">        return type;</span>
+<span class="fc" id="L54">        return type;</span>
     }
 
     public void setType(ListingType type) {
-<span class="fc" id="L57">        this.type = type;</span>
-<span class="fc" id="L58">    }</span>
+<span class="fc" id="L58">        this.type = type;</span>
+<span class="fc" id="L59">    }</span>
 
     public String getTitle() {
-<span class="fc" id="L61">        return title;</span>
+<span class="fc" id="L62">        return title;</span>
     }
 
     public void setTitle(String title) {
-<span class="fc" id="L65">        this.title = title;</span>
-<span class="fc" id="L66">    }</span>
+<span class="fc" id="L66">        this.title = title;</span>
+<span class="fc" id="L67">    }</span>
 
     public String getDescription() {
-<span class="fc" id="L69">        return description;</span>
+<span class="fc" id="L70">        return description;</span>
     }
 
     public void setDescription(String description) {
-<span class="fc" id="L73">        this.description = description;</span>
-<span class="fc" id="L74">    }</span>
+<span class="fc" id="L74">        this.description = description;</span>
+<span class="fc" id="L75">    }</span>
 
     public Category getCategory() {
-<span class="fc" id="L77">        return category;</span>
+<span class="fc" id="L78">        return category;</span>
     }
 
     public void setCategory(Category category) {
-<span class="fc" id="L81">        this.category = category;</span>
-<span class="fc" id="L82">    }</span>
+<span class="fc" id="L82">        this.category = category;</span>
+<span class="fc" id="L83">    }</span>
 
     public Condition getCondition() {
-<span class="fc" id="L85">        return condition;</span>
+<span class="fc" id="L86">        return condition;</span>
     }
 
     public void setCondition(Condition condition) {
-<span class="fc" id="L89">        this.condition = condition;</span>
-<span class="fc" id="L90">    }</span>
+<span class="fc" id="L90">        this.condition = condition;</span>
+<span class="fc" id="L91">    }</span>
 
     public Location getMeetupLocation() {
-<span class="fc" id="L93">        return meetupLocation;</span>
+<span class="fc" id="L94">        return meetupLocation;</span>
     }
 
     public void setMeetupLocation(Location meetupLocation) {
-<span class="fc" id="L97">        this.meetupLocation = meetupLocation;</span>
-<span class="fc" id="L98">    }</span>
+<span class="fc" id="L98">        this.meetupLocation = meetupLocation;</span>
+<span class="fc" id="L99">    }</span>
 
     // --- Type-specific raw values --------------------------------------------------
 
     public String getRawPrice() {
-<span class="fc" id="L103">        return rawPrice;</span>
+<span class="fc" id="L104">        return rawPrice;</span>
     }
 
     public void setRawPrice(String rawPrice) {
-<span class="fc" id="L107">        this.rawPrice = rawPrice;</span>
-<span class="fc" id="L108">    }</span>
+<span class="fc" id="L108">        this.rawPrice = rawPrice;</span>
+<span class="fc" id="L109">    }</span>
 
     public String getRawDurationDays() {
-<span class="nc" id="L111">        return rawDurationDays;</span>
+<span class="fc" id="L112">        return rawDurationDays;</span>
     }
 
     public void setRawDurationDays(String rawDurationDays) {
-<span class="fc" id="L115">        this.rawDurationDays = rawDurationDays;</span>
-<span class="fc" id="L116">    }</span>
+<span class="fc" id="L116">        this.rawDurationDays = rawDurationDays;</span>
+<span class="fc" id="L117">    }</span>
 
     public String getRawDurationHours() {
-<span class="nc" id="L119">        return rawDurationHours;</span>
+<span class="fc" id="L120">        return rawDurationHours;</span>
     }
 
     public void setRawDurationHours(String rawDurationHours) {
-<span class="fc" id="L123">        this.rawDurationHours = rawDurationHours;</span>
-<span class="fc" id="L124">    }</span>
+<span class="fc" id="L124">        this.rawDurationHours = rawDurationHours;</span>
+<span class="fc" id="L125">    }</span>
+
+    public String getRawDurationMinutes() {
+<span class="fc" id="L128">        return rawDurationMinutes;</span>
+    }
+
+    public void setRawDurationMinutes(String rawDurationMinutes) {
+<span class="fc" id="L132">        this.rawDurationMinutes = rawDurationMinutes;</span>
+<span class="fc" id="L133">    }</span>
 
     public String getRawDurationSeconds() {
-<span class="nc" id="L127">        return rawDurationSeconds;</span>
+<span class="fc" id="L136">        return rawDurationSeconds;</span>
     }
 
     public void setRawDurationSeconds(String rawDurationSeconds) {
-<span class="fc" id="L131">        this.rawDurationSeconds = rawDurationSeconds;</span>
-<span class="fc" id="L132">    }</span>
+<span class="fc" id="L140">        this.rawDurationSeconds = rawDurationSeconds;</span>
+<span class="fc" id="L141">    }</span>
 
     // --- Photos --------------------------------------------------------------------
 
     /** Source files chosen in the view, kept as pure-Java drafts. */
     public List&lt;PhotoDraft&gt; getChosenPhotos() {
-<span class="fc" id="L138">        return Collections.unmodifiableList(chosenPhotos);</span>
+<span class="fc" id="L147">        return Collections.unmodifiableList(chosenPhotos);</span>
     }
 
-    /** Whether another photo can be added (at most six). */
+    /**
+     * Whether another photo can be added (at most six overall).
+     *
+     * &lt;p&gt;Photos already saved with the listing count toward the cap too, so an edit form can
+     * never hold more than {@link #MAX_PHOTOS} photos between its stored and newly chosen ones.
+     */
     public boolean canAddMorePhotos() {
-<span class="fc bfc" id="L143" title="All 2 branches covered.">        return chosenPhotos.size() &lt; MAX_PHOTOS;</span>
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        return photoPaths.size() + chosenPhotos.size() &lt; MAX_PHOTOS;</span>
     }
 
-    /** Adds a photo chosen in the form, rejecting a seventh. */
+    /** Adds a photo chosen in the form, rejecting one past the overall cap. */
     public void addChosenPhoto(PhotoDraft draft) {
-<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        if (draft == null) {</span>
-<span class="nc" id="L149">            throw new IllegalArgumentException(&quot;Photo draft must not be null&quot;);</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">        if (draft == null) {</span>
+<span class="nc" id="L163">            throw new IllegalArgumentException(&quot;Photo draft must not be null&quot;);</span>
         }
-<span class="fc bfc" id="L151" title="All 2 branches covered.">        if (!canAddMorePhotos()) {</span>
-<span class="fc" id="L152">            throw new IllegalStateException(&quot;A listing can have at most &quot; + MAX_PHOTOS + &quot; photos&quot;);</span>
+<span class="fc bfc" id="L165" title="All 2 branches covered.">        if (!canAddMorePhotos()) {</span>
+<span class="fc" id="L166">            throw new IllegalStateException(&quot;A listing can have at most &quot; + MAX_PHOTOS + &quot; photos&quot;);</span>
         }
-<span class="fc" id="L154">        chosenPhotos.add(draft);</span>
-<span class="fc" id="L155">    }</span>
+<span class="fc" id="L168">        chosenPhotos.add(draft);</span>
+<span class="fc" id="L169">    }</span>
 
     /** Removes a photo chosen in the form. */
     public void removeChosenPhoto(PhotoDraft draft) {
-<span class="fc" id="L159">        chosenPhotos.remove(draft);</span>
-<span class="fc" id="L160">    }</span>
+<span class="fc" id="L173">        chosenPhotos.remove(draft);</span>
+<span class="fc" id="L174">    }</span>
 
     /** Project-root-relative paths written after storage; these are what the listing keeps. */
     public List&lt;String&gt; getPhotoPaths() {
-<span class="nc" id="L164">        return Collections.unmodifiableList(photoPaths);</span>
+<span class="fc" id="L178">        return Collections.unmodifiableList(photoPaths);</span>
     }
 
     /** Sets the stored photo paths when editing an existing listing. */
     public void setPhotoPaths(List&lt;String&gt; photoPaths) {
-<span class="pc bpc" id="L169" title="2 of 4 branches missed.">        if (photoPaths != null &amp;&amp; photoPaths.size() &gt; MAX_PHOTOS) {</span>
-<span class="nc" id="L170">            throw new IllegalArgumentException(&quot;A listing can have at most &quot; + MAX_PHOTOS + &quot; photos&quot;);</span>
+<span class="pc bpc" id="L183" title="2 of 4 branches missed.">        if (photoPaths != null &amp;&amp; photoPaths.size() &gt; MAX_PHOTOS) {</span>
+<span class="nc" id="L184">            throw new IllegalArgumentException(&quot;A listing can have at most &quot; + MAX_PHOTOS + &quot; photos&quot;);</span>
         }
-<span class="pc bpc" id="L172" title="1 of 2 branches missed.">        this.photoPaths = photoPaths == null ? new ArrayList&lt;&gt;() : new ArrayList&lt;&gt;(photoPaths);</span>
-<span class="fc" id="L173">    }</span>
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">        this.photoPaths = photoPaths == null ? new ArrayList&lt;&gt;() : new ArrayList&lt;&gt;(photoPaths);</span>
+<span class="fc" id="L187">    }</span>
+
+    // --- Editing -------------------------------------------------------------------
+
+    /**
+     * Loads an existing listing into this state so the edit form can start prefilled.
+     *
+     * &lt;p&gt;The stored photo paths are copied for display, and the type-specific raw values are
+     * taken from the concrete subclass. Values belonging to the other kinds are cleared first,
+     * so a reused state can never leak a stale price or duration into the edited listing.
+     *
+     * @param listing the listing being edited
+     */
+    public void loadFrom(Listing listing) {
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">        if (listing == null) {</span>
+<span class="nc" id="L202">            throw new IllegalArgumentException(&quot;Listing must not be null&quot;);</span>
+        }
+<span class="fc" id="L204">        setType(listing.getType());</span>
+<span class="fc" id="L205">        setTitle(listing.getTitle());</span>
+<span class="fc" id="L206">        setDescription(listing.getDescription());</span>
+<span class="fc" id="L207">        setCategory(listing.getCategory());</span>
+<span class="fc" id="L208">        setCondition(listing.getCondition());</span>
+<span class="fc" id="L209">        setMeetupLocation(listing.getMeetupLocation());</span>
+<span class="fc" id="L210">        setPhotoPaths(listing.getPhotoPaths());</span>
+
+<span class="fc" id="L212">        setRawPrice(null);</span>
+<span class="fc" id="L213">        setRawDurationDays(null);</span>
+<span class="fc" id="L214">        setRawDurationHours(null);</span>
+<span class="fc" id="L215">        setRawDurationMinutes(null);</span>
+<span class="fc" id="L216">        setRawDurationSeconds(null);</span>
+
+<span class="fc bfc" id="L218" title="All 2 branches covered.">        if (listing instanceof SaleListing sale) {</span>
+<span class="fc" id="L219">            setRawPrice(sale.getPrice().amount().toPlainString());</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">        } else if (listing instanceof LendListing lend) {</span>
+<span class="fc" id="L221">            long totalSeconds = lend.getLendingDuration().getSeconds();</span>
+<span class="fc" id="L222">            setRawDurationDays(String.valueOf(totalSeconds / 86_400));</span>
+<span class="fc" id="L223">            setRawDurationHours(String.valueOf((totalSeconds % 86_400) / 3_600));</span>
+<span class="fc" id="L224">            setRawDurationMinutes(String.valueOf((totalSeconds % 3_600) / 60));</span>
+<span class="fc" id="L225">            setRawDurationSeconds(String.valueOf(totalSeconds % 60));</span>
+        }
+<span class="fc" id="L227">    }</span>
 
     // --- Validation ----------------------------------------------------------------
 
@@ -180,54 +234,55 @@ import java.util.Map;
      * them.
      */
     public Map&lt;String, String&gt; validate(Seller seller) {
-<span class="fc" id="L183">        Map&lt;String, String&gt; errors = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L237">        Map&lt;String, String&gt; errors = new LinkedHashMap&lt;&gt;();</span>
 
-<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (type == null) {</span>
-<span class="nc" id="L186">            errors.put(&quot;type&quot;, &quot;Select a listing type.&quot;);</span>
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">        if (type == null) {</span>
+<span class="nc" id="L240">            errors.put(&quot;type&quot;, &quot;Select a listing type.&quot;);</span>
         }
-<span class="fc bfc" id="L188" title="All 2 branches covered.">        if (isBlank(title)) {</span>
-<span class="fc" id="L189">            errors.put(&quot;title&quot;, &quot;Item name is required.&quot;);</span>
+<span class="fc bfc" id="L242" title="All 2 branches covered.">        if (isBlank(title)) {</span>
+<span class="fc" id="L243">            errors.put(&quot;title&quot;, &quot;Item name is required.&quot;);</span>
         }
-<span class="fc bfc" id="L191" title="All 2 branches covered.">        if (isBlank(description)) {</span>
-<span class="fc" id="L192">            errors.put(&quot;description&quot;, &quot;Description is required.&quot;);</span>
+<span class="fc bfc" id="L245" title="All 2 branches covered.">        if (isBlank(description)) {</span>
+<span class="fc" id="L246">            errors.put(&quot;description&quot;, &quot;Description is required.&quot;);</span>
         }
-<span class="fc bfc" id="L194" title="All 2 branches covered.">        if (category == null) {</span>
-<span class="fc" id="L195">            errors.put(&quot;category&quot;, &quot;Category is required.&quot;);</span>
+<span class="fc bfc" id="L248" title="All 2 branches covered.">        if (category == null) {</span>
+<span class="fc" id="L249">            errors.put(&quot;category&quot;, &quot;Category is required.&quot;);</span>
         }
-<span class="fc bfc" id="L197" title="All 2 branches covered.">        if (condition == null) {</span>
-<span class="fc" id="L198">            errors.put(&quot;condition&quot;, &quot;Condition is required.&quot;);</span>
+<span class="fc bfc" id="L251" title="All 2 branches covered.">        if (condition == null) {</span>
+<span class="fc" id="L252">            errors.put(&quot;condition&quot;, &quot;Condition is required.&quot;);</span>
         }
-<span class="fc bfc" id="L200" title="All 2 branches covered.">        if (meetupLocation == null) {</span>
-<span class="fc" id="L201">            errors.put(&quot;location&quot;, &quot;Meet-up location is required.&quot;);</span>
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        if (meetupLocation == null) {</span>
+<span class="fc" id="L255">            errors.put(&quot;location&quot;, &quot;Meet-up location is required.&quot;);</span>
         }
-<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (seller == null) {</span>
-<span class="nc" id="L204">            errors.put(&quot;seller&quot;, &quot;You must be logged in as a seller to post a listing.&quot;);</span>
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">        if (seller == null) {</span>
+<span class="nc" id="L258">            errors.put(&quot;seller&quot;, &quot;You must be logged in as a seller to post a listing.&quot;);</span>
         }
 
-<span class="fc bfc" id="L207" title="All 2 branches covered.">        if (type == ListingType.SELL) {</span>
+<span class="fc bfc" id="L261" title="All 2 branches covered.">        if (type == ListingType.SELL) {</span>
             try {
-<span class="fc" id="L209">                Money.of(rawPrice);</span>
-<span class="fc" id="L210">            } catch (IllegalArgumentException ex) {</span>
-<span class="fc" id="L211">                errors.put(&quot;price&quot;, ex.getMessage());</span>
-<span class="fc" id="L212">            }</span>
-<span class="fc bfc" id="L213" title="All 2 branches covered.">        } else if (type == ListingType.LEND) {</span>
+<span class="fc" id="L263">                Money.of(rawPrice);</span>
+<span class="fc" id="L264">            } catch (IllegalArgumentException ex) {</span>
+<span class="fc" id="L265">                errors.put(&quot;price&quot;, ex.getMessage());</span>
+<span class="fc" id="L266">            }</span>
+<span class="fc bfc" id="L267" title="All 2 branches covered.">        } else if (type == ListingType.LEND) {</span>
             try {
-<span class="fc" id="L215">                LendingRules.requireLendingDuration(parsedDuration());</span>
-<span class="fc" id="L216">            } catch (IllegalArgumentException ex) {</span>
-<span class="fc" id="L217">                errors.put(&quot;duration&quot;, ex.getMessage());</span>
-<span class="fc" id="L218">            }</span>
+<span class="fc" id="L269">                LendingRules.requireLendingDuration(parsedDuration());</span>
+<span class="fc" id="L270">            } catch (IllegalArgumentException ex) {</span>
+<span class="fc" id="L271">                errors.put(&quot;duration&quot;, ex.getMessage());</span>
+<span class="fc" id="L272">            }</span>
         }
 
-<span class="fc" id="L221">        return errors;</span>
+<span class="fc" id="L275">        return errors;</span>
     }
 
     /** True when any field differs from its default, used for the dirty-cancel prompt. */
     public boolean isDirty() {
-<span class="pc bpc" id="L226" title="1 of 2 branches missed.">        return type != null</span>
-<span class="pc bpc" id="L227" title="2 of 6 branches missed.">                || hasText(title) || hasText(description) || hasText(rawPrice)</span>
-<span class="pc bpc" id="L228" title="6 of 12 branches missed.">                || hasText(rawDurationDays) || hasText(rawDurationHours) || hasText(rawDurationSeconds)</span>
+<span class="pc bpc" id="L280" title="1 of 2 branches missed.">        return type != null</span>
+<span class="pc bpc" id="L281" title="2 of 6 branches missed.">                || hasText(title) || hasText(description) || hasText(rawPrice)</span>
+<span class="pc bpc" id="L282" title="2 of 4 branches missed.">                || hasText(rawDurationDays) || hasText(rawDurationHours)</span>
+<span class="pc bpc" id="L283" title="5 of 10 branches missed.">                || hasText(rawDurationMinutes) || hasText(rawDurationSeconds)</span>
                 || category != null || condition != null || meetupLocation != null
-<span class="pc bpc" id="L230" title="2 of 4 branches missed.">                || !chosenPhotos.isEmpty() || !photoPaths.isEmpty();</span>
+<span class="pc bpc" id="L285" title="2 of 4 branches missed.">                || !chosenPhotos.isEmpty() || !photoPaths.isEmpty();</span>
     }
 
     // --- Builder -------------------------------------------------------------------
@@ -238,58 +293,61 @@ import java.util.Map;
      * @throws IllegalStateException if the state still has validation errors
      */
     public Listing buildListing(Seller seller) {
-<span class="fc bfc" id="L241" title="All 2 branches covered.">        if (!validate(seller).isEmpty()) {</span>
-<span class="fc" id="L242">            throw new IllegalStateException(&quot;Cannot build a listing from an invalid form state&quot;);</span>
+<span class="fc bfc" id="L296" title="All 2 branches covered.">        if (!validate(seller).isEmpty()) {</span>
+<span class="fc" id="L297">            throw new IllegalStateException(&quot;Cannot build a listing from an invalid form state&quot;);</span>
         }
 
-<span class="fc bfc" id="L245" title="All 3 branches covered.">        Listing listing = switch (type) {</span>
-<span class="fc" id="L246">            case SELL -&gt; new SaleListing(seller, title, description, category, condition,</span>
-<span class="fc" id="L247">                    meetupLocation, Money.of(rawPrice));</span>
-<span class="fc" id="L248">            case LEND -&gt; new LendListing(seller, title, description, category, condition,</span>
-<span class="fc" id="L249">                    meetupLocation, LendingRules.requireLendingDuration(parsedDuration()));</span>
-<span class="fc" id="L250">            case GIVEAWAY -&gt; new GiveawayListing(seller, title, description, category, condition,</span>
+<span class="fc bfc" id="L300" title="All 3 branches covered.">        Listing listing = switch (type) {</span>
+<span class="fc" id="L301">            case SELL -&gt; new SaleListing(seller, title, description, category, condition,</span>
+<span class="fc" id="L302">                    meetupLocation, Money.of(rawPrice));</span>
+<span class="fc" id="L303">            case LEND -&gt; new LendListing(seller, title, description, category, condition,</span>
+<span class="fc" id="L304">                    meetupLocation, LendingRules.requireLendingDuration(parsedDuration()));</span>
+<span class="fc" id="L305">            case GIVEAWAY -&gt; new GiveawayListing(seller, title, description, category, condition,</span>
                     meetupLocation);
         };
 
-<span class="fc bfc" id="L254" title="All 2 branches covered.">        for (String path : photoPaths) {</span>
-<span class="fc" id="L255">            listing.addPhoto(path);</span>
-<span class="fc" id="L256">        }</span>
-<span class="fc" id="L257">        return listing;</span>
+<span class="fc bfc" id="L309" title="All 2 branches covered.">        for (String path : photoPaths) {</span>
+<span class="fc" id="L310">            listing.addPhoto(path);</span>
+<span class="fc" id="L311">        }</span>
+<span class="fc" id="L312">        return listing;</span>
     }
 
     // --- Helpers -------------------------------------------------------------------
 
     public Duration getLendingDuration() {
-<span class="fc" id="L263">        return LendingRules.requireLendingDuration(parsedDuration());</span>
+<span class="fc" id="L318">        return LendingRules.requireLendingDuration(parsedDuration());</span>
     }
 
-    /** Parses the raw days/hours strings; numeric-rule checking stays in LendingRules. */
+    /** Parses the raw days/hours/minutes/seconds strings; numeric-rule checking stays in LendingRules. */
     private Duration parsedDuration() {
-<span class="pc bpc" id="L268" title="1 of 2 branches missed.">        String days = rawDurationDays == null ? &quot;&quot; : rawDurationDays.trim();</span>
-<span class="pc bpc" id="L269" title="1 of 2 branches missed.">        String hours = rawDurationHours == null ? &quot;&quot; : rawDurationHours.trim();</span>
-<span class="fc bfc" id="L270" title="All 2 branches covered.">        String seconds = rawDurationSeconds == null ? &quot;&quot; : rawDurationSeconds.trim();</span>
-<span class="pc bpc" id="L271" title="2 of 6 branches missed.">        if (days.isEmpty() &amp;&amp; hours.isEmpty() &amp;&amp; seconds.isEmpty()) {</span>
-<span class="fc" id="L272">            throw new IllegalArgumentException(&quot;Lending duration is required&quot;);</span>
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">        String days = rawDurationDays == null ? &quot;&quot; : rawDurationDays.trim();</span>
+<span class="pc bpc" id="L324" title="1 of 2 branches missed.">        String hours = rawDurationHours == null ? &quot;&quot; : rawDurationHours.trim();</span>
+<span class="fc bfc" id="L325" title="All 2 branches covered.">        String minutes = rawDurationMinutes == null ? &quot;&quot; : rawDurationMinutes.trim();</span>
+<span class="fc bfc" id="L326" title="All 2 branches covered.">        String seconds = rawDurationSeconds == null ? &quot;&quot; : rawDurationSeconds.trim();</span>
+<span class="pc bpc" id="L327" title="3 of 8 branches missed.">        if (days.isEmpty() &amp;&amp; hours.isEmpty() &amp;&amp; minutes.isEmpty() &amp;&amp; seconds.isEmpty()) {</span>
+<span class="fc" id="L328">            throw new IllegalArgumentException(&quot;Lending duration is required&quot;);</span>
         }
         try {
-<span class="pc bpc" id="L275" title="1 of 2 branches missed.">            long d = days.isEmpty() ? 0 : Long.parseLong(days);</span>
-<span class="pc bpc" id="L276" title="1 of 2 branches missed.">            long h = hours.isEmpty() ? 0 : Long.parseLong(hours);</span>
-<span class="fc bfc" id="L277" title="All 2 branches covered.">            long s = seconds.isEmpty() ? 0 : Long.parseLong(seconds);</span>
-<span class="pc bpc" id="L278" title="3 of 6 branches missed.">            if (d &lt; 0 || h &lt; 0 || s &lt; 0) {</span>
-<span class="nc" id="L279">                throw new IllegalArgumentException(&quot;Lending duration must not be negative&quot;);</span>
+<span class="pc bpc" id="L331" title="1 of 2 branches missed.">            long d = days.isEmpty() ? 0 : Long.parseLong(days);</span>
+<span class="pc bpc" id="L332" title="1 of 2 branches missed.">            long h = hours.isEmpty() ? 0 : Long.parseLong(hours);</span>
+<span class="fc bfc" id="L333" title="All 2 branches covered.">            long m = minutes.isEmpty() ? 0 : Long.parseLong(minutes);</span>
+<span class="fc bfc" id="L334" title="All 2 branches covered.">            long s = seconds.isEmpty() ? 0 : Long.parseLong(seconds);</span>
+<span class="pc bpc" id="L335" title="4 of 8 branches missed.">            if (d &lt; 0 || h &lt; 0 || m &lt; 0 || s &lt; 0) {</span>
+<span class="nc" id="L336">                throw new IllegalArgumentException(&quot;Lending duration must not be negative&quot;);</span>
             }
-<span class="fc" id="L281">            return Duration.ofDays(d).plusHours(h).plusSeconds(s);</span>
-<span class="nc" id="L282">        } catch (NumberFormatException ex) {</span>
-<span class="nc" id="L283">            throw new IllegalArgumentException(&quot;Lending days, hours and seconds must be whole numbers&quot;, ex);</span>
+<span class="fc" id="L338">            return Duration.ofDays(d).plusHours(h).plusMinutes(m).plusSeconds(s);</span>
+<span class="nc" id="L339">        } catch (NumberFormatException ex) {</span>
+<span class="nc" id="L340">            throw new IllegalArgumentException(</span>
+                    &quot;Lending days, hours, minutes and seconds must be whole numbers&quot;, ex);
         }
     }
 
     private static boolean isBlank(String value) {
-<span class="fc bfc" id="L288" title="All 4 branches covered.">        return value == null || value.isBlank();</span>
+<span class="fc bfc" id="L346" title="All 4 branches covered.">        return value == null || value.isBlank();</span>
     }
 
     private static boolean hasText(String value) {
-<span class="fc bfc" id="L292" title="All 4 branches covered.">        return value != null &amp;&amp; !value.isBlank();</span>
+<span class="fc bfc" id="L350" title="All 4 branches covered.">        return value != null &amp;&amp; !value.isBlank();</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

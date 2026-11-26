@@ -232,63 +232,91 @@ public final class ChatService {
 <span class="fc" id="L232">        return List.copyOf(matches);</span>
     }
 
+    /**
+     * Searches one thread (SRS UC-1.5 step 3.3): the messages in {@code thread} that contain
+     * {@code keyword}, ignoring case, in the order they were sent. A blank keyword keeps every
+     * message of the chosen kind, so {@code OFFERS_ONLY} lists the thread's offers.
+     *
+     * @throws SecurityException if {@code user} is not the thread's buyer or seller
+     * @throws NullPointerException if {@code user}, {@code thread} or {@code filter} is {@code null}
+     */
+    public List&lt;Message&gt; searchThread(User user, ChatThread thread, String keyword, MessageSearchFilter filter) {
+<span class="fc" id="L244">        Objects.requireNonNull(user, &quot;user&quot;);</span>
+<span class="fc" id="L245">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
+<span class="fc" id="L246">        Objects.requireNonNull(filter, &quot;filter&quot;);</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        boolean participant = user.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername())</span>
+<span class="fc bfc" id="L248" title="All 2 branches covered.">                || user.getUsername().equalsIgnoreCase(thread.getSeller().getUsername());</span>
+<span class="fc bfc" id="L249" title="All 2 branches covered.">        if (!participant) {</span>
+<span class="fc" id="L250">            throw new SecurityException(&quot;@&quot; + user.getUsername() + &quot; is not part of this chat&quot;);</span>
+        }
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">        String needle = keyword == null ? &quot;&quot; : keyword.trim().toLowerCase(Locale.ROOT);</span>
+<span class="fc" id="L253">        List&lt;Message&gt; matches = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        for (Message message : data.chats().history(thread)) {</span>
+<span class="fc bfc" id="L255" title="All 2 branches covered.">            if (matchesKind(message, filter)</span>
+<span class="fc bfc" id="L256" title="All 4 branches covered.">                    &amp;&amp; (needle.isEmpty() || message.getContent().toLowerCase(Locale.ROOT).contains(needle))) {</span>
+<span class="fc" id="L257">                matches.add(message);</span>
+            }
+<span class="fc" id="L259">        }</span>
+<span class="fc" id="L260">        return List.copyOf(matches);</span>
+    }
+
     private List&lt;ChatThread&gt; participatingThreads(User user) {
-<span class="fc bfc" id="L236" title="All 2 branches covered.">        if (user instanceof Buyer buyer) {</span>
-<span class="fc" id="L237">            return threadsForBuyer(buyer);</span>
+<span class="fc bfc" id="L264" title="All 2 branches covered.">        if (user instanceof Buyer buyer) {</span>
+<span class="fc" id="L265">            return threadsForBuyer(buyer);</span>
         }
-<span class="pc bpc" id="L239" title="1 of 2 branches missed.">        if (user instanceof Seller seller) {</span>
-<span class="fc" id="L240">            return threadsForSeller(seller);</span>
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">        if (user instanceof Seller seller) {</span>
+<span class="fc" id="L268">            return threadsForSeller(seller);</span>
         }
-<span class="nc" id="L242">        return List.of();</span>
+<span class="nc" id="L270">        return List.of();</span>
     }
 
     private static boolean matchesKind(Message message, MessageSearchFilter filter) {
-<span class="fc bfc" id="L246" title="All 3 branches covered.">        return switch (filter) {</span>
-<span class="fc" id="L247">            case ALL -&gt; true;</span>
-<span class="fc bfc" id="L248" title="All 2 branches covered.">            case TEXT_ONLY -&gt; !message.isFormalOffer();</span>
-<span class="fc" id="L249">            case OFFERS_ONLY -&gt; message.isFormalOffer();</span>
+<span class="fc bfc" id="L274" title="All 3 branches covered.">        return switch (filter) {</span>
+<span class="fc" id="L275">            case ALL -&gt; true;</span>
+<span class="fc bfc" id="L276" title="All 2 branches covered.">            case TEXT_ONLY -&gt; !message.isFormalOffer();</span>
+<span class="fc" id="L277">            case OFFERS_ONLY -&gt; message.isFormalOffer();</span>
         };
     }
 
     private static void requireListingSeller(User actor, DealRequest request) {
-<span class="fc" id="L254">        Objects.requireNonNull(actor, &quot;seller&quot;);</span>
-<span class="fc" id="L255">        Objects.requireNonNull(request, &quot;request&quot;);</span>
-<span class="fc bfc" id="L256" title="All 2 branches covered.">        if (!actor.getUsername().equalsIgnoreCase(request.getSellerUsername())) {</span>
-<span class="fc" id="L257">            throw new SecurityException(</span>
+<span class="fc" id="L282">        Objects.requireNonNull(actor, &quot;seller&quot;);</span>
+<span class="fc" id="L283">        Objects.requireNonNull(request, &quot;request&quot;);</span>
+<span class="fc bfc" id="L284" title="All 2 branches covered.">        if (!actor.getUsername().equalsIgnoreCase(request.getSellerUsername())) {</span>
+<span class="fc" id="L285">            throw new SecurityException(</span>
                     &quot;Only the listing's seller may accept or decline an offer&quot;);
         }
-<span class="fc" id="L260">    }</span>
+<span class="fc" id="L288">    }</span>
 
     private static Buyer requireThreadBuyer(User sender, ChatThread thread) {
-<span class="fc" id="L263">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
-<span class="fc" id="L264">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
-<span class="fc bfc" id="L265" title="All 2 branches covered.">        if (!sender.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername())) {</span>
-<span class="fc" id="L266">            throw new SecurityException(&quot;Only the thread's buyer may post a formal offer&quot;);</span>
+<span class="fc" id="L291">        Objects.requireNonNull(sender, &quot;sender&quot;);</span>
+<span class="fc" id="L292">        Objects.requireNonNull(thread, &quot;thread&quot;);</span>
+<span class="fc bfc" id="L293" title="All 2 branches covered.">        if (!sender.getUsername().equalsIgnoreCase(thread.getBuyer().getUsername())) {</span>
+<span class="fc" id="L294">            throw new SecurityException(&quot;Only the thread's buyer may post a formal offer&quot;);</span>
         }
-<span class="fc" id="L268">        return thread.getBuyer();</span>
+<span class="fc" id="L296">        return thread.getBuyer();</span>
     }
 
     private void requireLive(ChatThread thread) {
-<span class="fc bfc" id="L272" title="All 2 branches covered.">        if (!acceptsOffers(thread)) {</span>
-<span class="fc" id="L273">            throw new IllegalStateException(OFFERS_CLOSED_BANNER);</span>
+<span class="fc bfc" id="L300" title="All 2 branches covered.">        if (!acceptsOffers(thread)) {</span>
+<span class="fc" id="L301">            throw new IllegalStateException(OFFERS_CLOSED_BANNER);</span>
         }
-<span class="fc" id="L275">    }</span>
+<span class="fc" id="L303">    }</span>
 
     private static void requireType(ChatThread thread, ListingType expected) {
-<span class="fc bfc" id="L278" title="All 2 branches covered.">        if (thread.getListing().getType() != expected) {</span>
-<span class="fc" id="L279">            throw new IllegalArgumentException(&quot;A &quot; + thread.getListing().getType()</span>
+<span class="fc bfc" id="L306" title="All 2 branches covered.">        if (thread.getListing().getType() != expected) {</span>
+<span class="fc" id="L307">            throw new IllegalArgumentException(&quot;A &quot; + thread.getListing().getType()</span>
                     + &quot; listing does not accept this kind of formal offer&quot;);
         }
-<span class="fc" id="L282">    }</span>
+<span class="fc" id="L310">    }</span>
 
     private static void requireParticipant(User sender, ChatThread thread) {
-<span class="fc" id="L285">        String username = sender.getUsername();</span>
-<span class="fc bfc" id="L286" title="All 2 branches covered.">        boolean participant = username.equalsIgnoreCase(thread.getBuyer().getUsername())</span>
-<span class="fc bfc" id="L287" title="All 2 branches covered.">                || username.equalsIgnoreCase(thread.getSeller().getUsername());</span>
-<span class="fc bfc" id="L288" title="All 2 branches covered.">        if (!participant) {</span>
-<span class="fc" id="L289">            throw new SecurityException(</span>
+<span class="fc" id="L313">        String username = sender.getUsername();</span>
+<span class="fc bfc" id="L314" title="All 2 branches covered.">        boolean participant = username.equalsIgnoreCase(thread.getBuyer().getUsername())</span>
+<span class="fc bfc" id="L315" title="All 2 branches covered.">                || username.equalsIgnoreCase(thread.getSeller().getUsername());</span>
+<span class="fc bfc" id="L316" title="All 2 branches covered.">        if (!participant) {</span>
+<span class="fc" id="L317">            throw new SecurityException(</span>
                     &quot;Only the thread's buyer or the listing's seller may send messages&quot;);
         }
-<span class="fc" id="L292">    }</span>
+<span class="fc" id="L320">    }</span>
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

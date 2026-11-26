@@ -55,12 +55,20 @@ public abstract class User {
      */
 <span class="fc bfc" id="L56" title="All 2 branches covered.">    public String getDisplayName() { return deleted ? &quot;deleted user&quot; : fullName; }</span>
 
-<span class="fc" id="L58">    public LocalDateTime getCreatedAt() { return createdAt; }</span>
-<span class="fc" id="L59">    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }</span>
+    /**
+     * The display name followed by the username, e.g. &quot;Charlie Lee @charlie&quot;, so two people
+     * with the same full name can be told apart (used in chats).
+     *
+     * @return the name and username, or &quot;deleted user&quot; after a soft delete
+     */
+<span class="fc bfc" id="L64" title="All 2 branches covered.">    public String getNameWithUsername() { return deleted ? &quot;deleted user&quot; : fullName + &quot; @&quot; + username; }</span>
+
+<span class="fc" id="L66">    public LocalDateTime getCreatedAt() { return createdAt; }</span>
+<span class="fc" id="L67">    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }</span>
 
     @Override
     public String toString() {
-<span class="nc" id="L63">        return fullName + &quot; (@&quot; + username + &quot;)&quot;;</span>
+<span class="nc" id="L71">        return fullName + &quot; (@&quot; + username + &quot;)&quot;;</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

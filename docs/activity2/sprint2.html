@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Sprint 2 Backlog and Burndown Chart</title>
+<link rel="stylesheet" href="submission.css">
+<style>@page { size: A4 landscape; margin: 0; }</style>
+</head><body>
+<section class="page landscape">
+  <div class="bar-title">Sprint 2 Backlog and Burndown Chart</div>
+  <div class="bar-sub">Sprint 2: 23 &ndash; 26 November 2026 &middot; estimates in hours &middot; source: GitHub issues, pull
+    requests and <span style="font-family:Consolas,monospace">git log</span> on
+    <span style="font-family:Consolas,monospace">main</span></div>
+
+  <div class="two-col">
+    <div class="col-left">
+      <table class="backlog">
+        <colgroup>
+          <col style="width:47%"><col style="width:8%"><col style="width:9%">
+          <col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%">
+        </colgroup>
+        <tr>
+          <th class="task">Sprint task</th>
+          <th>Est. h</th>
+          <th>23 Nov</th><th>24 Nov</th><th>25 Nov</th><th>26 Nov</th>
+          <th>Closed h</th>
+        </tr>
+        <tr class="area"><td colspan="7">Buyer portal &mdash; Chong Yui Kiu</td></tr>
+<tr><td>Browse marketplace: search, filter, sort <span class="issue">#17</span></td><td class="num">6</td><td class="num">6</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">6</td></tr>
+<tr><td>Listing detail with favourite and follow <span class="issue">#18</span></td><td class="num">4</td><td class="num">4</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">4</td></tr>
+<tr><td>Deal request: price offer, borrow request, claim <span class="issue">#19</span></td><td class="num">6</td><td class="num">6</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">6</td></tr>
+<tr><td>Buyer chat, My Deals, history, ratings, profile <span class="issue">#20&ndash;#24</span></td><td class="num">14</td><td class="num">14</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">14</td></tr>
+<tr class="area"><td colspan="7">Seller portal &mdash; Chan Lok Him</td></tr>
+<tr><td>Create listing with photos and type switching <span class="issue">#25</span></td><td class="num">5</td><td class="num">5</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">5</td></tr>
+<tr><td>My Listings, requests, chat, stats, reviews, profile <span class="issue">#26&ndash;#31</span></td><td class="num">17</td><td class="num">&middot;</td><td class="num">17</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">17</td></tr>
+<tr class="area"><td colspan="7">Admin console &mdash; Ho Sze Yui</td></tr>
+<tr><td>Manage users and soft-delete an account <span class="issue">#32&ndash;#33</span></td><td class="num">6</td><td class="num">&middot;</td><td class="num">6</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">6</td></tr>
+<tr><td>All listings, all deals, seller ratings <span class="issue">#34&ndash;#36</span></td><td class="num">10</td><td class="num">&middot;</td><td class="num">10</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">10</td></tr>
+<tr><td>Admin profile and notification board <span class="issue">#37</span></td><td class="num">4</td><td class="num">&middot;</td><td class="num">4</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">4</td></tr>
+<tr class="area"><td colspan="7">Verification and delivery</td></tr>
+<tr><td>Test suite, JaCoCo coverage, JavaDoc <span class="issue">#38&ndash;#39</span></td><td class="num">7</td><td class="num">&middot;</td><td class="num">7</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">7</td></tr>
+<tr><td>Screenshots, README, submission ZIP <span class="issue">#40&ndash;#41</span></td><td class="num">5</td><td class="num">&middot;</td><td class="num">5</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">5</td></tr>
+<tr><td>SRS gap fixes and UX polish <span class="issue">PRs #87&ndash;#95</span></td><td class="num">12</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">4</td><td class="num">8</td><td class="num">12</td></tr>
+<tr><td>Manual SRS regression checklist <span class="issue">#96</span></td><td class="num">3</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">&middot;</td><td class="num">0</td></tr>
+<tr class="total"><td>Total hours</td><td>99</td><td>35</td><td>49</td><td>4</td><td>8</td><td>96</td></tr>
+      </table>
+      <p class="note">Each figure is the estimated effort of the issues closed that day, not hours logged; the
+        minutes record those. "SRS gap fixes" was scoped on 24 November (+12 h); checklist #96 was still open
+        at sprint close, so 3 h remain. Days follow GitHub's UTC timestamps, so work after midnight HKT counts
+        on the previous day.</p>
+    </div>
+
+    <div class="col-right">
+      <div class="chart-card">
+        <h3>Sprint 2 Burndown</h3>
+        <div class="hint">Remaining estimated hours, measured at the end of each sprint day.</div>
+        <svg viewBox="0 0 440 520" width="100%" role="img" aria-label="Sprint 2 burndown chart">
+  <text x="52" y="20" font-size="9" fill="#555">Hours remaining</text>
+  <line x1="52" y1="465.0" x2="424" y2="465.0" stroke="#dde3ea" stroke-width="1"/><text x="45" y="468.0" text-anchor="end" font-size="9" fill="#666">0</text><line x1="52" y1="362.5" x2="424" y2="362.5" stroke="#dde3ea" stroke-width="1"/><text x="45" y="365.5" text-anchor="end" font-size="9" fill="#666">25</text><line x1="52" y1="260.0" x2="424" y2="260.0" stroke="#dde3ea" stroke-width="1"/><text x="45" y="263.0" text-anchor="end" font-size="9" fill="#666">50</text><line x1="52" y1="157.5" x2="424" y2="157.5" stroke="#dde3ea" stroke-width="1"/><text x="45" y="160.5" text-anchor="end" font-size="9" fill="#666">75</text><line x1="52" y1="55.0" x2="424" y2="55.0" stroke="#dde3ea" stroke-width="1"/><text x="45" y="58.0" text-anchor="end" font-size="9" fill="#666">100</text>
+  <line x1="52" y1="465" x2="424" y2="465" stroke="#9aa7b8" stroke-width="1"/><line x1="52" y1="465" x2="52" y2="55" stroke="#9aa7b8" stroke-width="1"/>
+  <polyline points="52.0,108.3 145.0,197.5 238.0,286.6 331.0,375.8 424.0,465.0" fill="none" stroke="#9aa7b8" stroke-width="2" stroke-dasharray="6 4"/>
+  <polyline points="52.0,108.3 145.0,251.8 238.0,403.5 331.0,419.9 424.0,452.7" fill="none" stroke="#1f5f9e" stroke-width="3"/>
+  <circle cx="52.0" cy="108.3" r="4" fill="#fff" stroke="#1f5f9e" stroke-width="2.4"/><circle cx="145.0" cy="251.8" r="4" fill="#fff" stroke="#1f5f9e" stroke-width="2.4"/><circle cx="238.0" cy="403.5" r="4" fill="#fff" stroke="#1f5f9e" stroke-width="2.4"/><circle cx="331.0" cy="419.9" r="4" fill="#fff" stroke="#1f5f9e" stroke-width="2.4"/><circle cx="424.0" cy="452.7" r="4" fill="#fff" stroke="#1f5f9e" stroke-width="2.4"/>
+  <text x="52.0" y="98.3" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f5f9e">87</text><text x="145.0" y="241.8" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f5f9e">52</text><text x="238.0" y="393.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f5f9e">15</text><text x="331.0" y="409.9" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f5f9e">11</text><text x="424.0" y="442.7" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f5f9e">3</text>
+  <text x="52.0" y="481" text-anchor="middle" font-size="8.5" fill="#444"><tspan x="52.0" dy="0">start</tspan><tspan x="52.0" dy="11" font-size="7.5" fill="#777"></tspan></text><text x="145.0" y="481" text-anchor="middle" font-size="8.5" fill="#444"><tspan x="145.0" dy="0">day 1</tspan><tspan x="145.0" dy="11" font-size="7.5" fill="#777">23 Nov</tspan></text><text x="238.0" y="481" text-anchor="middle" font-size="8.5" fill="#444"><tspan x="238.0" dy="0">day 2</tspan><tspan x="238.0" dy="11" font-size="7.5" fill="#777">24 Nov</tspan></text><text x="331.0" y="481" text-anchor="middle" font-size="8.5" fill="#444"><tspan x="331.0" dy="0">day 3</tspan><tspan x="331.0" dy="11" font-size="7.5" fill="#777">25 Nov</tspan></text><text x="424.0" y="481" text-anchor="middle" font-size="8.5" fill="#444"><tspan x="424.0" dy="0">day 4</tspan><tspan x="424.0" dy="11" font-size="7.5" fill="#777">26 Nov</tspan></text>
+  <g font-size="8.5">
+    <line x1="268" y1="17" x2="294" y2="17" stroke="#9aa7b8" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="299" y="20" fill="#444">Ideal</text>
+    <line x1="344" y1="17" x2="370" y2="17" stroke="#1f5f9e" stroke-width="3"/>
+    <text x="375" y="20" fill="#444">Actual</text>
+  </g>
+</svg>
+        <div class="note">
+          Estimate 99 h: 87 h planned plus 12 h of SRS gap fixes added on
+          24 November (the step at day 2). Completed 96 h, 3 h remaining.
+          The curve is below the ideal line from day 1 because the three portals were built in parallel.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</body></html>

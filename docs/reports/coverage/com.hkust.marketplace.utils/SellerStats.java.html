@@ -38,9 +38,11 @@ import java.util.OptionalDouble;
      * @param views views of this listing
      * @param offers offers received on this listing
      * @param completed completed deals for this listing
+     * @param outcome the type of the completed deal (SOLD, LENT or GIVEN), or {@code null} when
+     *                this listing has no completed deal
      */
-<span class="fc" id="L42">    public record ListingStat(String listingId, String title, ListingStatus status,</span>
-                              int views, int offers, int completed) {
+<span class="fc" id="L44">    public record ListingStat(String listingId, String title, ListingStatus status,</span>
+                              int views, int offers, int completed, DealType outcome) {
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

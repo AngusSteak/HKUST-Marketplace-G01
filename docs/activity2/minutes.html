@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Minutes of Project Scrum Meetings</title>
+<link rel="stylesheet" href="submission.css">
+</head>
+<body>
+
+<!-- ======================= Meeting 1 ======================= -->
+<section class="page portrait">
+  <div class="runhead">
+    <span class="team">Group 1</span>
+    <span>1 / 3</span>
+  </div>
+
+  <div class="course">COMP 3111: Introduction to Software Engineering</div>
+  <div class="doc-title">Minutes of the 1st Project Scrum Meeting</div>
+  <div class="doc-project">HKUST Marketplace</div>
+
+  <table class="meta">
+    <tr><td class="k">Date:</td><td class="v">23 November 2026</td></tr>
+    <tr><td class="k">Time:</td><td class="v">1:00 p.m.</td></tr>
+    <tr><td class="k">Place:</td><td class="v">LC-12</td></tr>
+    <tr><td class="k">Attending:</td><td class="v">Chong Yui Kiu, Chan Lok Him, Ho Sze Yui</td></tr>
+    <tr><td class="k">Absent:</td><td class="v">None</td></tr>
+    <tr><td class="k">Recorder:</td><td class="v">Chong Yui Kiu</td></tr>
+  </table>
+
+  <h2 class="sec">1. Report on progress during the past week</h2>
+  <table class="grid">
+    <tr>
+      <th style="width: 30mm">Name</th>
+      <th>Tasks worked on in the past week</th>
+      <th style="width: 20mm">Total hours</th>
+    </tr>
+    <tr>
+      <td>Chong Yui Kiu</td>
+      <td>
+        Reworked the deal model around a DealRequest hierarchy
+        (PriceOffer, BorrowRequest, Claim) &mdash; #4, #5<br>
+        Added Favourites and Follows and seeded demo deals through the lifecycle &mdash; #6, #7<br>
+        First commit and project skeleton; uploaded the SRS document to the repository
+      </td>
+      <td class="num">11</td>
+    </tr>
+    <tr>
+      <td>Chan Lok Him</td>
+      <td>
+        Base User model with Buyer, Seller and Admin roles &mdash; PR #1<br>
+        Category, Condition and Location enums; split Listing into Sale, Lend and
+        Giveaway subclasses &mdash; #8, #9<br>
+        Modelled the lending period as <span style="font-family:Consolas,monospace">java.time.Duration</span> &mdash; #10
+      </td>
+      <td class="num">10</td>
+    </tr>
+    <tr>
+      <td>Ho Sze Yui</td>
+      <td>
+        Deal lifecycle status rules with unit tests; split DummyDataService into per-area
+        stores &mdash; #2, #3<br>
+        Admin audit log, notification categories and the ListingReport model &mdash; #12, #13, #14<br>
+        Full SRS password rules and the account soft-delete flag &mdash; #15, #16
+      </td>
+      <td class="num">9.5</td>
+    </tr>
+    <tr class="total">
+      <td colspan="2">Total</td>
+      <td class="num">30.5</td>
+    </tr>
+  </table>
+
+  <h2 class="sec">2. Discussion of impediments and resolution</h2>
+  <p class="item">2.1. Chong and Chan edited the same <span style="font-family:Consolas,monospace">DummyDataService</span> at
+    the same time, which caused repeated merge conflicts. It was split into one store per area
+    (users, listings, deals, chat, reviews) before any screen work starts (#3).</p>
+  <p class="item">2.2. The SRS does not state how short a borrow period may be. We agreed on a five-second
+    minimum so that auto-return can be tested, and Chan will apply the same rule in the UI.</p>
+  <p class="item">2.3. The team had different ideas about when a deal changes state. Ho pointed out that only
+    <span style="font-family:Consolas,monospace">DealLifecycle</span> should change a deal, and everyone agreed that screens
+    must go through a store method instead of editing an object directly.</p>
+
+  <h2 class="sec">3. Goals for the coming week</h2>
+  <table class="grid">
+    <tr>
+      <th style="width: 30mm">Name</th>
+      <th>Tasks that will be worked on in the coming week</th>
+    </tr>
+    <tr>
+      <td>Chong Yui Kiu</td>
+      <td>SQLite foundation and schema (#55); persistence for every store (#56&ndash;#60); target Java 21</td>
+    </tr>
+    <tr>
+      <td>Chan Lok Him</td>
+      <td>Shared chat component (#11); Seller Create Listing with photos and type switching (#25)</td>
+    </tr>
+    <tr>
+      <td>Ho Sze Yui</td>
+      <td>Admin console screens: manage users, all listings, all deals, seller ratings (#32&ndash;#37)</td>
+    </tr>
+  </table>
+
+  <h2 class="sec">4. Meeting adjournment and next meeting</h2>
+  <p>The meeting was adjourned at 2:10 p.m. The next meeting will be held on 24 November at 9:00 p.m.
+    in LC-12.</p>
+</section>
+
+<!-- ======================= Meeting 2 ======================= -->
+<section class="page portrait">
+  <div class="runhead">
+    <span class="team">Group 1</span>
+    <span>2 / 3</span>
+  </div>
+
+  <div class="course">COMP 3111: Introduction to Software Engineering</div>
+  <div class="doc-title">Minutes of the 2nd Project Scrum Meeting</div>
+  <div class="doc-project">HKUST Marketplace</div>
+
+  <table class="meta">
+    <tr><td class="k">Date:</td><td class="v">24 November 2026</td></tr>
+    <tr><td class="k">Time:</td><td class="v">9:00 p.m.</td></tr>
+    <tr><td class="k">Place:</td><td class="v">LC-12</td></tr>
+    <tr><td class="k">Attending:</td><td class="v">Chong Yui Kiu, Chan Lok Him, Ho Sze Yui</td></tr>
+    <tr><td class="k">Absent:</td><td class="v">None</td></tr>
+    <tr><td class="k">Recorder:</td><td class="v">Chan Lok Him</td></tr>
+  </table>
+
+  <h2 class="sec">1. Report on progress during the past week</h2>
+  <table class="grid">
+    <tr>
+      <th style="width: 30mm">Name</th>
+      <th>Tasks worked on in the past week</th>
+      <th style="width: 20mm">Total hours</th>
+    </tr>
+    <tr>
+      <td>Chong Yui Kiu</td>
+      <td>
+        SQLite connection, full schema and persistence for every store &mdash; #55&ndash;#59<br>
+        Role checks inside AdminService and SellerService; build retargeted to Java 21 &mdash; #60<br>
+        Buyer portal: browse, listing detail, deal request, chat, My Deals, history, ratings,
+        profile &mdash; #17&ndash;#24
+      </td>
+      <td class="num">16</td>
+    </tr>
+    <tr>
+      <td>Chan Lok Him</td>
+      <td>
+        Shared chat component: ChatThread, Message and ChatService &mdash; #11<br>
+        Seller Create Listing form with type switching and photo upload &mdash; #25<br>
+        Seller screens: My Listings, requests, reviews, profile and notifications &mdash; #26&ndash;#31
+      </td>
+      <td class="num">12</td>
+    </tr>
+    <tr>
+      <td>Ho Sze Yui</td>
+      <td>
+        Admin console: Manage Users, All Listings, All Deals, Seller Ratings, profile and
+        notifications &mdash; #32&ndash;#37<br>
+        Corrected the admin review filters after the block-2 review
+      </td>
+      <td class="num">11</td>
+    </tr>
+    <tr class="total">
+      <td colspan="2">Total</td>
+      <td class="num">39</td>
+    </tr>
+  </table>
+
+  <h2 class="sec">2. Discussion of impediments and resolution</h2>
+  <p class="item">2.1. The demo must run on the lab machines, which have JDK 21, and the build targeted an older
+    release. Chong changed <span style="font-family:Consolas,monospace">pom.xml</span> to Java 21 and the
+    project now builds with Java 21.</p>
+  <p class="item">2.2. Adding the listing <span style="font-family:Consolas,monospace">deleted</span> column did not reach
+    databases created before the change, because the schema only uses
+    <span style="font-family:Consolas,monospace">CREATE TABLE IF NOT EXISTS</span>. It was decided to document one reset of
+    <span style="font-family:Consolas,monospace">data/</span> in the README instead of writing a migration.</p>
+  <p class="item">2.3. Two copies of the app could open the same database and overwrite each other's changes.
+    Chong will add a lock file so only one copy runs at a time (PR #94).</p>
+  <p class="item">2.4. The screens depend on the deal lifecycle being final. The team agreed to freeze the model
+    after this meeting, so the remaining work is screens, fixes and tests only.</p>
+
+  <h2 class="sec">3. Goals for the coming week</h2>
+  <table class="grid">
+    <tr>
+      <th style="width: 30mm">Name</th>
+      <th>Tasks that will be worked on in the coming week</th>
+    </tr>
+    <tr>
+      <td>Chong Yui Kiu</td>
+      <td>SRS gap fixes for the buyer and chat screens (UC-1.4, 1.5, 1.6, 1.8, 1.9); final layout fixes</td>
+    </tr>
+    <tr>
+      <td>Chan Lok Him</td>
+      <td>Seller gap fixes (UC-2.1, 2.4, 2.5, 2.7&ndash;2.9); make the five-second borrow period usable in the dialog</td>
+    </tr>
+    <tr>
+      <td>Ho Sze Yui</td>
+      <td>Test suite and JaCoCo coverage (#38); JavaDoc (#39); screenshots and README (#40)</td>
+    </tr>
+  </table>
+
+  <h2 class="sec">4. Meeting adjournment and next meeting</h2>
+  <p>The meeting was adjourned at 10:20 p.m. The next meeting will be held on 26 November at 9:00 p.m.
+    in LC-12.</p>
+</section>
+
+<!-- ======================= Meeting 3 ======================= -->
+<section class="page portrait">
+  <div class="runhead">
+    <span class="team">Group 1</span>
+    <span>3 / 3</span>
+  </div>
+
+  <div class="course">COMP 3111: Introduction to Software Engineering</div>
+  <div class="doc-title">Minutes of the 3rd Project Scrum Meeting</div>
+  <div class="doc-project">HKUST Marketplace</div>
+
+  <table class="meta">
+    <tr><td class="k">Date:</td><td class="v">26 November 2026</td></tr>
+    <tr><td class="k">Time:</td><td class="v">9:00 p.m.</td></tr>
+    <tr><td class="k">Place:</td><td class="v">LC-12</td></tr>
+    <tr><td class="k">Attending:</td><td class="v">Chong Yui Kiu, Chan Lok Him, Ho Sze Yui</td></tr>
+    <tr><td class="k">Absent:</td><td class="v">None</td></tr>
+    <tr><td class="k">Recorder:</td><td class="v">Ho Sze Yui</td></tr>
+  </table>
+
+  <h2 class="sec">1. Report on progress during the past week</h2>
+  <table class="grid">
+    <tr>
+      <th style="width: 30mm">Name</th>
+      <th>Tasks worked on in the past week</th>
+      <th style="width: 20mm">Total hours</th>
+    </tr>
+    <tr>
+      <td>Chong Yui Kiu</td>
+      <td>
+        Lock file so only one copy of the app runs per database (PR #94); approval photos,
+        registration notice and the seller profile (PR #93)<br>
+        Run instructions for IntelliJ and VS Code (PR #92); merged
+        <span style="font-family:Consolas,monospace;white-space:nowrap">fix/srs-gaps-6-2-13</span> into main<br>
+        Opened the manual SRS regression checklist (#96) and fixed buyer issues: countered
+        requests first, chat search inside the open thread, username in chats
+      </td>
+      <td class="num">12</td>
+    </tr>
+    <tr>
+      <td>Chan Lok Him</td>
+      <td>
+        SRS gap fixes across the three portals (PR #95): review flag state (UC-2.9), five-second
+        borrow (UC-1.4), seller notification links (UC-2.7), photo cap (UC-2.4), admin photo
+        edit (UC-3.7)<br>
+        Login and password visibility, listing-detail popup and cross-portal links
+        (PR #90, PR #91)
+      </td>
+      <td class="num">13</td>
+    </tr>
+    <tr>
+      <td>Ho Sze Yui</td>
+      <td>
+        Test suite and JaCoCo coverage report (#38); JavaDoc for all public classes (#39)<br>
+        Screenshots of every screen and the README refresh (#40)<br>
+        Activity 2 evidence and the demo cue sheet
+      </td>
+      <td class="num">14</td>
+    </tr>
+    <tr class="total">
+      <td colspan="2">Total</td>
+      <td class="num">39</td>
+    </tr>
+  </table>
+
+  <h2 class="sec">2. Discussion of impediments and resolution</h2>
+  <p class="item">2.1. A review of the SRS on 24 November found about twenty small gaps: the "already claimed"
+    message for a reserved giveaway (UC-1.4), the review date and flagged state (UC-2.9), photo editing
+    and field highlighting in All Listings (UC-3.7), and the date filter on Seller Ratings (UC-3.8).
+    The team fixed them on one branch,
+    <span style="font-family:Consolas,monospace;white-space:nowrap">fix/srs-gaps-6-2-13</span>, and merged it
+    into main before this meeting.</p>
+  <p class="item">2.2. The seller edit form did not count photos already saved, so a seller could exceed the
+    six-photo limit. Chan fixed the count before the final test run.</p>
+  <p class="item">2.3. The auto-return demo needs a short loan, but the borrow dialog only selected a date and
+    time. The team added a minutes field and allowed a five-second period in the UI.</p>
+  <p class="item">2.4. Some screens were cut off at the presentation size. The app is now designed for a
+    1200&times;780 window, and the README and demo script tell the grader to maximise the window first.</p>
+
+  <h2 class="sec">3. Goals for the coming week</h2>
+  <table class="grid">
+    <tr>
+      <th style="width: 30mm">Name</th>
+      <th>Tasks that will be worked on in the coming week</th>
+    </tr>
+    <tr>
+      <td>Chong Yui Kiu</td>
+      <td>Finish the manual SRS checklist (#96) and fix any layout problems found during the rehearsal</td>
+    </tr>
+    <tr>
+      <td>Chan Lok Him</td>
+      <td>Finish the remaining seller review cases, then record the seller part of the demo</td>
+    </tr>
+    <tr>
+      <td>Ho Sze Yui</td>
+      <td>Prepare the Activity 2 submission PDF and the ZIP, and run the final test and coverage report</td>
+    </tr>
+  </table>
+
+  <h2 class="sec">4. Meeting adjournment and next meeting</h2>
+  <p>The meeting was adjourned at 10:15 p.m. There is no further scrum meeting before the submission on
+    27 November; the team will meet online if the final test run finds a defect.</p>
+</section>
+
+</body>
+</html>

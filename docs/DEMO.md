@@ -213,7 +213,7 @@ This covers 1.5, 1.6 (start), 2.5 and notifications.
 
 Say these, and show the pages you prepared:
 
-- **503 JUnit tests pass**; JaCoCo report open; 78.7% branch coverage on business logic (83.2% lines), models 96%, services 89%, persistence 82%.
+- **568 JUnit tests pass**; JaCoCo report open; 78.0% branch coverage on business logic (81.8% lines), models 85.7% branches, services 81.5%, persistence 86.5%.
 - **JavaDoc** builds clean (`mvnw javadoc:javadoc`).
 - **RBAC**: `AccessControl.require` runs inside `AdminService` and `SellerService` before
   every change, so a buyer session cannot call seller/admin actions even if the UI is bypassed.
@@ -241,7 +241,7 @@ Use section 7.
 4. Buyer login → My Deals → Accept Counter → Mark Complete → Rate 5★ (1.5 min).
 5. Seller Stats (pie now visible) + Reviews reply (1 min).
 6. Admin login → approve the speaker (create it first if time) + Manage Users (1 min).
-7. One technical sentence: 503 tests, RBAC in services, BCrypt, SQLite (30s).
+7. One technical sentence: 568 tests, RBAC in services, BCrypt, SQLite (30s).
 
 ---
 
@@ -296,7 +296,7 @@ Use section 7.
 > recommended option.
 
 **"What is tested?"**
-> 503 JUnit tests across models, stores, services and the database. JaCoCo report shows
+> 568 JUnit tests across models, stores, services and the database. JaCoCo report shows
 > 96% line coverage for models, 89% for services/utils, 82% for persistence. Controllers
 > are covered lightly because they are UI.
 
@@ -329,4 +329,4 @@ Use section 7.
 - If the database is corrupted, close the app, delete `data/`, relaunch.
 - If the build fails, check `JAVA_HOME` points at `C:\Users\hosze\.jdks\ms-21.0.12.1`
   and run `.\mvnw.cmd -q compile` once before the demo.
-- The final ZIP and tag are `v1.0.1`; do not edit the repo during the demo.
+- The final ZIP and tag are `v1.1.0`; do not edit the repo during the demo.

@@ -1,0 +1,339 @@
+/* COMP 3111 Activity 2 submission — shared print styles */
+:root {
+  --blue: #003974;
+  --blue-dark: #0f2f57;
+  --gold: #a68137;
+  --rule: #9aa7b8;
+  --tint: #eef2f7;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 9.5pt;
+  color: #111;
+  line-height: 1.3;
+}
+
+.page {
+  position: relative;
+  page-break-after: always;
+  overflow: hidden;
+}
+.page:last-of-type { page-break-after: auto; }
+
+/* ---------- portrait pages ---------- */
+@page { size: A4 portrait; margin: 0; }
+
+.portrait {
+  width: 210mm;
+  height: 297mm;
+  padding: 12mm 17mm 10mm;
+}
+
+/* ---------- landscape pages ---------- */
+@page landscape { size: A4 landscape; margin: 0; }
+
+.landscape {
+  page: landscape;
+  width: 297mm;
+  height: 210mm;
+  padding: 10mm 12mm 8mm;
+}
+
+/* ---------- page furniture ---------- */
+.runhead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9pt;
+  color: #444;
+  border-bottom: 0.6pt solid var(--rule);
+  padding-bottom: 1.6mm;
+}
+.runhead .team { font-weight: 600; color: var(--blue); }
+
+.course {
+  margin-top: 4.5mm;
+  font-size: 10pt;
+  font-weight: 600;
+  letter-spacing: 0.2pt;
+}
+
+.doc-title {
+  margin: 2mm 0 1mm;
+  font-size: 14.5pt;
+  font-weight: 700;
+  text-align: center;
+}
+.doc-project {
+  text-align: center;
+  font-size: 11pt;
+  color: var(--blue);
+  font-weight: 600;
+  margin-bottom: 4.5mm;
+}
+
+.bar-title {
+  background: var(--blue);
+  color: #fff;
+  font-size: 18pt;
+  font-weight: 700;
+  text-align: center;
+  padding: 5mm 0;
+  letter-spacing: 0.3pt;
+}
+.bar-sub {
+  text-align: center;
+  color: #555;
+  font-size: 9pt;
+  margin: 2mm 0 5mm;
+}
+
+/* ---------- minutes meta ---------- */
+table.meta {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 4mm;
+  font-size: 9.5pt;
+}
+table.meta td { padding: 0.9mm 0; vertical-align: top; }
+table.meta td.k { width: 24mm; font-weight: 700; }
+table.meta td.v { }
+
+h2.sec {
+  font-size: 10.5pt;
+  font-weight: 700;
+  margin: 3.6mm 0 1.4mm;
+}
+h3.sub {
+  font-size: 10pt;
+  font-weight: 600;
+  margin: 3mm 0 1mm;
+}
+
+p { margin: 0 0 1.8mm; }
+p.item { margin-left: 8mm; text-indent: -8mm; }
+
+table.grid {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 8.8pt;
+  margin: 1mm 0 2.5mm;
+}
+table.grid th, table.grid td {
+  border: 0.6pt solid var(--rule);
+  padding: 1.1mm 1.8mm;
+  vertical-align: top;
+  text-align: left;
+}
+table.grid th {
+  background: var(--tint);
+  font-weight: 600;
+  color: var(--blue-dark);
+}
+table.grid td.num { text-align: right; white-space: nowrap; }
+table.grid tr.total td { font-weight: 700; background: #f7f9fc; }
+
+.cover-body { padding: 0 6mm; }
+.cover-rule {
+  height: 3pt;
+  background: var(--gold);
+  margin: 4mm 0 8mm;
+}
+.cover-kicker {
+  font-size: 10pt;
+  letter-spacing: 1.5pt;
+  color: var(--gold);
+  font-weight: 700;
+}
+.cover h1 {
+  font-size: 30pt;
+  color: var(--blue);
+  margin: 2mm 0 1mm;
+}
+.cover h1 + .cover-sub {
+  font-size: 12pt;
+  color: #333;
+  margin-bottom: 14mm;
+}
+.cover table { font-size: 9.5pt; }
+.cover .label { color: #555; }
+.toc {
+  margin-top: 10mm;
+  border-top: 0.6pt solid var(--rule);
+  padding-top: 4mm;
+  font-size: 9.5pt;
+}
+.toc li { margin-bottom: 1.5mm; }
+
+/* ---------- gantt ---------- */
+table.gantt {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 7.5pt;
+}
+table.gantt th, table.gantt td {
+  border: none;
+  padding: 0;
+  height: 7.3mm;
+  vertical-align: middle;
+}
+table.gantt td.glabel {
+  text-align: right;
+  padding-right: 3mm;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.gantt td.gphase {
+  background: var(--blue-dark);
+  color: #fff;
+  font-weight: 700;
+  font-size: 8pt;
+  padding-left: 3mm;
+  letter-spacing: 0.3pt;
+}
+table.gantt td.gempty { background: #e9edf2; }
+table.gantt th.week {
+  background: var(--blue-dark);
+  color: #fff;
+  font-weight: 600;
+  font-size: 8pt;
+  text-align: center;
+}
+table.gantt th.day {
+  font-weight: 600;
+  font-size: 7pt;
+  text-align: center;
+  color: #fff;
+  border-left: 0.5pt solid #fff;
+}
+table.gantt td.cell { border-left: 1.2pt solid #fff; }
+table.gantt .bar {
+  height: 4.8mm;
+  border-radius: 0.4mm;
+}
+.gap-row td { height: 2.2mm; }
+
+.legend {
+  margin-top: 3mm;
+  font-size: 7.5pt;
+  color: #444;
+  display: flex;
+  gap: 8mm;
+  align-items: center;
+  white-space: nowrap;
+}
+.legend .chip {
+  display: inline-block;
+  width: 6mm;
+  height: 2.6mm;
+  border-radius: 0.4mm;
+  margin-right: 1.5mm;
+  vertical-align: middle;
+}
+
+/* ---------- sprint / chart / log ---------- */
+.two-col {
+  display: flex;
+  gap: 6mm;
+  height: 158mm;
+}
+.col-left { width: 58%; }
+.col-right { width: 42%; }
+
+.chart-card {
+  border: 0.6pt solid var(--rule);
+  padding: 3mm;
+  height: 100%;
+}
+.chart-card h3 {
+  margin: 0 0 1mm;
+  font-size: 10pt;
+  color: var(--blue-dark);
+}
+.chart-card .hint {
+  font-size: 7.5pt;
+  color: #555;
+  margin: 0 0 2mm;
+}
+.note {
+  font-size: 7.5pt;
+  color: #555;
+  margin-top: 2mm;
+}
+
+table.backlog {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 8.1pt;
+  table-layout: fixed;
+}
+table.backlog th, table.backlog td {
+  border: 0.5pt solid #b9c4d2;
+  padding: 1.95mm 1.7mm;
+  vertical-align: top;
+}
+table.backlog th {
+  background: var(--blue-dark);
+  color: #fff;
+  font-weight: 600;
+  font-size: 7.4pt;
+  text-align: center;
+}
+table.backlog th.task { text-align: left; }
+table.backlog td.num { text-align: center; }
+table.backlog tr.area td {
+  background: var(--tint);
+  font-weight: 700;
+  color: var(--blue-dark);
+  font-size: 7.4pt;
+}
+table.backlog tr.total td {
+  background: #f4f7fb;
+  font-weight: 700;
+  text-align: center;
+}
+table.backlog .issue { color: #555; white-space: nowrap; }
+
+.log {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 7.2pt;
+  line-height: 1.55;
+  background: #f7f9fc;
+  border: 0.5pt solid #c9d3df;
+  padding: 3mm;
+  column-count: 2;
+  column-gap: 6mm;
+}
+.log span.h { color: #8a6d1f; }
+.log div { break-inside: avoid; }
+
+.shot {
+  border: 0.5pt solid #c9d3df;
+  width: 100%;
+  display: block;
+}
+.caption { font-size: 7pt; color: #666; margin-top: 1.5mm; }
+
+.facts { font-size: 8pt; }
+.facts div { margin-bottom: 1.2mm; }
+.facts b { color: var(--blue-dark); }
+
+.kv {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8pt;
+}
+.kv td { padding: 1.2mm 1.5mm; border-bottom: 0.5pt solid #dde3ea; }
+.kv td.n { text-align: right; font-weight: 700; }

@@ -90,23 +90,28 @@ public final class ReviewService {
 <span class="fc" id="L90">        return review;</span>
     }
 
-    /** Step 3.2: every review the buyer has submitted, newest first, with any seller reply. */
+    /**
+     * Step 3.2: every visible review the buyer has submitted, newest first, with any seller reply.
+     * Reviews the admin has hidden are omitted (SRS UC-3.8), as they are for sellers.
+     */
     public List&lt;Review&gt; myReviews(User actor) {
-<span class="fc" id="L95">        return data.reviews().byBuyer(requireBuyer(actor).getUsername());</span>
+<span class="fc" id="L98">        return data.reviews().byBuyer(requireBuyer(actor).getUsername()).stream()</span>
+<span class="fc bfc" id="L99" title="All 2 branches covered.">                .filter(review -&gt; !review.isHidden())</span>
+<span class="fc" id="L100">                .toList();</span>
     }
 
     /** The listing a review is about, resolved through its completed deal, or null if unknown. */
     public Listing listingOf(Review review) {
-<span class="fc bfc" id="L100" title="All 2 branches covered.">        String dealId = review == null ? null : review.getDealId();</span>
-<span class="fc bfc" id="L101" title="All 2 branches covered.">        if (dealId == null) {</span>
-<span class="fc" id="L102">            return null;</span>
+<span class="fc bfc" id="L105" title="All 2 branches covered.">        String dealId = review == null ? null : review.getDealId();</span>
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        if (dealId == null) {</span>
+<span class="fc" id="L107">            return null;</span>
         }
-<span class="pc bpc" id="L104" title="1 of 2 branches missed.">        for (Deal deal : data.deals().allDeals()) {</span>
-<span class="pc bpc" id="L105" title="1 of 2 branches missed.">            if (deal.getId().equals(dealId)) {</span>
-<span class="fc" id="L106">                return deal.getListing();</span>
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        for (Deal deal : data.deals().allDeals()) {</span>
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">            if (deal.getId().equals(dealId)) {</span>
+<span class="fc" id="L111">                return deal.getListing();</span>
             }
-<span class="nc" id="L108">        }</span>
-<span class="nc" id="L109">        return null;</span>
+<span class="nc" id="L113">        }</span>
+<span class="nc" id="L114">        return null;</span>
     }
 
     /**
@@ -115,28 +120,28 @@ public final class ReviewService {
      * hides it.
      */
     public synchronized void flagReview(User actor, Review review, boolean flagged) {
-<span class="fc" id="L118">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
-<span class="fc" id="L119">        Objects.requireNonNull(review, &quot;review&quot;);</span>
-<span class="pc bpc" id="L120" title="1 of 2 branches missed.">        if (!seller.getUsername().equalsIgnoreCase(review.getSellerUsername())) {</span>
-<span class="nc" id="L121">            throw new SecurityException(&quot;This review is not about you.&quot;);</span>
+<span class="fc" id="L123">        Seller seller = (Seller) AccessControl.require(actor, UserRole.SELLER);</span>
+<span class="fc" id="L124">        Objects.requireNonNull(review, &quot;review&quot;);</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        if (!seller.getUsername().equalsIgnoreCase(review.getSellerUsername())) {</span>
+<span class="nc" id="L126">            throw new SecurityException(&quot;This review is not about you.&quot;);</span>
         }
-<span class="fc" id="L123">        review.setFlagged(flagged);</span>
+<span class="fc" id="L128">        review.setFlagged(flagged);</span>
         try {
-<span class="fc" id="L125">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L126">                data.reviews().save(review);</span>
-<span class="pc bpc" id="L127" title="1 of 2 branches missed.">                if (flagged) {</span>
-<span class="fc" id="L128">                    NotificationRef ref = new NotificationRef(NotificationRef.Target.REVIEW, review.getId());</span>
-<span class="fc bfc" id="L129" title="All 2 branches covered.">                    for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
-<span class="fc" id="L130">                        data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,</span>
-<span class="fc" id="L131">                                &quot;Seller @&quot; + seller.getUsername() + &quot; flagged a review: &quot; + review.getComment(), ref);</span>
-<span class="fc" id="L132">                    }</span>
+<span class="fc" id="L130">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L131">                data.reviews().save(review);</span>
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">                if (flagged) {</span>
+<span class="fc" id="L133">                    NotificationRef ref = new NotificationRef(NotificationRef.Target.REVIEW, review.getId());</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">                    for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
+<span class="fc" id="L135">                        data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,</span>
+<span class="fc" id="L136">                                &quot;Seller @&quot; + seller.getUsername() + &quot; flagged a review: &quot; + review.getComment(), ref);</span>
+<span class="fc" id="L137">                    }</span>
                 }
-<span class="fc" id="L134">            });</span>
-<span class="nc" id="L135">        } catch (RuntimeException e) {</span>
-<span class="nc bnc" id="L136" title="All 2 branches missed.">            review.setFlagged(!flagged);</span>
-<span class="nc" id="L137">            throw e;</span>
-<span class="fc" id="L138">        }</span>
-<span class="fc" id="L139">    }</span>
+<span class="fc" id="L139">            });</span>
+<span class="nc" id="L140">        } catch (RuntimeException e) {</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">            review.setFlagged(!flagged);</span>
+<span class="nc" id="L142">            throw e;</span>
+<span class="fc" id="L143">        }</span>
+<span class="fc" id="L144">    }</span>
 
     /**
      * Report Listing (UC-1.10): stores an Open report and notifies every admin.
@@ -144,29 +149,29 @@ public final class ReviewService {
      * @throws IllegalArgumentException with {@link #REASON_MISSING} if the reason is empty (A1)
      */
     public ListingReport reportListing(User actor, Listing listing, String reason) {
-<span class="fc" id="L147">        Buyer buyer = requireBuyer(actor);</span>
-<span class="fc" id="L148">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
-<span class="pc bpc" id="L149" title="1 of 4 branches missed.">        if (reason == null || reason.isBlank()) {</span>
-<span class="fc" id="L150">            throw new IllegalArgumentException(REASON_MISSING);</span>
+<span class="fc" id="L152">        Buyer buyer = requireBuyer(actor);</span>
+<span class="fc" id="L153">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="pc bpc" id="L154" title="1 of 4 branches missed.">        if (reason == null || reason.isBlank()) {</span>
+<span class="fc" id="L155">            throw new IllegalArgumentException(REASON_MISSING);</span>
         }
-<span class="fc" id="L152">        ListingReport[] report = new ListingReport[1];</span>
-<span class="fc" id="L153">        data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L154">            report[0] = data.reports().fileReport(buyer, listing, reason);</span>
-<span class="fc bfc" id="L155" title="All 2 branches covered.">            for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
-<span class="fc" id="L156">                data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,</span>
-<span class="fc" id="L157">                        buyer.getDisplayName() + &quot; reported '&quot; + listing.getTitle() + &quot;': &quot; + reason.trim(),</span>
-<span class="fc" id="L158">                        new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
-<span class="fc" id="L159">            }</span>
-<span class="fc" id="L160">        });</span>
-<span class="fc" id="L161">        return report[0];</span>
+<span class="fc" id="L157">        ListingReport[] report = new ListingReport[1];</span>
+<span class="fc" id="L158">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L159">            report[0] = data.reports().fileReport(buyer, listing, reason);</span>
+<span class="fc bfc" id="L160" title="All 2 branches covered.">            for (User admin : data.users().byRole(UserRole.ADMIN)) {</span>
+<span class="fc" id="L161">                data.notifications().notify(admin.getUsername(), NotificationCategory.REPORTED_LISTING,</span>
+<span class="fc" id="L162">                        buyer.getDisplayName() + &quot; reported '&quot; + listing.getTitle() + &quot;': &quot; + reason.trim(),</span>
+<span class="fc" id="L163">                        new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
+<span class="fc" id="L164">            }</span>
+<span class="fc" id="L165">        });</span>
+<span class="fc" id="L166">        return report[0];</span>
     }
 
     private boolean canBeReviewed(Deal deal) {
-<span class="fc bfc" id="L165" title="All 4 branches covered.">        return FINISHED.contains(deal.getStatus()) &amp;&amp; data.reviews().forDeal(deal.getId()) == null;</span>
+<span class="fc bfc" id="L170" title="All 4 branches covered.">        return FINISHED.contains(deal.getStatus()) &amp;&amp; data.reviews().forDeal(deal.getId()) == null;</span>
     }
 
     private static Buyer requireBuyer(User actor) {
-<span class="fc" id="L169">        return (Buyer) AccessControl.require(actor, UserRole.BUYER);</span>
+<span class="fc" id="L174">        return (Buyer) AccessControl.require(actor, UserRole.BUYER);</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

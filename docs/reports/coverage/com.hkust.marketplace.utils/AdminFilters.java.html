@@ -13,41 +13,51 @@ import java.util.Locale;
  */
 public final class AdminFilters {
 
+    /** SRS UC-3.5 A1/A2: shown instead of an empty table when the range starts after it ends. */
+    public static final String INVALID_DEAL_DATE_RANGE =
+            &quot;The date range is invalid: the start date is after the end date.&quot;;
+
     private AdminFilters() {
     }
 
     /**
      * Matches the review list filters (SRS UC-3.6): keyword over seller, buyer and comment, then
-     * a star score and a visibility state.
+     * a star score, a visibility state and an inclusive created-date range.
      *
      * @param review the review to test
      * @param keyword text to find in the seller, buyer or comment; blank means any
      * @param scoreIndex 0 for &quot;All scores&quot;, otherwise 1 for 5 stars down to 5 for 1 star
      * @param visibility &quot;All reviews&quot;, &quot;Visible&quot;, &quot;Hidden&quot; or &quot;Flagged&quot;
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
      * @return {@code true} when the review passes every filter
      */
-    public static boolean matchesReview(Review review, String keyword, int scoreIndex, String visibility) {
-<span class="fc" id="L30">        String text = normalise(keyword);</span>
-<span class="fc bfc" id="L31" title="All 2 branches covered.">        if (!text.isEmpty()</span>
-<span class="fc bfc" id="L32" title="All 2 branches covered.">                &amp;&amp; !contains(review.getSellerUsername(), text)</span>
-<span class="fc bfc" id="L33" title="All 2 branches covered.">                &amp;&amp; !contains(review.getBuyerUsername(), text)</span>
-<span class="fc bfc" id="L34" title="All 2 branches covered.">                &amp;&amp; !contains(review.getComment(), text)) {</span>
-<span class="fc" id="L35">            return false;</span>
+    public static boolean matchesReview(Review review, String keyword, int scoreIndex, String visibility,
+                                        LocalDate from, LocalDate to) {
+<span class="fc" id="L37">        String text = normalise(keyword);</span>
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        if (!text.isEmpty()</span>
+<span class="fc bfc" id="L39" title="All 2 branches covered.">                &amp;&amp; !contains(review.getSellerUsername(), text)</span>
+<span class="fc bfc" id="L40" title="All 2 branches covered.">                &amp;&amp; !contains(review.getBuyerUsername(), text)</span>
+<span class="fc bfc" id="L41" title="All 2 branches covered.">                &amp;&amp; !contains(review.getComment(), text)) {</span>
+<span class="fc" id="L42">            return false;</span>
         }
-<span class="fc bfc" id="L37" title="All 2 branches covered.">        int wanted = scoreIndex == 0 ? 0 : 6 - scoreIndex;</span>
-<span class="fc bfc" id="L38" title="All 4 branches covered.">        if (wanted != 0 &amp;&amp; review.getRating() != wanted) {</span>
-<span class="fc" id="L39">            return false;</span>
+<span class="fc bfc" id="L44" title="All 2 branches covered.">        int wanted = scoreIndex == 0 ? 0 : 6 - scoreIndex;</span>
+<span class="fc bfc" id="L45" title="All 4 branches covered.">        if (wanted != 0 &amp;&amp; review.getRating() != wanted) {</span>
+<span class="fc" id="L46">            return false;</span>
         }
-<span class="fc bfc" id="L41" title="All 2 branches covered.">        if (&quot;Hidden&quot;.equals(visibility)) {</span>
-<span class="fc" id="L42">            return review.isHidden();</span>
+<span class="fc bfc" id="L48" title="All 4 branches covered.">        if (&quot;Hidden&quot;.equals(visibility) &amp;&amp; !review.isHidden()) {</span>
+<span class="fc" id="L49">            return false;</span>
         }
-<span class="fc bfc" id="L44" title="All 2 branches covered.">        if (&quot;Visible&quot;.equals(visibility)) {</span>
-<span class="fc bfc" id="L45" title="All 2 branches covered.">            return !review.isHidden();</span>
+<span class="fc bfc" id="L51" title="All 4 branches covered.">        if (&quot;Visible&quot;.equals(visibility) &amp;&amp; review.isHidden()) {</span>
+<span class="fc" id="L52">            return false;</span>
         }
-<span class="fc bfc" id="L47" title="All 2 branches covered.">        if (&quot;Flagged&quot;.equals(visibility)) {</span>
-<span class="fc bfc" id="L48" title="All 4 branches covered.">            return review.isFlagged() &amp;&amp; !review.isHidden();</span>
+<span class="fc bfc" id="L54" title="All 6 branches covered.">        if (&quot;Flagged&quot;.equals(visibility) &amp;&amp; !(review.isFlagged() &amp;&amp; !review.isHidden())) {</span>
+<span class="fc" id="L55">            return false;</span>
         }
-<span class="fc" id="L50">        return true;</span>
+<span class="fc bfc" id="L57" title="All 4 branches covered.">        if (from == null &amp;&amp; to == null) {</span>
+<span class="fc" id="L58">            return true;</span>
+        }
+<span class="fc" id="L60">        return inRange(review.getCreatedAt().toLocalDate(), from, to);</span>
     }
 
     /**
@@ -64,26 +74,26 @@ public final class AdminFilters {
      */
     public static boolean matchesDeal(Deal deal, String keyword, String type, String status,
                                       LocalDate from, LocalDate to) {
-<span class="fc" id="L67">        String text = normalise(keyword);</span>
-<span class="fc bfc" id="L68" title="All 2 branches covered.">        if (!text.isEmpty()</span>
-<span class="fc bfc" id="L69" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getListing().getTitle(), text)</span>
-<span class="fc bfc" id="L70" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getBuyerUsername(), text)</span>
-<span class="fc bfc" id="L71" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getSellerUsername(), text)) {</span>
-<span class="fc" id="L72">            return false;</span>
+<span class="fc" id="L77">        String text = normalise(keyword);</span>
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        if (!text.isEmpty()</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getListing().getTitle(), text)</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getBuyerUsername(), text)</span>
+<span class="fc bfc" id="L81" title="All 2 branches covered.">                &amp;&amp; !contains(deal.getSellerUsername(), text)) {</span>
+<span class="fc" id="L82">            return false;</span>
         }
-<span class="pc bpc" id="L74" title="1 of 6 branches missed.">        if (type != null &amp;&amp; !type.equals(&quot;All types&quot;) &amp;&amp; !type.equals(deal.getDealType().name())) {</span>
-<span class="fc" id="L75">            return false;</span>
+<span class="pc bpc" id="L84" title="1 of 6 branches missed.">        if (type != null &amp;&amp; !type.equals(&quot;All types&quot;) &amp;&amp; !type.equals(deal.getDealType().name())) {</span>
+<span class="fc" id="L85">            return false;</span>
         }
-<span class="pc bpc" id="L77" title="1 of 6 branches missed.">        if (status != null &amp;&amp; !status.equals(&quot;All statuses&quot;) &amp;&amp; !status.equals(deal.getStatus().name())) {</span>
-<span class="fc" id="L78">            return false;</span>
+<span class="pc bpc" id="L87" title="1 of 6 branches missed.">        if (status != null &amp;&amp; !status.equals(&quot;All statuses&quot;) &amp;&amp; !status.equals(deal.getStatus().name())) {</span>
+<span class="fc" id="L88">            return false;</span>
         }
-<span class="fc bfc" id="L80" title="All 4 branches covered.">        if (from == null &amp;&amp; to == null) {</span>
-<span class="fc" id="L81">            return true;</span>
+<span class="fc bfc" id="L90" title="All 4 branches covered.">        if (from == null &amp;&amp; to == null) {</span>
+<span class="fc" id="L91">            return true;</span>
         }
-<span class="fc" id="L83">        LocalDate start = deal.getStartDate().toLocalDate();</span>
-<span class="fc bfc" id="L84" title="All 2 branches covered.">        LocalDate end = deal.getCompletedDate() != null ? deal.getCompletedDate().toLocalDate()</span>
-<span class="pc bpc" id="L85" title="1 of 2 branches missed.">                : deal.getDueDate() != null ? deal.getDueDate().toLocalDate() : null;</span>
-<span class="pc bpc" id="L86" title="3 of 6 branches missed.">        return inRange(start, from, to) || (end != null &amp;&amp; inRange(end, from, to));</span>
+<span class="fc" id="L93">        LocalDate start = deal.getStartDate().toLocalDate();</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        LocalDate end = deal.getCompletedDate() != null ? deal.getCompletedDate().toLocalDate()</span>
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">                : deal.getDueDate() != null ? deal.getDueDate().toLocalDate() : null;</span>
+<span class="pc bpc" id="L96" title="3 of 6 branches missed.">        return inRange(start, from, to) || (end != null &amp;&amp; inRange(end, from, to));</span>
     }
 
     /**
@@ -94,22 +104,34 @@ public final class AdminFilters {
      * @return the label shown in historical tables
      */
     public static String partyLabel(User user, String username) {
-<span class="fc bfc" id="L97" title="All 2 branches covered.">        if (user == null) {</span>
-<span class="fc" id="L98">            return username;</span>
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if (user == null) {</span>
+<span class="fc" id="L108">            return username;</span>
         }
-<span class="fc bfc" id="L100" title="All 2 branches covered.">        return user.isDeleted() ? &quot;deleted user&quot; : user.getFullName() + &quot; (@&quot; + username + &quot;)&quot;;</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        return user.isDeleted() ? &quot;deleted user&quot; : user.getFullName() + &quot; (@&quot; + username + &quot;)&quot;;</span>
+    }
+
+    /**
+     * Whether a deal date range is usable (SRS UC-3.5 A1/A2). An open-ended range is always
+     * valid; a range is invalid only when both ends are given and the start is after the end.
+     *
+     * @param from the first day of the range, or {@code null}
+     * @param to the last day of the range, or {@code null}
+     * @return {@code true} when either end is missing or {@code from} is not after {@code to}
+     */
+    public static boolean isValidDealDateRange(LocalDate from, LocalDate to) {
+<span class="pc bpc" id="L122" title="1 of 6 branches missed.">        return from == null || to == null || !from.isAfter(to);</span>
     }
 
     static boolean inRange(LocalDate date, LocalDate from, LocalDate to) {
-<span class="pc bpc" id="L104" title="1 of 8 branches missed.">        return (from == null || !date.isBefore(from)) &amp;&amp; (to == null || !date.isAfter(to));</span>
+<span class="fc bfc" id="L126" title="All 8 branches covered.">        return (from == null || !date.isBefore(from)) &amp;&amp; (to == null || !date.isAfter(to));</span>
     }
 
     private static boolean contains(String value, String keyword) {
-<span class="pc bpc" id="L108" title="1 of 4 branches missed.">        return value != null &amp;&amp; value.toLowerCase(Locale.ROOT).contains(keyword);</span>
+<span class="pc bpc" id="L130" title="1 of 4 branches missed.">        return value != null &amp;&amp; value.toLowerCase(Locale.ROOT).contains(keyword);</span>
     }
 
     private static String normalise(String text) {
-<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        return text == null ? &quot;&quot; : text.trim().toLowerCase(Locale.ROOT);</span>
+<span class="pc bpc" id="L134" title="1 of 2 branches missed.">        return text == null ? &quot;&quot; : text.trim().toLowerCase(Locale.ROOT);</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

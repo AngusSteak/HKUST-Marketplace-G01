@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Representative Git Commit Log</title>
+<link rel="stylesheet" href="submission.css">
+<style>@page { size: A4 landscape; margin: 0; }</style>
+</head>
+<body>
+
+<section class="page landscape">
+  <div class="bar-title">Representative Git Commit Log</div>
+  <div class="bar-sub">github.com/AngusSteak/HKUST-Marketplace-G01 &middot; branch
+    <span style="font-family:Consolas,monospace">main</span> &middot; 49 commits &middot; 3 contributors &middot;
+    43 merged pull requests</div>
+
+  <div style="display:flex;gap:6mm;height:70mm">
+    <div style="width:56%">
+      <img class="shot" src="github-commits.png" alt="GitHub commits page for the repository">
+      <div class="caption">GitHub &rarr; Commits on <b>main</b>, 26 November 2026. Each commit names the issue,
+        pull request or use case it closes, e.g. (#17), (#94) or (UC-3.7), so the log can be traced back to
+        the backlog.</div>
+    </div>
+
+    <div style="width:44%">
+      <table class="kv">
+        <tr><td>Repository</td><td class="n" style="font-weight:400">AngusSteak/HKUST-Marketplace-G01</td></tr>
+        <tr><td>Branches</td><td class="n">23</td></tr>
+        <tr><td>Commits on main</td><td class="n">49</td></tr>
+        <tr><td>Merged pull requests</td><td class="n">43</td></tr>
+        <tr><td>Issues closed</td><td class="n">51 of 52</td></tr>
+        <tr><td>Tests at submission</td><td class="n">568, 0 failures</td></tr>
+      </table>
+
+      <table class="grid" style="margin-top:3mm;font-size:8pt">
+        <tr>
+          <th style="width:45%">Contributor</th>
+          <th style="width:35%">GitHub</th>
+          <th style="width:20%;text-align:right">Commits</th>
+        </tr>
+        <tr><td>Chong Yui Kiu</td><td>AngusSteak</td><td class="num">21</td></tr>
+        <tr><td>Chan Lok Him</td><td>Matthechan005</td><td class="num">14</td></tr>
+        <tr><td>Ho Sze Yui</td><td>jammiiieeeee</td><td class="num">14</td></tr>
+        <tr class="total"><td colspan="2">Total</td><td class="num">49</td></tr>
+      </table>
+      <p class="note">Most work was done on one branch per issue group and merged by pull request; a few
+        documentation commits went straight to main. The last commit carries the SRS gap fixes (PR #95) from
+        <span style="font-family:Consolas,monospace">fix/srs-gaps-6-2-13</span>.</p>
+    </div>
+  </div>
+
+  <div style="margin-top:4mm">
+    <div style="font-size:8.5pt;font-weight:700;color:#0f2f57;margin-bottom:1.5mm">
+      Representative commits, from first commit to submission (<span style="font-family:Consolas,monospace">git log --oneline</span>)</div>
+    <div class="log">
+      <div><span class="h">bd10138</span> Nov 01 first commit</div>
+      <div><span class="h">4e74375</span> Nov 19 Feature/base user model (#1)</div>
+      <div><span class="h">fa336df</span> Nov 21 Add deal lifecycle status rules and tests (#2)</div>
+      <div><span class="h">afe1412</span> Nov 21 Split DummyDataService into per-area stores (#3)</div>
+      <div><span class="h">e3d1d6f</span> Nov 22 Add DealRequest hierarchy and rework Deal around it (#4, #5) (#42)</div>
+      <div><span class="h">ff19c32</span> Nov 22 Add Favourites and Follows store (#6) (#43)</div>
+      <div><span class="h">ae842e5</span> Nov 22 [B1] Category / Condition / Location enums; rename REMOVED to TAKEN_DOWN (#9)</div>
+      <div><span class="h">e36560f</span> Nov 22 feat(listing): add listing subclasses, Money and Duration (#8) (#46)</div>
+      <div><span class="h">be7f4ce</span> Nov 22 refactor(lending): centralise the duration rule and format durations (#10) (#47)</div>
+      <div><span class="h">786fb08</span> Nov 23 feat(audit): append-only admin audit log (#14) (#51)</div>
+      <div><span class="h">4629988</span> Nov 23 feat(security): enforce full SRS password rules with per-rule failures (#15) (#48)</div>
+      <div><span class="h">0164ac8</span> Nov 23 feat(chat): add the shared chat component for buyers and sellers (#11) (#54)</div>
+      <div><span class="h">fa94676</span> Nov 23 build: target Java 21 as the course requires (#61)</div>
+      <div><span class="h">c415bab</span> Nov 23 SQLite database foundation: users and listings (#55) (#62)</div>
+      <div><span class="h">bb216f2</span> Nov 23 Persist deal requests, deals, favourites and follows (#56) (#63)</div>
+      <div><span class="h">4cdda3e</span> Nov 24 docs: add JavaDoc to all public classes and APIs (#39)</div>
+      <div><span class="h">f7ecf8f</span> Nov 23 Browse Marketplace: search, filter and sort (#17)</div>
+      <div><span class="h">903b8a8</span> Nov 23 Listing details with favourite and follow (#18) (#71)</div>
+      <div><span class="h">61554b8</span> Nov 23 Seller Create Listing: reusable form, type switching &amp; photos (#25) (#73)</div>
+      <div><span class="h">9bc1dbd</span> Nov 23 Make Deal Request: real offers, borrow requests and claims (#19)</div>
+      <div><span class="h">cee5c86</span> Nov 23 Buyer chat: Chats page, notifications, offers through the request service (#20) (#75)</div>
+      <div><span class="h">b0efbf8</span> Nov 23 My Deals: answer counters, return items, mark complete (#21) (#76)</div>
+      <div><span class="h">286ddd0</span> Nov 23 Deal History filters, auto-return timer and reminders (#22) (#77)</div>
+      <div><span class="h">e190ceb</span> Nov 23 Rate sellers and report listings (#23) (#78)</div>
+      <div><span class="h">38c934c</span> Nov 24 feat(admin): complete Block 2 admin console (#32-#37)</div>
+      <div><span class="h">83956fc</span> Nov 24 [Seller] My Listings: edit, withdraw and mark sold (#26) (#79)</div>
+      <div><span class="h">34183ae</span> Nov 24 [Seller] Real seller stats and formal-offer &rarr; request link (#28) (#29) (#89)</div>
+      <div><span class="h">70e37fc</span> Nov 24 build: add JaCoCo coverage report and document the test suite (#38)</div>
+      <div><span class="h">6848986</span> Nov 24 docs: add screenshots of every screen and refresh README (#40)</div>
+      <div><span class="h">4be6d0d</span> Nov 25 UX: listing-detail popup + admin/seller/buyer links + SRS review fixes (#91)</div>
+      <div><span class="h">65e70bd</span> Nov 26 SRS gap fixes: reviews, deals, requests, admin edit &amp; moderation (#95)</div>
+    </div>
+    <div class="note" style="margin-top:2mm;text-align:right">
+      Full history: github.com/AngusSteak/HKUST-Marketplace-G01/commits/main</div>
+  </div>
+</section>
+
+</body>
+</html>
