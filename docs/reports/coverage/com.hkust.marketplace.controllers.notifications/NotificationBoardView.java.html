@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationBoardView.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.notifications</a> &gt; <span class="el_source">NotificationBoardView.java</span></div><h1>NotificationBoardView.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.notifications;
+
+import com.hkust.marketplace.models.Notification;
+import com.hkust.marketplace.models.NotificationCategory;
+import com.hkust.marketplace.utils.DummyDataService;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Parent;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.function.Consumer;
+
+/**
+ * Builds the notification board shared by the buyer, seller and admin portals. The view owns no
+ * state: the caller keeps the current filter (so it survives navigation) and supplies the two
+ * callbacks for filter changes and for opening a notification.
+ */
+public final class NotificationBoardView {
+
+<span class="fc" id="L28">    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern(&quot;dd MMM yyyy HH:mm&quot;);</span>
+
+    private NotificationBoardView() {
+    }
+
+    /** One choice in the category filter; a {@code null} value means &quot;All categories&quot;. */
+<span class="fc" id="L34">    private record Option&lt;T&gt;(String label, T value) {</span>
+        @Override
+        public String toString() {
+<span class="fc" id="L37">            return label;</span>
+        }
+    }
+
+    /**
+     * Builds the board for {@code username}. The first filter item is &quot;All categories&quot; (a
+     * {@code null} category), followed by each supplied category's label in the given order.
+     */
+    public static Parent build(String username, List&lt;NotificationCategory&gt; categories,
+                               NotificationCategory filter,
+                               Consumer&lt;NotificationCategory&gt; onFilterChange,
+                               Consumer&lt;Notification&gt; onOpen) {
+<span class="fc" id="L49">        DummyDataService data = DummyDataService.getInstance();</span>
+<span class="fc" id="L50">        VBox root = new VBox(12);</span>
+<span class="fc" id="L51">        root.setPadding(new Insets(4));</span>
+
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        if (data.notifications().forUser(username).isEmpty()) {</span>
+            // SRS UC-1.8 A1: nothing but the empty-state message.
+<span class="fc" id="L55">            root.getChildren().add(muted(&quot;You have no notifications.&quot;));</span>
+<span class="fc" id="L56">            return wrap(root);</span>
+        }
+
+<span class="fc" id="L59">        ComboBox&lt;Option&lt;NotificationCategory&gt;&gt; filterBox = new ComboBox&lt;&gt;();</span>
+<span class="fc" id="L60">        filterBox.getItems().add(new Option&lt;&gt;(&quot;All categories&quot;, null));</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        for (NotificationCategory category : categories) {</span>
+<span class="fc" id="L62">            filterBox.getItems().add(new Option&lt;&gt;(category.getLabel(), category));</span>
+<span class="fc" id="L63">        }</span>
+        // Preselect before wiring the handler so the initial selection never fires onFilterChange.
+<span class="fc" id="L65">        filterBox.getSelectionModel().selectFirst();</span>
+<span class="fc" id="L66">        filterBox.getItems().stream()</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">                .filter(o -&gt; o.value() == filter)</span>
+<span class="fc" id="L68">                .findFirst()</span>
+<span class="fc" id="L69">                .ifPresent(o -&gt; filterBox.getSelectionModel().select(o));</span>
+<span class="fc" id="L70">        filterBox.setOnAction(e -&gt; {</span>
+<span class="nc" id="L71">            Option&lt;NotificationCategory&gt; chosen = filterBox.getValue();</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">            onFilterChange.accept(chosen == null ? null : chosen.value());</span>
+<span class="nc" id="L73">        });</span>
+
+<span class="fc" id="L75">        long unread = data.notifications().unreadCount(username);</span>
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        Label unreadLabel = muted(unread == 0 ? &quot;All read&quot; : unread + &quot; unread&quot;);</span>
+<span class="fc" id="L77">        HBox header = new HBox(12, new Label(&quot;Category:&quot;), filterBox, unreadLabel);</span>
+<span class="fc" id="L78">        header.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L79">        root.getChildren().add(header);</span>
+
+<span class="fc" id="L81">        List&lt;Notification&gt; notifs = data.notifications().forUser(username, filter);</span>
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">        if (notifs.isEmpty()) {</span>
+<span class="nc" id="L83">            root.getChildren().add(muted(&quot;No notifications in this category.&quot;));</span>
+        }
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        for (Notification n : notifs) {</span>
+<span class="fc" id="L86">            root.getChildren().add(row(n, onOpen));</span>
+<span class="fc" id="L87">        }</span>
+
+<span class="fc" id="L89">        return wrap(root);</span>
+    }
+
+    private static HBox row(Notification n, Consumer&lt;Notification&gt; onOpen) {
+<span class="fc" id="L93">        Label title = new Label(n.getTitle());</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        title.setStyle(&quot;-fx-text-fill: #1a1a2e; &quot; + (n.isRead() ? &quot;&quot; : &quot;-fx-font-weight: bold;&quot;));</span>
+<span class="fc" id="L95">        HBox titleRow = new HBox(8, title);</span>
+<span class="fc" id="L96">        titleRow.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if (!n.isRead()) {</span>
+<span class="fc" id="L98">            Label badge = new Label(&quot;New&quot;);</span>
+<span class="fc" id="L99">            badge.getStyleClass().addAll(&quot;badge&quot;, &quot;badge-pending&quot;);</span>
+<span class="fc" id="L100">            titleRow.getChildren().add(badge);</span>
+        }
+<span class="fc" id="L102">        Label msg = muted(n.getMessage());</span>
+<span class="fc" id="L103">        Label meta = new Label(n.getCategory().getLabel() + &quot; \u00b7 &quot;</span>
+<span class="fc" id="L104">                + n.getTimestamp().format(DATE_TIME));</span>
+<span class="fc" id="L105">        meta.setStyle(&quot;-fx-text-fill: #9aa0b0; -fx-font-size: 11px;&quot;);</span>
+<span class="fc" id="L106">        VBox text = new VBox(4, titleRow, msg, meta);</span>
+<span class="fc" id="L107">        HBox.setHgrow(text, Priority.ALWAYS);</span>
+
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        Button open = new Button(n.getRelatedRef() == null ? &quot;Mark read&quot; : &quot;Open&quot;);</span>
+<span class="fc" id="L110">        open.getStyleClass().addAll(&quot;btn-outline&quot;, &quot;btn-sm&quot;);</span>
+<span class="pc bpc" id="L111" title="3 of 4 branches missed.">        open.setDisable(n.getRelatedRef() == null &amp;&amp; n.isRead());</span>
+<span class="fc" id="L112">        open.setOnAction(e -&gt; onOpen.accept(n));</span>
+
+<span class="fc" id="L114">        HBox item = new HBox(12, text, open);</span>
+<span class="fc" id="L115">        item.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L116">        item.getStyleClass().add(&quot;notif-item&quot;);</span>
+<span class="fc" id="L117">        return item;</span>
+    }
+
+    private static Label muted(String text) {
+<span class="fc" id="L121">        Label label = new Label(text);</span>
+<span class="fc" id="L122">        label.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 13px;&quot;);</span>
+<span class="fc" id="L123">        label.setWrapText(true);</span>
+<span class="fc" id="L124">        return label;</span>
+    }
+
+    private static ScrollPane wrap(VBox root) {
+<span class="fc" id="L128">        ScrollPane scroll = new ScrollPane(root);</span>
+<span class="fc" id="L129">        scroll.setFitToWidth(true);</span>
+<span class="fc" id="L130">        return scroll;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

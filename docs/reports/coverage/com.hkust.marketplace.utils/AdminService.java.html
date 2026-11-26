@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AdminService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">AdminService.java</span></div><h1>AdminService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AdminService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">AdminService.java</span></div><h1>AdminService.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.forms.ListingFormState;
 import com.hkust.marketplace.forms.PhotoDraft;
@@ -188,6 +188,7 @@ public final class AdminService {
     /**
      * Edits a listing's details without changing its status (SRS UC-3.7 S1), then audits the
      * change and notifies the seller. Prices and lending durations keep their existing rules.
+     * The listing keeps its current photos.
      *
      * @param admin the acting admin
      * @param listing the listing to edit
@@ -202,57 +203,130 @@ public final class AdminService {
     public void editListing(User admin, Listing listing, String title, String description,
                             Category category, Condition condition, Location location,
                             String rawPrice, Duration lendingDuration) {
-<span class="fc" id="L205">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L206">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
-<span class="fc" id="L207">        String newTitle = requireText(title, &quot;Title&quot;);</span>
-        // Validated as in Post Listing (SRS UC-3.7 step 3.1.2), which requires a description.
-<span class="fc" id="L209">        String newDescription = requireText(description, &quot;Description&quot;);</span>
-<span class="fc" id="L210">        Objects.requireNonNull(category, &quot;category&quot;);</span>
-<span class="fc" id="L211">        Objects.requireNonNull(condition, &quot;condition&quot;);</span>
-<span class="fc" id="L212">        Objects.requireNonNull(location, &quot;meetup location&quot;);</span>
-<span class="fc bfc" id="L213" title="All 2 branches covered.">        Money price = listing instanceof SaleListing ? requirePrice(rawPrice) : null;</span>
-<span class="fc bfc" id="L214" title="All 2 branches covered.">        Duration duration = listing instanceof LendListing</span>
-<span class="fc" id="L215">                ? LendingRules.requireLendingDuration(lendingDuration) : null;</span>
+<span class="fc" id="L206">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L207">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L208">        editListing(admin, listing, title, description, category, condition, location,</span>
+<span class="fc" id="L209">                rawPrice, lendingDuration, List.copyOf(listing.getPhotoPaths()), List.of(), null);</span>
+<span class="fc" id="L210">    }</span>
 
-<span class="fc" id="L217">        String oldTitle = listing.getTitle();</span>
-<span class="fc" id="L218">        String oldDescription = listing.getDescription();</span>
-<span class="fc" id="L219">        Category oldCategory = listing.getCategory();</span>
-<span class="fc" id="L220">        Condition oldCondition = listing.getCondition();</span>
-<span class="fc" id="L221">        Location oldLocation = listing.getMeetupLocation();</span>
-<span class="fc bfc" id="L222" title="All 2 branches covered.">        Money oldPrice = listing instanceof SaleListing sale ? sale.getPrice() : null;</span>
-<span class="fc bfc" id="L223" title="All 2 branches covered.">        Duration oldDuration = listing instanceof LendListing lend ? lend.getLendingDuration() : null;</span>
-        try {
-<span class="fc" id="L225">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L226">                listing.setTitle(newTitle);</span>
-<span class="fc" id="L227">                listing.setDescription(newDescription);</span>
-<span class="fc" id="L228">                listing.setCategory(category);</span>
-<span class="fc" id="L229">                listing.setCondition(condition);</span>
-<span class="fc" id="L230">                listing.setMeetupLocation(location);</span>
-<span class="fc bfc" id="L231" title="All 2 branches covered.">                if (listing instanceof SaleListing sale) {</span>
-<span class="fc" id="L232">                    sale.setPrice(price);</span>
-<span class="pc bpc" id="L233" title="1 of 2 branches missed.">                } else if (listing instanceof LendListing lend) {</span>
-<span class="fc" id="L234">                    lend.setLendingDuration(duration);</span>
-                }
-<span class="fc" id="L236">                data.listings().update(listing);</span>
-<span class="fc" id="L237">                data.audit().recordEdit(admin.getUsername(), listing.getId());</span>
-<span class="fc" id="L238">                data.notifications().notify(listing.getSellerUsername(), NotificationCategory.ANNOUNCEMENT,</span>
-<span class="fc" id="L239">                        &quot;An admin edited your listing '&quot; + listing.getTitle() + &quot;'.&quot;,</span>
-<span class="fc" id="L240">                        new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
-<span class="fc" id="L241">            });</span>
-<span class="nc" id="L242">        } catch (RuntimeException e) {</span>
-<span class="nc" id="L243">            listing.setTitle(oldTitle);</span>
-<span class="nc" id="L244">            listing.setDescription(oldDescription);</span>
-<span class="nc" id="L245">            listing.setCategory(oldCategory);</span>
-<span class="nc" id="L246">            listing.setCondition(oldCondition);</span>
-<span class="nc" id="L247">            listing.setMeetupLocation(oldLocation);</span>
-<span class="nc bnc" id="L248" title="All 2 branches missed.">            if (listing instanceof SaleListing sale) {</span>
-<span class="nc" id="L249">                sale.setPrice(oldPrice);</span>
-<span class="nc bnc" id="L250" title="All 2 branches missed.">            } else if (listing instanceof LendListing lend) {</span>
-<span class="nc" id="L251">                lend.setLendingDuration(oldDuration);</span>
+    /**
+     * Edits a listing's details and photos without changing its status (SRS UC-3.7 step 3.1.2),
+     * then audits the change and notifies the seller. The admin keeps some of the listing's
+     * existing photo paths and adds new JPEG/PNG files, with at most six photos in total
+     * (SRS UC-3.7 A4). New photos are stored under the listing's seller and id.
+     *
+     * &lt;p&gt;Removed photos only leave the listing's stored paths; the files on disk are kept.
+     *
+     * @param admin the acting admin
+     * @param listing the listing to edit
+     * @param title the new title
+     * @param description the new description
+     * @param category the new category
+     * @param condition the new condition
+     * @param location the new meetup location
+     * @param rawPrice the new asking price for a Sale listing; ignored for other types
+     * @param lendingDuration the new duration for a Lend listing; ignored for other types
+     * @param keptPhotoPaths the existing photo paths that stay on the listing
+     * @param newPhotos the newly chosen photo files to store
+     * @param photos storage for the new photos; may be {@code null} when none are added
+     * @throws IllegalArgumentException if the combined photos exceed six, a new file is not a
+     *         supported JPEG/PNG, or a text/price/duration rule fails
+     */
+    public void editListing(User admin, Listing listing, String title, String description,
+                            Category category, Condition condition, Location location,
+                            String rawPrice, Duration lendingDuration,
+                            List&lt;String&gt; keptPhotoPaths, List&lt;PhotoDraft&gt; newPhotos, PhotoStorage photos) {
+<span class="fc" id="L239">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L240">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc" id="L241">        String newTitle = requireText(title, &quot;Title&quot;);</span>
+        // Validated as in Post Listing (SRS UC-3.7 step 3.1.2), which requires a description.
+<span class="fc" id="L243">        String newDescription = requireText(description, &quot;Description&quot;);</span>
+<span class="fc" id="L244">        Objects.requireNonNull(category, &quot;category&quot;);</span>
+<span class="fc" id="L245">        Objects.requireNonNull(condition, &quot;condition&quot;);</span>
+<span class="fc" id="L246">        Objects.requireNonNull(location, &quot;meetup location&quot;);</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        Money price = listing instanceof SaleListing ? requirePrice(rawPrice) : null;</span>
+<span class="fc bfc" id="L248" title="All 2 branches covered.">        Duration duration = listing instanceof LendListing</span>
+<span class="fc" id="L249">                ? LendingRules.requireLendingDuration(lendingDuration) : null;</span>
+
+<span class="fc bfc" id="L251" title="All 2 branches covered.">        List&lt;String&gt; kept = keptPhotoPaths == null</span>
+<span class="fc" id="L252">                ? List.copyOf(listing.getPhotoPaths()) : List.copyOf(keptPhotoPaths);</span>
+<span class="fc bfc" id="L253" title="All 2 branches covered.">        List&lt;PhotoDraft&gt; additions = newPhotos == null ? List.of() : List.copyOf(newPhotos);</span>
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        if (kept.size() + additions.size() &gt; ListingFormState.MAX_PHOTOS) {</span>
+<span class="fc" id="L255">            throw new IllegalArgumentException(&quot;A listing can have at most &quot;</span>
+                    + ListingFormState.MAX_PHOTOS + &quot; photos&quot;);
+        }
+<span class="fc bfc" id="L258" title="All 2 branches covered.">        for (String path : kept) {</span>
+<span class="pc bpc" id="L259" title="1 of 4 branches missed.">            if (path == null || path.isBlank()) {</span>
+<span class="fc" id="L260">                throw new IllegalArgumentException(&quot;Photo path must not be blank&quot;);</span>
             }
-<span class="nc" id="L253">            throw e;</span>
-<span class="fc" id="L254">        }</span>
-<span class="fc" id="L255">    }</span>
+<span class="fc" id="L262">        }</span>
+<span class="fc bfc" id="L263" title="All 2 branches covered.">        for (PhotoDraft draft : additions) {</span>
+<span class="pc bpc" id="L264" title="1 of 4 branches missed.">            if (draft == null || draft.source() == null) {</span>
+<span class="fc" id="L265">                throw new IllegalArgumentException(&quot;A photo file is required&quot;);</span>
+            }
+<span class="fc bfc" id="L267" title="All 2 branches covered.">            if (!isSupportedImage(draft.source().getFileName().toString())) {</span>
+<span class="fc" id="L268">                throw new IllegalArgumentException(&quot;Only JPEG and PNG photos are supported&quot;);</span>
+            }
+<span class="fc" id="L270">        }</span>
+<span class="fc bfc" id="L271" title="All 2 branches covered.">        if (!additions.isEmpty()) {</span>
+<span class="fc" id="L272">            Objects.requireNonNull(photos, &quot;photos&quot;);</span>
+        }
+
+<span class="fc" id="L275">        String oldTitle = listing.getTitle();</span>
+<span class="fc" id="L276">        String oldDescription = listing.getDescription();</span>
+<span class="fc" id="L277">        Category oldCategory = listing.getCategory();</span>
+<span class="fc" id="L278">        Condition oldCondition = listing.getCondition();</span>
+<span class="fc" id="L279">        Location oldLocation = listing.getMeetupLocation();</span>
+<span class="fc bfc" id="L280" title="All 2 branches covered.">        Money oldPrice = listing instanceof SaleListing sale ? sale.getPrice() : null;</span>
+<span class="fc bfc" id="L281" title="All 2 branches covered.">        Duration oldDuration = listing instanceof LendListing lend ? lend.getLendingDuration() : null;</span>
+<span class="fc" id="L282">        List&lt;String&gt; oldPhotoPaths = List.copyOf(listing.getPhotoPaths());</span>
+<span class="fc" id="L283">        List&lt;String&gt; storedPaths = new ArrayList&lt;&gt;();</span>
+        try {
+<span class="fc bfc" id="L285" title="All 2 branches covered.">            for (PhotoDraft draft : additions) {</span>
+<span class="fc" id="L286">                storedPaths.add(photos.store(draft.source(), listing.getSellerUsername(), listing.getId()));</span>
+<span class="fc" id="L287">            }</span>
+<span class="fc" id="L288">            List&lt;String&gt; combinedPaths = new ArrayList&lt;&gt;(kept);</span>
+<span class="fc" id="L289">            combinedPaths.addAll(storedPaths);</span>
+<span class="fc" id="L290">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L291">                listing.setTitle(newTitle);</span>
+<span class="fc" id="L292">                listing.setDescription(newDescription);</span>
+<span class="fc" id="L293">                listing.setCategory(category);</span>
+<span class="fc" id="L294">                listing.setCondition(condition);</span>
+<span class="fc" id="L295">                listing.setMeetupLocation(location);</span>
+<span class="fc" id="L296">                listing.setPhotoPaths(combinedPaths);</span>
+<span class="fc bfc" id="L297" title="All 2 branches covered.">                if (listing instanceof SaleListing sale) {</span>
+<span class="fc" id="L298">                    sale.setPrice(price);</span>
+<span class="fc bfc" id="L299" title="All 2 branches covered.">                } else if (listing instanceof LendListing lend) {</span>
+<span class="fc" id="L300">                    lend.setLendingDuration(duration);</span>
+                }
+<span class="fc" id="L302">                data.listings().update(listing);</span>
+<span class="fc" id="L303">                data.audit().recordEdit(admin.getUsername(), listing.getId());</span>
+<span class="fc" id="L304">                data.notifications().notify(listing.getSellerUsername(), NotificationCategory.ANNOUNCEMENT,</span>
+<span class="fc" id="L305">                        &quot;An admin edited your listing '&quot; + listing.getTitle() + &quot;'.&quot;,</span>
+<span class="fc" id="L306">                        new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
+<span class="fc" id="L307">            });</span>
+<span class="fc" id="L308">        } catch (RuntimeException e) {</span>
+<span class="fc" id="L309">            listing.setTitle(oldTitle);</span>
+<span class="fc" id="L310">            listing.setDescription(oldDescription);</span>
+<span class="fc" id="L311">            listing.setCategory(oldCategory);</span>
+<span class="fc" id="L312">            listing.setCondition(oldCondition);</span>
+<span class="fc" id="L313">            listing.setMeetupLocation(oldLocation);</span>
+<span class="fc" id="L314">            listing.setPhotoPaths(oldPhotoPaths);</span>
+<span class="fc bfc" id="L315" title="All 2 branches covered.">            if (listing instanceof SaleListing sale) {</span>
+<span class="fc" id="L316">                sale.setPrice(oldPrice);</span>
+<span class="fc bfc" id="L317" title="All 2 branches covered.">            } else if (listing instanceof LendListing lend) {</span>
+<span class="fc" id="L318">                lend.setLendingDuration(oldDuration);</span>
+            }
+<span class="fc bfc" id="L320" title="All 2 branches covered.">            for (String path : storedPaths) {</span>
+                try {
+<span class="fc" id="L322">                    Files.deleteIfExists(Path.of(path));</span>
+<span class="nc" id="L323">                } catch (IOException ignored) {</span>
+                    // best-effort cleanup of a photo whose listing edit did not save
+<span class="fc" id="L325">                }</span>
+<span class="fc" id="L326">            }</span>
+<span class="fc" id="L327">            throw e;</span>
+<span class="fc" id="L328">        }</span>
+<span class="fc" id="L329">    }</span>
 
     /** SRS UC-3.7 A6. */
     public static final String RESOLUTION_NOTE_REQUIRED = &quot;A resolution note is required to dismiss the reports.&quot;;
@@ -269,20 +343,20 @@ public final class AdminService {
      * @throws IllegalStateException if the listing has no open reports
      */
     public int dismissReports(User admin, Listing listing, String note) {
-<span class="fc" id="L272">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L273">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
-<span class="pc bpc" id="L274" title="1 of 4 branches missed.">        if (note == null || note.isBlank()) {</span>
-<span class="fc" id="L275">            throw new IllegalArgumentException(RESOLUTION_NOTE_REQUIRED);</span>
+<span class="fc" id="L346">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L347">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L348" title="All 4 branches covered.">        if (note == null || note.isBlank()) {</span>
+<span class="fc" id="L349">            throw new IllegalArgumentException(RESOLUTION_NOTE_REQUIRED);</span>
         }
-<span class="fc bfc" id="L277" title="All 2 branches covered.">        if (data.reports().openReports(listing).isEmpty()) {</span>
-<span class="fc" id="L278">            throw new IllegalStateException(&quot;This listing has no open reports.&quot;);</span>
+<span class="fc bfc" id="L351" title="All 2 branches covered.">        if (data.reports().openReports(listing).isEmpty()) {</span>
+<span class="fc" id="L352">            throw new IllegalStateException(&quot;This listing has no open reports.&quot;);</span>
         }
-<span class="fc" id="L280">        int[] resolved = new int[1];</span>
-<span class="fc" id="L281">        data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L282">            resolved[0] = data.reports().resolveAll(listing, note.trim());</span>
-<span class="fc" id="L283">            data.audit().recordReportResolution(admin.getUsername(), listing.getId());</span>
-<span class="fc" id="L284">        });</span>
-<span class="fc" id="L285">        return resolved[0];</span>
+<span class="fc" id="L354">        int[] resolved = new int[1];</span>
+<span class="fc" id="L355">        data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L356">            resolved[0] = data.reports().resolveAll(listing, note.trim());</span>
+<span class="fc" id="L357">            data.audit().recordReportResolution(admin.getUsername(), listing.getId());</span>
+<span class="fc" id="L358">        });</span>
+<span class="fc" id="L359">        return resolved[0];</span>
     }
 
     /**
@@ -296,48 +370,48 @@ public final class AdminService {
      * @return the saved listing
      */
     public Listing addListingOnBehalf(User admin, Seller seller, ListingFormState state, PhotoStorage photos) {
-<span class="fc" id="L299">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L300">        Objects.requireNonNull(seller, &quot;seller&quot;);</span>
-<span class="fc" id="L301">        Objects.requireNonNull(state, &quot;state&quot;);</span>
-<span class="fc" id="L302">        Objects.requireNonNull(photos, &quot;photos&quot;);</span>
-<span class="pc bpc" id="L303" title="1 of 4 branches missed.">        if (!seller.isActive() || seller.isDeleted()) {</span>
-<span class="fc" id="L304">            throw new IllegalStateException(&quot;Only an active seller can receive a listing.&quot;);</span>
+<span class="fc" id="L373">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L374">        Objects.requireNonNull(seller, &quot;seller&quot;);</span>
+<span class="fc" id="L375">        Objects.requireNonNull(state, &quot;state&quot;);</span>
+<span class="fc" id="L376">        Objects.requireNonNull(photos, &quot;photos&quot;);</span>
+<span class="fc bfc" id="L377" title="All 4 branches covered.">        if (!seller.isActive() || seller.isDeleted()) {</span>
+<span class="fc" id="L378">            throw new IllegalStateException(&quot;Only an active seller can receive a listing.&quot;);</span>
         }
-<span class="fc" id="L306">        var errors = state.validate(seller);</span>
-<span class="pc bpc" id="L307" title="1 of 2 branches missed.">        if (!errors.isEmpty()) {</span>
-<span class="nc" id="L308">            throw new IllegalArgumentException(&quot;Invalid listing: &quot; + errors);</span>
+<span class="fc" id="L380">        var errors = state.validate(seller);</span>
+<span class="fc bfc" id="L381" title="All 2 branches covered.">        if (!errors.isEmpty()) {</span>
+<span class="fc" id="L382">            throw new IllegalArgumentException(&quot;Invalid listing: &quot; + errors);</span>
         }
 
-<span class="fc" id="L311">        String id = data.listings().reserveId();</span>
-<span class="fc" id="L312">        List&lt;String&gt; storedPaths = new ArrayList&lt;&gt;();</span>
-<span class="pc bpc" id="L313" title="1 of 2 branches missed.">        for (PhotoDraft draft : state.getChosenPhotos()) {</span>
-<span class="nc" id="L314">            storedPaths.add(photos.store(draft.source(), seller.getUsername(), id));</span>
-<span class="nc" id="L315">        }</span>
-<span class="fc" id="L316">        state.setPhotoPaths(storedPaths);</span>
+<span class="fc" id="L385">        String id = data.listings().reserveId();</span>
+<span class="fc" id="L386">        List&lt;String&gt; storedPaths = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L387" title="All 2 branches covered.">        for (PhotoDraft draft : state.getChosenPhotos()) {</span>
+<span class="fc" id="L388">            storedPaths.add(photos.store(draft.source(), seller.getUsername(), id));</span>
+<span class="fc" id="L389">        }</span>
+<span class="fc" id="L390">        state.setPhotoPaths(storedPaths);</span>
 
-<span class="fc" id="L318">        Listing listing = state.buildListing(seller);</span>
-<span class="fc" id="L319">        listing.setId(id);</span>
-<span class="fc" id="L320">        listing.setStatus(ListingStatus.LIVE);</span>
-<span class="fc" id="L321">        listing.setReviewedAt(LocalDateTime.now());</span>
+<span class="fc" id="L392">        Listing listing = state.buildListing(seller);</span>
+<span class="fc" id="L393">        listing.setId(id);</span>
+<span class="fc" id="L394">        listing.setStatus(ListingStatus.LIVE);</span>
+<span class="fc" id="L395">        listing.setReviewedAt(LocalDateTime.now());</span>
         try {
-<span class="fc" id="L323">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L324">                data.listings().add(listing);</span>
-<span class="fc" id="L325">                data.audit().recordAddOnBehalf(admin.getUsername(), listing.getId());</span>
-<span class="fc" id="L326">                data.notifications().notify(seller.getUsername(), NotificationCategory.ANNOUNCEMENT,</span>
-<span class="fc" id="L327">                        &quot;An admin added the listing '&quot; + listing.getTitle() + &quot;' on your behalf.&quot;,</span>
-<span class="fc" id="L328">                        new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
-<span class="fc" id="L329">            });</span>
-<span class="nc" id="L330">        } catch (RuntimeException e) {</span>
-<span class="nc bnc" id="L331" title="All 2 branches missed.">            for (String path : storedPaths) {</span>
+<span class="fc" id="L397">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L398">                data.listings().add(listing);</span>
+<span class="fc" id="L399">                data.audit().recordAddOnBehalf(admin.getUsername(), listing.getId());</span>
+<span class="fc" id="L400">                data.notifications().notify(seller.getUsername(), NotificationCategory.ANNOUNCEMENT,</span>
+<span class="fc" id="L401">                        &quot;An admin added the listing '&quot; + listing.getTitle() + &quot;' on your behalf.&quot;,</span>
+<span class="fc" id="L402">                        new NotificationRef(NotificationRef.Target.LISTING, listing.getId()));</span>
+<span class="fc" id="L403">            });</span>
+<span class="fc" id="L404">        } catch (RuntimeException e) {</span>
+<span class="fc bfc" id="L405" title="All 2 branches covered.">            for (String path : storedPaths) {</span>
                 try {
-<span class="nc" id="L333">                    Files.deleteIfExists(Path.of(path));</span>
-<span class="nc" id="L334">                } catch (IOException ignored) {</span>
+<span class="fc" id="L407">                    Files.deleteIfExists(Path.of(path));</span>
+<span class="nc" id="L408">                } catch (IOException ignored) {</span>
                     // best-effort cleanup of a photo whose listing was never saved
-<span class="nc" id="L336">                }</span>
-<span class="nc" id="L337">            }</span>
-<span class="nc" id="L338">            throw e;</span>
-<span class="fc" id="L339">        }</span>
-<span class="fc" id="L340">        return listing;</span>
+<span class="fc" id="L410">                }</span>
+<span class="fc" id="L411">            }</span>
+<span class="fc" id="L412">            throw e;</span>
+<span class="fc" id="L413">        }</span>
+<span class="fc" id="L414">        return listing;</span>
     }
 
     /**
@@ -356,40 +430,40 @@ public final class AdminService {
      */
     public User addAccount(User admin, UserRole role, String username, String fullName, String password,
                            String residenceHall, String bio, Location meetup) {
-<span class="fc" id="L359">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc bfc" id="L360" title="All 4 branches covered.">        if (role != UserRole.BUYER &amp;&amp; role != UserRole.SELLER) {</span>
-<span class="fc" id="L361">            throw new IllegalArgumentException(&quot;Admins can add only buyer or seller accounts.&quot;);</span>
+<span class="fc" id="L433">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc bfc" id="L434" title="All 4 branches covered.">        if (role != UserRole.BUYER &amp;&amp; role != UserRole.SELLER) {</span>
+<span class="fc" id="L435">            throw new IllegalArgumentException(&quot;Admins can add only buyer or seller accounts.&quot;);</span>
         }
-<span class="fc" id="L363">        String key = requireText(username, &quot;Username&quot;).toLowerCase(Locale.ROOT);</span>
-<span class="fc bfc" id="L364" title="All 2 branches covered.">        if (data.users().usernameExists(key)) {</span>
-<span class="fc" id="L365">            throw new IllegalArgumentException(USERNAME_TAKEN);</span>
+<span class="fc" id="L437">        String key = requireText(username, &quot;Username&quot;).toLowerCase(Locale.ROOT);</span>
+<span class="fc bfc" id="L438" title="All 2 branches covered.">        if (data.users().usernameExists(key)) {</span>
+<span class="fc" id="L439">            throw new IllegalArgumentException(USERNAME_TAKEN);</span>
         }
-<span class="fc" id="L367">        String name = requireText(fullName, &quot;Full name&quot;);</span>
-<span class="fc" id="L368">        Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(password, key);</span>
-<span class="fc bfc" id="L369" title="All 2 branches covered.">        if (!failed.isEmpty()) {</span>
-<span class="fc" id="L370">            throw new IllegalArgumentException(UserStore.formatPasswordErrors(failed));</span>
+<span class="fc" id="L441">        String name = requireText(fullName, &quot;Full name&quot;);</span>
+<span class="fc" id="L442">        Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(password, key);</span>
+<span class="fc bfc" id="L443" title="All 2 branches covered.">        if (!failed.isEmpty()) {</span>
+<span class="fc" id="L444">            throw new IllegalArgumentException(UserStore.formatPasswordErrors(failed));</span>
         }
 
         User account;
-<span class="fc bfc" id="L374" title="All 2 branches covered.">        if (role == UserRole.BUYER) {</span>
-<span class="fc" id="L375">            Buyer buyer = new Buyer(key, name, PasswordHasher.hash(password), UserRole.BUYER);</span>
-<span class="fc" id="L376">            buyer.setResidenceHall(blankToNull(residenceHall));</span>
-<span class="fc" id="L377">            account = buyer;</span>
-<span class="fc" id="L378">        } else {</span>
-<span class="fc" id="L379">            Seller seller = new Seller(key, name, PasswordHasher.hash(password), UserRole.SELLER);</span>
-<span class="fc" id="L380">            seller.setBio(blankToNull(bio));</span>
-<span class="pc bpc" id="L381" title="1 of 2 branches missed.">            if (meetup != null) {</span>
-<span class="fc" id="L382">                seller.setPreferredMeetup(EnumSet.of(meetup));</span>
+<span class="fc bfc" id="L448" title="All 2 branches covered.">        if (role == UserRole.BUYER) {</span>
+<span class="fc" id="L449">            Buyer buyer = new Buyer(key, name, PasswordHasher.hash(password), UserRole.BUYER);</span>
+<span class="fc" id="L450">            buyer.setResidenceHall(blankToNull(residenceHall));</span>
+<span class="fc" id="L451">            account = buyer;</span>
+<span class="fc" id="L452">        } else {</span>
+<span class="fc" id="L453">            Seller seller = new Seller(key, name, PasswordHasher.hash(password), UserRole.SELLER);</span>
+<span class="fc" id="L454">            seller.setBio(blankToNull(bio));</span>
+<span class="fc bfc" id="L455" title="All 2 branches covered.">            if (meetup != null) {</span>
+<span class="fc" id="L456">                seller.setPreferredMeetup(EnumSet.of(meetup));</span>
             }
-<span class="fc" id="L384">            account = seller;</span>
+<span class="fc" id="L458">            account = seller;</span>
         }
-<span class="fc" id="L386">        data.database().inTransaction(() -&gt; {</span>
-<span class="pc bpc" id="L387" title="1 of 2 branches missed.">            if (!data.users().register(account)) {</span>
-<span class="nc" id="L388">                throw new IllegalArgumentException(USERNAME_TAKEN);</span>
+<span class="fc" id="L460">        data.database().inTransaction(() -&gt; {</span>
+<span class="pc bpc" id="L461" title="1 of 2 branches missed.">            if (!data.users().register(account)) {</span>
+<span class="nc" id="L462">                throw new IllegalArgumentException(USERNAME_TAKEN);</span>
             }
-<span class="fc" id="L390">            data.audit().append(admin.getUsername(), &quot;Added account&quot;, &quot;@&quot; + key);</span>
-<span class="fc" id="L391">        });</span>
-<span class="fc" id="L392">        return account;</span>
+<span class="fc" id="L464">            data.audit().append(admin.getUsername(), &quot;Added account&quot;, &quot;@&quot; + key);</span>
+<span class="fc" id="L465">        });</span>
+<span class="fc" id="L466">        return account;</span>
     }
 
     /**
@@ -405,44 +479,44 @@ public final class AdminService {
      */
     public void updateAccount(User admin, User account, String fullName, String residenceHall,
                               String bio, Location meetup) {
-<span class="fc" id="L408">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L409">        Objects.requireNonNull(account, &quot;account&quot;);</span>
-<span class="fc bfc" id="L410" title="All 2 branches covered.">        if (account.getRole() == UserRole.ADMIN) {</span>
-<span class="fc" id="L411">            throw new IllegalStateException(&quot;Edit the admin account from My Profile.&quot;);</span>
+<span class="fc" id="L482">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L483">        Objects.requireNonNull(account, &quot;account&quot;);</span>
+<span class="fc bfc" id="L484" title="All 2 branches covered.">        if (account.getRole() == UserRole.ADMIN) {</span>
+<span class="fc" id="L485">            throw new IllegalStateException(&quot;Edit the admin account from My Profile.&quot;);</span>
         }
-<span class="fc" id="L413">        String name = requireText(fullName, &quot;Full name&quot;);</span>
-<span class="fc" id="L414">        String oldName = account.getFullName();</span>
-<span class="pc bpc" id="L415" title="1 of 2 branches missed.">        String oldHall = account instanceof Buyer buyer ? buyer.getResidenceHall() : null;</span>
-<span class="pc bpc" id="L416" title="1 of 2 branches missed.">        String oldBio = account instanceof Seller seller ? seller.getBio() : null;</span>
-<span class="pc bpc" id="L417" title="1 of 2 branches missed.">        Set&lt;Location&gt; oldMeetup = account instanceof Seller seller ? seller.getPreferredMeetup() : Set.of();</span>
+<span class="fc" id="L487">        String name = requireText(fullName, &quot;Full name&quot;);</span>
+<span class="fc" id="L488">        String oldName = account.getFullName();</span>
+<span class="fc bfc" id="L489" title="All 2 branches covered.">        String oldHall = account instanceof Buyer buyer ? buyer.getResidenceHall() : null;</span>
+<span class="fc bfc" id="L490" title="All 2 branches covered.">        String oldBio = account instanceof Seller seller ? seller.getBio() : null;</span>
+<span class="fc bfc" id="L491" title="All 2 branches covered.">        Set&lt;Location&gt; oldMeetup = account instanceof Seller seller ? seller.getPreferredMeetup() : Set.of();</span>
         try {
-<span class="fc" id="L419">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L420">                account.setFullName(name);</span>
-<span class="pc bpc" id="L421" title="1 of 2 branches missed.">                if (account instanceof Buyer buyer) {</span>
-<span class="fc" id="L422">                    buyer.setResidenceHall(blankToNull(residenceHall));</span>
-<span class="nc bnc" id="L423" title="All 2 branches missed.">                } else if (account instanceof Seller seller) {</span>
-<span class="nc" id="L424">                    seller.setBio(blankToNull(bio));</span>
-<span class="nc bnc" id="L425" title="All 2 branches missed.">                    if (meetup != null) {</span>
-<span class="nc" id="L426">                        seller.setPreferredMeetup(EnumSet.of(meetup));</span>
+<span class="fc" id="L493">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L494">                account.setFullName(name);</span>
+<span class="fc bfc" id="L495" title="All 2 branches covered.">                if (account instanceof Buyer buyer) {</span>
+<span class="fc" id="L496">                    buyer.setResidenceHall(blankToNull(residenceHall));</span>
+<span class="pc bpc" id="L497" title="1 of 2 branches missed.">                } else if (account instanceof Seller seller) {</span>
+<span class="fc" id="L498">                    seller.setBio(blankToNull(bio));</span>
+<span class="fc bfc" id="L499" title="All 2 branches covered.">                    if (meetup != null) {</span>
+<span class="fc" id="L500">                        seller.setPreferredMeetup(EnumSet.of(meetup));</span>
                     }
                 }
-<span class="fc" id="L429">                data.users().save(account);</span>
-<span class="fc" id="L430">                data.audit().recordEdit(admin.getUsername(), &quot;@&quot; + account.getUsername());</span>
-<span class="fc" id="L431">                data.notifications().notify(account.getUsername(), NotificationCategory.ANNOUNCEMENT,</span>
+<span class="fc" id="L503">                data.users().save(account);</span>
+<span class="fc" id="L504">                data.audit().recordEdit(admin.getUsername(), &quot;@&quot; + account.getUsername());</span>
+<span class="fc" id="L505">                data.notifications().notify(account.getUsername(), NotificationCategory.ANNOUNCEMENT,</span>
                         &quot;An admin updated your account details.&quot;,
-<span class="fc" id="L433">                        new NotificationRef(NotificationRef.Target.USER, account.getUsername()));</span>
-<span class="fc" id="L434">            });</span>
-<span class="nc" id="L435">        } catch (RuntimeException e) {</span>
-<span class="nc" id="L436">            account.setFullName(oldName);</span>
-<span class="nc bnc" id="L437" title="All 2 branches missed.">            if (account instanceof Buyer buyer) {</span>
-<span class="nc" id="L438">                buyer.setResidenceHall(oldHall);</span>
-<span class="nc bnc" id="L439" title="All 2 branches missed.">            } else if (account instanceof Seller seller) {</span>
-<span class="nc" id="L440">                seller.setBio(oldBio);</span>
-<span class="nc" id="L441">                seller.setPreferredMeetup(oldMeetup);</span>
+<span class="fc" id="L507">                        new NotificationRef(NotificationRef.Target.USER, account.getUsername()));</span>
+<span class="fc" id="L508">            });</span>
+<span class="fc" id="L509">        } catch (RuntimeException e) {</span>
+<span class="fc" id="L510">            account.setFullName(oldName);</span>
+<span class="fc bfc" id="L511" title="All 2 branches covered.">            if (account instanceof Buyer buyer) {</span>
+<span class="fc" id="L512">                buyer.setResidenceHall(oldHall);</span>
+<span class="pc bpc" id="L513" title="1 of 2 branches missed.">            } else if (account instanceof Seller seller) {</span>
+<span class="fc" id="L514">                seller.setBio(oldBio);</span>
+<span class="fc" id="L515">                seller.setPreferredMeetup(oldMeetup);</span>
             }
-<span class="nc" id="L443">            throw e;</span>
-<span class="fc" id="L444">        }</span>
-<span class="fc" id="L445">    }</span>
+<span class="fc" id="L517">            throw e;</span>
+<span class="fc" id="L518">        }</span>
+<span class="fc" id="L519">    }</span>
 
     /**
      * Activates or deactivates a buyer or seller account (SRS UC-3.4). A deactivated account can
@@ -454,33 +528,33 @@ public final class AdminService {
      * @param active {@code true} to activate, {@code false} to deactivate
      */
     public void setActive(User admin, User account, boolean active) {
-<span class="fc" id="L457">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L458">        Objects.requireNonNull(account, &quot;account&quot;);</span>
-<span class="fc bfc" id="L459" title="All 2 branches covered.">        if (account.getRole() == UserRole.ADMIN) {</span>
-<span class="fc" id="L460">            throw new IllegalStateException(ADMIN_PROTECTED);</span>
+<span class="fc" id="L531">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L532">        Objects.requireNonNull(account, &quot;account&quot;);</span>
+<span class="fc bfc" id="L533" title="All 2 branches covered.">        if (account.getRole() == UserRole.ADMIN) {</span>
+<span class="fc" id="L534">            throw new IllegalStateException(ADMIN_PROTECTED);</span>
         }
-<span class="pc bpc" id="L462" title="1 of 2 branches missed.">        if (account.isDeleted()) {</span>
-<span class="nc" id="L463">            throw new IllegalStateException(ACCOUNT_DELETED);</span>
+<span class="fc bfc" id="L536" title="All 2 branches covered.">        if (account.isDeleted()) {</span>
+<span class="fc" id="L537">            throw new IllegalStateException(ACCOUNT_DELETED);</span>
         }
-<span class="pc bpc" id="L465" title="1 of 2 branches missed.">        if (account.isActive() == active) {</span>
-<span class="nc" id="L466">            return;</span>
+<span class="fc bfc" id="L539" title="All 2 branches covered.">        if (account.isActive() == active) {</span>
+<span class="fc" id="L540">            return;</span>
         }
         try {
-<span class="fc" id="L469">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L470">                account.setActive(active);</span>
-<span class="fc" id="L471">                data.users().save(account);</span>
-<span class="fc bfc" id="L472" title="All 2 branches covered.">                data.audit().append(admin.getUsername(), active ? &quot;Reactivated account&quot; : &quot;Deactivated account&quot;,</span>
-<span class="fc" id="L473">                        &quot;@&quot; + account.getUsername());</span>
-<span class="fc" id="L474">                data.notifications().notify(account.getUsername(), NotificationCategory.ANNOUNCEMENT,</span>
-<span class="fc bfc" id="L475" title="All 2 branches covered.">                        active ? &quot;Your account was reactivated by an admin.&quot;</span>
-<span class="fc" id="L476">                                : &quot;Your account was deactivated by an admin.&quot;,</span>
-<span class="fc" id="L477">                        new NotificationRef(NotificationRef.Target.USER, account.getUsername()));</span>
-<span class="fc" id="L478">            });</span>
-<span class="nc" id="L479">        } catch (RuntimeException e) {</span>
-<span class="nc bnc" id="L480" title="All 2 branches missed.">            account.setActive(!active);</span>
-<span class="nc" id="L481">            throw e;</span>
-<span class="fc" id="L482">        }</span>
-<span class="fc" id="L483">    }</span>
+<span class="fc" id="L543">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L544">                account.setActive(active);</span>
+<span class="fc" id="L545">                data.users().save(account);</span>
+<span class="fc bfc" id="L546" title="All 2 branches covered.">                data.audit().append(admin.getUsername(), active ? &quot;Reactivated account&quot; : &quot;Deactivated account&quot;,</span>
+<span class="fc" id="L547">                        &quot;@&quot; + account.getUsername());</span>
+<span class="fc" id="L548">                data.notifications().notify(account.getUsername(), NotificationCategory.ANNOUNCEMENT,</span>
+<span class="fc bfc" id="L549" title="All 2 branches covered.">                        active ? &quot;Your account was reactivated by an admin.&quot;</span>
+<span class="fc" id="L550">                                : &quot;Your account was deactivated by an admin.&quot;,</span>
+<span class="fc" id="L551">                        new NotificationRef(NotificationRef.Target.USER, account.getUsername()));</span>
+<span class="fc" id="L552">            });</span>
+<span class="fc" id="L553">        } catch (RuntimeException e) {</span>
+<span class="pc bpc" id="L554" title="1 of 2 branches missed.">            account.setActive(!active);</span>
+<span class="fc" id="L555">            throw e;</span>
+<span class="fc" id="L556">        }</span>
+<span class="fc" id="L557">    }</span>
 
     /**
      * What the soft-delete warning lists before the admin confirms (SRS UC-3.3 S1).
@@ -490,16 +564,16 @@ public final class AdminService {
      * @return the activity that soft delete would close
      */
     public AccountActivity accountActivity(User admin, User account) {
-<span class="fc" id="L493">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L494">        Objects.requireNonNull(account, &quot;account&quot;);</span>
-<span class="fc" id="L495">        String username = account.getUsername();</span>
-<span class="fc" id="L496">        List&lt;DealRequest&gt; requests = new ArrayList&lt;&gt;(data.deals().requestsByBuyer(username));</span>
-<span class="fc" id="L497">        requests.addAll(data.deals().requestsForSeller(username));</span>
-<span class="fc" id="L498">        List&lt;Deal&gt; deals = new ArrayList&lt;&gt;(data.deals().dealsForBuyer(username));</span>
-<span class="fc" id="L499">        deals.addAll(data.deals().dealsForSeller(username));</span>
-<span class="fc" id="L500">        List&lt;ChatThread&gt; chats = new ArrayList&lt;&gt;(data.chats().forBuyer(username));</span>
-<span class="fc" id="L501">        chats.addAll(data.chats().forSeller(username));</span>
-<span class="fc" id="L502">        return new AccountActivity(data.listings().bySeller(username), requests, deals, chats);</span>
+<span class="fc" id="L567">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L568">        Objects.requireNonNull(account, &quot;account&quot;);</span>
+<span class="fc" id="L569">        String username = account.getUsername();</span>
+<span class="fc" id="L570">        List&lt;DealRequest&gt; requests = new ArrayList&lt;&gt;(data.deals().requestsByBuyer(username));</span>
+<span class="fc" id="L571">        requests.addAll(data.deals().requestsForSeller(username));</span>
+<span class="fc" id="L572">        List&lt;Deal&gt; deals = new ArrayList&lt;&gt;(data.deals().dealsForBuyer(username));</span>
+<span class="fc" id="L573">        deals.addAll(data.deals().dealsForSeller(username));</span>
+<span class="fc" id="L574">        List&lt;ChatThread&gt; chats = new ArrayList&lt;&gt;(data.chats().forBuyer(username));</span>
+<span class="fc" id="L575">        chats.addAll(data.chats().forSeller(username));</span>
+<span class="fc" id="L576">        return new AccountActivity(data.listings().bySeller(username), requests, deals, chats);</span>
     }
 
     /**
@@ -512,103 +586,103 @@ public final class AdminService {
      * @param account the buyer or seller to soft-delete
      */
     public void softDeleteAccount(User admin, User account) {
-<span class="fc" id="L515">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L516">        Objects.requireNonNull(account, &quot;account&quot;);</span>
-<span class="fc bfc" id="L517" title="All 2 branches covered.">        if (account.getRole() == UserRole.ADMIN) {</span>
-<span class="fc" id="L518">            throw new IllegalStateException(ADMIN_PROTECTED);</span>
+<span class="fc" id="L589">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L590">        Objects.requireNonNull(account, &quot;account&quot;);</span>
+<span class="fc bfc" id="L591" title="All 2 branches covered.">        if (account.getRole() == UserRole.ADMIN) {</span>
+<span class="fc" id="L592">            throw new IllegalStateException(ADMIN_PROTECTED);</span>
         }
-<span class="pc bpc" id="L520" title="1 of 2 branches missed.">        if (account.isDeleted()) {</span>
-<span class="nc" id="L521">            throw new IllegalStateException(ACCOUNT_DELETED);</span>
+<span class="fc bfc" id="L594" title="All 2 branches covered.">        if (account.isDeleted()) {</span>
+<span class="fc" id="L595">            throw new IllegalStateException(ACCOUNT_DELETED);</span>
         }
-<span class="fc" id="L523">        String username = account.getUsername();</span>
-<span class="fc" id="L524">        List&lt;Listing&gt; listings = data.listings().bySeller(username);</span>
-<span class="fc" id="L525">        List&lt;DealRequest&gt; openRequests = new ArrayList&lt;&gt;(data.deals().openRequestsByBuyer(username));</span>
-<span class="fc" id="L526">        List&lt;Deal&gt; activeDeals = new ArrayList&lt;&gt;(data.deals().activeDealsForBuyer(username));</span>
-<span class="fc bfc" id="L527" title="All 2 branches covered.">        for (Listing listing : listings) {</span>
-<span class="fc" id="L528">            openRequests.addAll(openRequestsOn(listing));</span>
-<span class="fc" id="L529">            data.deals().lifecycle().activeDeal(listing).ifPresent(activeDeals::add);</span>
-<span class="fc" id="L530">        }</span>
+<span class="fc" id="L597">        String username = account.getUsername();</span>
+<span class="fc" id="L598">        List&lt;Listing&gt; listings = data.listings().bySeller(username);</span>
+<span class="fc" id="L599">        List&lt;DealRequest&gt; openRequests = new ArrayList&lt;&gt;(data.deals().openRequestsByBuyer(username));</span>
+<span class="fc" id="L600">        List&lt;Deal&gt; activeDeals = new ArrayList&lt;&gt;(data.deals().activeDealsForBuyer(username));</span>
+<span class="fc bfc" id="L601" title="All 2 branches covered.">        for (Listing listing : listings) {</span>
+<span class="fc" id="L602">            openRequests.addAll(openRequestsOn(listing));</span>
+<span class="fc" id="L603">            data.deals().lifecycle().activeDeal(listing).ifPresent(activeDeals::add);</span>
+<span class="fc" id="L604">        }</span>
 
-<span class="fc" id="L532">        Set&lt;String&gt; affected = new LinkedHashSet&lt;&gt;();</span>
-<span class="pc bpc" id="L533" title="1 of 2 branches missed.">        openRequests.forEach(r -&gt; affected.add(r.getBuyerUsername().equalsIgnoreCase(username)</span>
-<span class="pc" id="L534">                ? r.getSellerUsername() : r.getBuyerUsername()));</span>
-<span class="pc bpc" id="L535" title="1 of 2 branches missed.">        activeDeals.forEach(d -&gt; affected.add(d.getBuyerUsername().equalsIgnoreCase(username)</span>
-<span class="pc" id="L536">                ? d.getSellerUsername() : d.getBuyerUsername()));</span>
-<span class="fc" id="L537">        affected.removeIf(name -&gt; name.equalsIgnoreCase(username));</span>
+<span class="fc" id="L606">        Set&lt;String&gt; affected = new LinkedHashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L607" title="All 2 branches covered.">        openRequests.forEach(r -&gt; affected.add(r.getBuyerUsername().equalsIgnoreCase(username)</span>
+<span class="fc" id="L608">                ? r.getSellerUsername() : r.getBuyerUsername()));</span>
+<span class="fc bfc" id="L609" title="All 2 branches covered.">        activeDeals.forEach(d -&gt; affected.add(d.getBuyerUsername().equalsIgnoreCase(username)</span>
+<span class="fc" id="L610">                ? d.getSellerUsername() : d.getBuyerUsername()));</span>
+<span class="fc" id="L611">        affected.removeIf(name -&gt; name.equalsIgnoreCase(username));</span>
 
-<span class="fc" id="L539">        String oldName = account.getFullName();</span>
-<span class="fc" id="L540">        boolean oldActive = account.isActive();</span>
-<span class="fc bfc" id="L541" title="All 2 branches covered.">        String oldHall = account instanceof Buyer buyer ? buyer.getResidenceHall() : null;</span>
-<span class="fc bfc" id="L542" title="All 2 branches covered.">        String oldBio = account instanceof Seller seller ? seller.getBio() : null;</span>
-<span class="fc bfc" id="L543" title="All 2 branches covered.">        Set&lt;Location&gt; oldMeetup = account instanceof Seller seller ? seller.getPreferredMeetup() : Set.of();</span>
-<span class="fc" id="L544">        Map&lt;Listing, ListingStatus&gt; oldStatuses = new LinkedHashMap&lt;&gt;();</span>
-<span class="fc" id="L545">        Map&lt;Listing, String&gt; oldReasons = new LinkedHashMap&lt;&gt;();</span>
-<span class="fc bfc" id="L546" title="All 2 branches covered.">        for (Listing listing : listings) {</span>
-<span class="fc" id="L547">            oldStatuses.put(listing, listing.getStatus());</span>
-<span class="fc" id="L548">            oldReasons.put(listing, listing.getTakedownReason());</span>
-<span class="fc" id="L549">        }</span>
+<span class="fc" id="L613">        String oldName = account.getFullName();</span>
+<span class="fc" id="L614">        boolean oldActive = account.isActive();</span>
+<span class="fc bfc" id="L615" title="All 2 branches covered.">        String oldHall = account instanceof Buyer buyer ? buyer.getResidenceHall() : null;</span>
+<span class="fc bfc" id="L616" title="All 2 branches covered.">        String oldBio = account instanceof Seller seller ? seller.getBio() : null;</span>
+<span class="fc bfc" id="L617" title="All 2 branches covered.">        Set&lt;Location&gt; oldMeetup = account instanceof Seller seller ? seller.getPreferredMeetup() : Set.of();</span>
+<span class="fc" id="L618">        Map&lt;Listing, ListingStatus&gt; oldStatuses = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L619">        Map&lt;Listing, String&gt; oldReasons = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L620" title="All 2 branches covered.">        for (Listing listing : listings) {</span>
+<span class="fc" id="L621">            oldStatuses.put(listing, listing.getStatus());</span>
+<span class="fc" id="L622">            oldReasons.put(listing, listing.getTakedownReason());</span>
+<span class="fc" id="L623">        }</span>
         try {
-<span class="fc" id="L551">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc bfc" id="L552" title="All 2 branches covered.">                for (DealRequest request : openRequests) {</span>
-<span class="pc bpc" id="L553" title="1 of 2 branches missed.">                    if (request.getStatus() == RequestStatus.PENDING</span>
-<span class="nc bnc" id="L554" title="All 2 branches missed.">                            || request.getStatus() == RequestStatus.COUNTERED) {</span>
-<span class="fc" id="L555">                        data.deals().lifecycle().decline(request);</span>
+<span class="fc" id="L625">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc bfc" id="L626" title="All 2 branches covered.">                for (DealRequest request : openRequests) {</span>
+<span class="fc bfc" id="L627" title="All 2 branches covered.">                    if (request.getStatus() == RequestStatus.PENDING</span>
+<span class="pc bpc" id="L628" title="1 of 2 branches missed.">                            || request.getStatus() == RequestStatus.COUNTERED) {</span>
+<span class="fc" id="L629">                        data.deals().lifecycle().decline(request);</span>
                     }
-<span class="fc" id="L557">                }</span>
-<span class="fc bfc" id="L558" title="All 2 branches covered.">                for (Deal deal : activeDeals) {</span>
-<span class="pc bpc" id="L559" title="1 of 2 branches missed.">                    if (deal.getStatus() == com.hkust.marketplace.models.DealStatus.ACTIVE) {</span>
-<span class="fc" id="L560">                        data.deals().lifecycle().cancel(deal);</span>
+<span class="fc" id="L631">                }</span>
+<span class="fc bfc" id="L632" title="All 2 branches covered.">                for (Deal deal : activeDeals) {</span>
+<span class="pc bpc" id="L633" title="1 of 2 branches missed.">                    if (deal.getStatus() == com.hkust.marketplace.models.DealStatus.ACTIVE) {</span>
+<span class="fc" id="L634">                        data.deals().lifecycle().cancel(deal);</span>
                     }
-<span class="fc" id="L562">                }</span>
-<span class="fc bfc" id="L563" title="All 2 branches covered.">                for (Listing listing : listings) {</span>
-<span class="pc bpc" id="L564" title="1 of 2 branches missed.">                    if (listing.getStatus() == ListingStatus.LIVE</span>
-<span class="nc bnc" id="L565" title="All 2 branches missed.">                            || listing.getStatus() == ListingStatus.PENDING_REVIEW</span>
-<span class="nc bnc" id="L566" title="All 2 branches missed.">                            || listing.getStatus() == ListingStatus.RESERVED</span>
-<span class="nc bnc" id="L567" title="All 2 branches missed.">                            || listing.getStatus() == ListingStatus.LENT) {</span>
-<span class="fc" id="L568">                        listing.setStatus(ListingStatus.TAKEN_DOWN);</span>
-<span class="fc" id="L569">                        listing.setTakedownReason(ACCOUNT_DELETED_REASON);</span>
-<span class="fc" id="L570">                        data.listings().update(listing);</span>
-<span class="fc" id="L571">                        data.reports().resolveAll(listing, TAKEN_DOWN_RESOLUTION);</span>
+<span class="fc" id="L636">                }</span>
+<span class="fc bfc" id="L637" title="All 2 branches covered.">                for (Listing listing : listings) {</span>
+<span class="fc bfc" id="L638" title="All 2 branches covered.">                    if (listing.getStatus() == ListingStatus.LIVE</span>
+<span class="pc bpc" id="L639" title="1 of 2 branches missed.">                            || listing.getStatus() == ListingStatus.PENDING_REVIEW</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">                            || listing.getStatus() == ListingStatus.RESERVED</span>
+<span class="nc bnc" id="L641" title="All 2 branches missed.">                            || listing.getStatus() == ListingStatus.LENT) {</span>
+<span class="fc" id="L642">                        listing.setStatus(ListingStatus.TAKEN_DOWN);</span>
+<span class="fc" id="L643">                        listing.setTakedownReason(ACCOUNT_DELETED_REASON);</span>
+<span class="fc" id="L644">                        data.listings().update(listing);</span>
+<span class="fc" id="L645">                        data.reports().resolveAll(listing, TAKEN_DOWN_RESOLUTION);</span>
                     }
-<span class="fc" id="L573">                }</span>
+<span class="fc" id="L647">                }</span>
 
-<span class="fc" id="L575">                account.setActive(false);</span>
-<span class="fc" id="L576">                account.setDeleted(true);</span>
-<span class="fc" id="L577">                account.setFullName(&quot;Deleted user&quot;);</span>
-<span class="fc bfc" id="L578" title="All 2 branches covered.">                if (account instanceof Buyer buyer) {</span>
-<span class="fc" id="L579">                    buyer.setResidenceHall(null);</span>
-<span class="pc bpc" id="L580" title="1 of 2 branches missed.">                } else if (account instanceof Seller seller) {</span>
-<span class="fc" id="L581">                    seller.setBio(null);</span>
-<span class="fc" id="L582">                    seller.setPreferredMeetup(EnumSet.noneOf(Location.class));</span>
+<span class="fc" id="L649">                account.setActive(false);</span>
+<span class="fc" id="L650">                account.setDeleted(true);</span>
+<span class="fc" id="L651">                account.setFullName(&quot;Deleted user&quot;);</span>
+<span class="fc bfc" id="L652" title="All 2 branches covered.">                if (account instanceof Buyer buyer) {</span>
+<span class="fc" id="L653">                    buyer.setResidenceHall(null);</span>
+<span class="pc bpc" id="L654" title="1 of 2 branches missed.">                } else if (account instanceof Seller seller) {</span>
+<span class="fc" id="L655">                    seller.setBio(null);</span>
+<span class="fc" id="L656">                    seller.setPreferredMeetup(EnumSet.noneOf(Location.class));</span>
                 }
-<span class="fc" id="L584">                data.users().save(account);</span>
-<span class="fc" id="L585">                data.audit().recordAccountDeletion(admin.getUsername(), &quot;@&quot; + username);</span>
+<span class="fc" id="L658">                data.users().save(account);</span>
+<span class="fc" id="L659">                data.audit().recordAccountDeletion(admin.getUsername(), &quot;@&quot; + username);</span>
 
-<span class="fc bfc" id="L587" title="All 2 branches covered.">                for (String name : affected) {</span>
-<span class="fc" id="L588">                    data.notifications().notify(name, closedDealCategory(name),</span>
+<span class="fc bfc" id="L661" title="All 2 branches covered.">                for (String name : affected) {</span>
+<span class="fc" id="L662">                    data.notifications().notify(name, closedDealCategory(name),</span>
                             &quot;An account involved in your request or deal was deleted, so it was closed.&quot;,
                             new NotificationRef(NotificationRef.Target.USER, username));
-<span class="fc" id="L591">                }</span>
-<span class="fc" id="L592">            });</span>
-<span class="nc" id="L593">        } catch (RuntimeException e) {</span>
-<span class="nc" id="L594">            account.setFullName(oldName);</span>
-<span class="nc" id="L595">            account.setActive(oldActive);</span>
-<span class="nc" id="L596">            account.setDeleted(false);</span>
-<span class="nc bnc" id="L597" title="All 2 branches missed.">            if (account instanceof Buyer buyer) {</span>
-<span class="nc" id="L598">                buyer.setResidenceHall(oldHall);</span>
-<span class="nc bnc" id="L599" title="All 2 branches missed.">            } else if (account instanceof Seller seller) {</span>
-<span class="nc" id="L600">                seller.setBio(oldBio);</span>
-<span class="nc" id="L601">                seller.setPreferredMeetup(oldMeetup);</span>
+<span class="fc" id="L665">                }</span>
+<span class="fc" id="L666">            });</span>
+<span class="fc" id="L667">        } catch (RuntimeException e) {</span>
+<span class="fc" id="L668">            account.setFullName(oldName);</span>
+<span class="fc" id="L669">            account.setActive(oldActive);</span>
+<span class="fc" id="L670">            account.setDeleted(false);</span>
+<span class="fc bfc" id="L671" title="All 2 branches covered.">            if (account instanceof Buyer buyer) {</span>
+<span class="fc" id="L672">                buyer.setResidenceHall(oldHall);</span>
+<span class="pc bpc" id="L673" title="1 of 2 branches missed.">            } else if (account instanceof Seller seller) {</span>
+<span class="fc" id="L674">                seller.setBio(oldBio);</span>
+<span class="fc" id="L675">                seller.setPreferredMeetup(oldMeetup);</span>
             }
             // shortcut: the database rolled back, but cancelled deals and declined requests keep
             // their in-memory state. Restore them if this cascade ever becomes likely to fail.
-<span class="nc" id="L605">            oldStatuses.forEach((listing, status) -&gt; {</span>
-<span class="nc" id="L606">                listing.setStatus(status);</span>
-<span class="nc" id="L607">                listing.setTakedownReason(oldReasons.get(listing));</span>
-<span class="nc" id="L608">            });</span>
-<span class="nc" id="L609">            throw e;</span>
-<span class="fc" id="L610">        }</span>
-<span class="fc" id="L611">    }</span>
+<span class="fc" id="L679">            oldStatuses.forEach((listing, status) -&gt; {</span>
+<span class="fc" id="L680">                listing.setStatus(status);</span>
+<span class="fc" id="L681">                listing.setTakedownReason(oldReasons.get(listing));</span>
+<span class="fc" id="L682">            });</span>
+<span class="fc" id="L683">            throw e;</span>
+<span class="fc" id="L684">        }</span>
+<span class="fc" id="L685">    }</span>
 
     /**
      * Hides or unhides a review; hidden reviews leave the seller's rating (SRS UC-3.6).
@@ -618,11 +692,11 @@ public final class AdminService {
      * @param hidden {@code true} to hide, {@code false} to show
      */
     public void setReviewHidden(User admin, Review review, boolean hidden) {
-<span class="fc" id="L621">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L622">        Objects.requireNonNull(review, &quot;review&quot;);</span>
-<span class="fc" id="L623">        review.setHidden(hidden);</span>
-<span class="fc" id="L624">        data.reviews().save(review);</span>
-<span class="fc" id="L625">    }</span>
+<span class="fc" id="L695">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L696">        Objects.requireNonNull(review, &quot;review&quot;);</span>
+<span class="fc" id="L697">        review.setHidden(hidden);</span>
+<span class="fc" id="L698">        data.reviews().save(review);</span>
+<span class="fc" id="L699">    }</span>
 
     /**
      * Saves the admin's own profile (SRS UC-3.4). The full name must not be whitespace only; a
@@ -638,52 +712,52 @@ public final class AdminService {
      */
     public List&lt;String&gt; updateProfile(User admin, String fullName, String currentPassword,
                                       String newPassword, String confirmPassword) {
-<span class="fc" id="L641">        AccessControl.require(admin, UserRole.ADMIN);</span>
-<span class="fc" id="L642">        String name = requireText(fullName, &quot;Full name&quot;);</span>
-<span class="pc bpc" id="L643" title="5 of 6 branches missed.">        boolean changePassword = !isBlank(currentPassword) || !isBlank(newPassword) || !isBlank(confirmPassword);</span>
-<span class="pc bpc" id="L644" title="1 of 2 branches missed.">        if (changePassword) {</span>
-<span class="pc bpc" id="L645" title="2 of 6 branches missed.">            if (isBlank(currentPassword) || isBlank(newPassword) || isBlank(confirmPassword)) {</span>
-<span class="fc" id="L646">                throw new IllegalArgumentException(&quot;Current password, new password and confirmation are all required.&quot;);</span>
+<span class="fc" id="L715">        AccessControl.require(admin, UserRole.ADMIN);</span>
+<span class="fc" id="L716">        String name = requireText(fullName, &quot;Full name&quot;);</span>
+<span class="fc bfc" id="L717" title="All 6 branches covered.">        boolean changePassword = !isBlank(currentPassword) || !isBlank(newPassword) || !isBlank(confirmPassword);</span>
+<span class="fc bfc" id="L718" title="All 2 branches covered.">        if (changePassword) {</span>
+<span class="fc bfc" id="L719" title="All 6 branches covered.">            if (isBlank(currentPassword) || isBlank(newPassword) || isBlank(confirmPassword)) {</span>
+<span class="fc" id="L720">                throw new IllegalArgumentException(&quot;Current password, new password and confirmation are all required.&quot;);</span>
             }
-<span class="fc bfc" id="L648" title="All 2 branches covered.">            if (!PasswordHasher.verify(currentPassword, admin.getPasswordHash())) {</span>
-<span class="fc" id="L649">                throw new IllegalArgumentException(ProfileService.CURRENT_PASSWORD_WRONG);</span>
+<span class="fc bfc" id="L722" title="All 2 branches covered.">            if (!PasswordHasher.verify(currentPassword, admin.getPasswordHash())) {</span>
+<span class="fc" id="L723">                throw new IllegalArgumentException(ProfileService.CURRENT_PASSWORD_WRONG);</span>
             }
-<span class="fc" id="L651">            Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(newPassword, admin.getUsername());</span>
-<span class="pc bpc" id="L652" title="1 of 2 branches missed.">            if (!failed.isEmpty()) {</span>
-<span class="nc" id="L653">                throw new IllegalArgumentException(UserStore.formatPasswordErrors(failed));</span>
+<span class="fc" id="L725">            Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(newPassword, admin.getUsername());</span>
+<span class="fc bfc" id="L726" title="All 2 branches covered.">            if (!failed.isEmpty()) {</span>
+<span class="fc" id="L727">                throw new IllegalArgumentException(UserStore.formatPasswordErrors(failed));</span>
             }
-<span class="fc bfc" id="L655" title="All 2 branches covered.">            if (!Objects.equals(newPassword, confirmPassword)) {</span>
-<span class="fc" id="L656">                throw new IllegalArgumentException(ProfileService.CONFIRMATION_MISMATCH);</span>
+<span class="fc bfc" id="L729" title="All 2 branches covered.">            if (!Objects.equals(newPassword, confirmPassword)) {</span>
+<span class="fc" id="L730">                throw new IllegalArgumentException(ProfileService.CONFIRMATION_MISMATCH);</span>
             }
         }
 
-<span class="fc" id="L660">        List&lt;String&gt; changed = new ArrayList&lt;&gt;();</span>
-<span class="pc bpc" id="L661" title="1 of 2 branches missed.">        if (!name.equals(admin.getFullName())) {</span>
-<span class="fc" id="L662">            changed.add(&quot;full name&quot;);</span>
+<span class="fc" id="L734">        List&lt;String&gt; changed = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L735" title="All 2 branches covered.">        if (!name.equals(admin.getFullName())) {</span>
+<span class="fc" id="L736">            changed.add(&quot;full name&quot;);</span>
         }
-<span class="pc bpc" id="L664" title="1 of 2 branches missed.">        if (changePassword) {</span>
-<span class="fc" id="L665">            changed.add(&quot;password&quot;);</span>
+<span class="fc bfc" id="L738" title="All 2 branches covered.">        if (changePassword) {</span>
+<span class="fc" id="L739">            changed.add(&quot;password&quot;);</span>
         }
-<span class="pc bpc" id="L667" title="1 of 2 branches missed.">        if (changed.isEmpty()) {</span>
-<span class="nc" id="L668">            return List.of();</span>
+<span class="fc bfc" id="L741" title="All 2 branches covered.">        if (changed.isEmpty()) {</span>
+<span class="fc" id="L742">            return List.of();</span>
         }
-<span class="fc" id="L670">        String oldName = admin.getFullName();</span>
-<span class="fc" id="L671">        String oldHash = admin.getPasswordHash();</span>
+<span class="fc" id="L744">        String oldName = admin.getFullName();</span>
+<span class="fc" id="L745">        String oldHash = admin.getPasswordHash();</span>
         try {
-<span class="fc" id="L673">            data.database().inTransaction(() -&gt; {</span>
-<span class="fc" id="L674">                admin.setFullName(name);</span>
-<span class="pc bpc" id="L675" title="1 of 2 branches missed.">                if (changePassword) {</span>
-<span class="fc" id="L676">                    admin.setPasswordHash(PasswordHasher.hash(newPassword));</span>
+<span class="fc" id="L747">            data.database().inTransaction(() -&gt; {</span>
+<span class="fc" id="L748">                admin.setFullName(name);</span>
+<span class="fc bfc" id="L749" title="All 2 branches covered.">                if (changePassword) {</span>
+<span class="fc" id="L750">                    admin.setPasswordHash(PasswordHasher.hash(newPassword));</span>
                 }
-<span class="fc" id="L678">                data.users().save(admin);</span>
-<span class="fc" id="L679">                data.audit().recordEdit(admin.getUsername(), &quot;@&quot; + admin.getUsername());</span>
-<span class="fc" id="L680">            });</span>
-<span class="nc" id="L681">        } catch (RuntimeException e) {</span>
-<span class="nc" id="L682">            admin.setFullName(oldName);</span>
-<span class="nc" id="L683">            admin.setPasswordHash(oldHash);</span>
-<span class="nc" id="L684">            throw e;</span>
-<span class="fc" id="L685">        }</span>
-<span class="fc" id="L686">        return List.copyOf(changed);</span>
+<span class="fc" id="L752">                data.users().save(admin);</span>
+<span class="fc" id="L753">                data.audit().recordEdit(admin.getUsername(), &quot;@&quot; + admin.getUsername());</span>
+<span class="fc" id="L754">            });</span>
+<span class="fc" id="L755">        } catch (RuntimeException e) {</span>
+<span class="fc" id="L756">            admin.setFullName(oldName);</span>
+<span class="fc" id="L757">            admin.setPasswordHash(oldHash);</span>
+<span class="fc" id="L758">            throw e;</span>
+<span class="fc" id="L759">        }</span>
+<span class="fc" id="L760">        return List.copyOf(changed);</span>
     }
 
     /**
@@ -692,50 +766,59 @@ public final class AdminService {
      * category (SRS UC-3.x View Notifications), so it is never sent to buyers or sellers.
      */
     private NotificationCategory closedDealCategory(String username) {
-<span class="fc" id="L695">        User user = data.users().find(username);</span>
-<span class="pc bpc" id="L696" title="1 of 4 branches missed.">        return user != null &amp;&amp; user.getRole() == UserRole.BUYER</span>
-<span class="fc" id="L697">                ? NotificationCategory.OFFER_UPDATE : NotificationCategory.ANNOUNCEMENT;</span>
+<span class="fc" id="L769">        User user = data.users().find(username);</span>
+<span class="pc bpc" id="L770" title="1 of 4 branches missed.">        return user != null &amp;&amp; user.getRole() == UserRole.BUYER</span>
+<span class="fc" id="L771">                ? NotificationCategory.OFFER_UPDATE : NotificationCategory.ANNOUNCEMENT;</span>
     }
 
     private List&lt;DealRequest&gt; openRequestsOn(Listing listing) {
-<span class="fc" id="L701">        List&lt;DealRequest&gt; open = new ArrayList&lt;&gt;();</span>
-<span class="fc bfc" id="L702" title="All 2 branches covered.">        for (DealRequest request : data.deals().lifecycle().requestsFor(listing)) {</span>
-<span class="fc bfc" id="L703" title="All 2 branches covered.">            if (request.getStatus() == RequestStatus.PENDING</span>
-<span class="pc bpc" id="L704" title="1 of 2 branches missed.">                    || request.getStatus() == RequestStatus.COUNTERED) {</span>
-<span class="fc" id="L705">                open.add(request);</span>
+<span class="fc" id="L775">        List&lt;DealRequest&gt; open = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L776" title="All 2 branches covered.">        for (DealRequest request : data.deals().lifecycle().requestsFor(listing)) {</span>
+<span class="fc bfc" id="L777" title="All 2 branches covered.">            if (request.getStatus() == RequestStatus.PENDING</span>
+<span class="pc bpc" id="L778" title="1 of 2 branches missed.">                    || request.getStatus() == RequestStatus.COUNTERED) {</span>
+<span class="fc" id="L779">                open.add(request);</span>
             }
-<span class="fc" id="L707">        }</span>
-<span class="fc" id="L708">        return open;</span>
+<span class="fc" id="L781">        }</span>
+<span class="fc" id="L782">        return open;</span>
+    }
+
+    private static boolean isSupportedImage(String filename) {
+<span class="fc" id="L786">        int dot = filename.lastIndexOf('.');</span>
+<span class="fc bfc" id="L787" title="All 2 branches covered.">        if (dot &lt; 0) {</span>
+<span class="fc" id="L788">            return false;</span>
+        }
+<span class="fc" id="L790">        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);</span>
+<span class="fc bfc" id="L791" title="All 6 branches covered.">        return extension.equals(&quot;jpg&quot;) || extension.equals(&quot;jpeg&quot;) || extension.equals(&quot;png&quot;);</span>
     }
 
     private static Money requirePrice(String rawPrice) {
         try {
-<span class="fc" id="L713">            return Money.of(rawPrice);</span>
-<span class="nc" id="L714">        } catch (IllegalArgumentException e) {</span>
-<span class="nc" id="L715">            throw new IllegalArgumentException(&quot;Asking price is invalid: &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L796">            return Money.of(rawPrice);</span>
+<span class="fc" id="L797">        } catch (IllegalArgumentException e) {</span>
+<span class="fc" id="L798">            throw new IllegalArgumentException(&quot;Asking price is invalid: &quot; + e.getMessage(), e);</span>
         }
     }
 
     private static void requirePending(Listing listing) {
-<span class="fc" id="L720">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
-<span class="fc bfc" id="L721" title="All 2 branches covered.">        if (listing.getStatus() != ListingStatus.PENDING_REVIEW) {</span>
-<span class="fc" id="L722">            throw new IllegalStateException(&quot;Listing &quot; + listing.getId() + &quot; is not pending review&quot;);</span>
+<span class="fc" id="L803">        Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="fc bfc" id="L804" title="All 2 branches covered.">        if (listing.getStatus() != ListingStatus.PENDING_REVIEW) {</span>
+<span class="fc" id="L805">            throw new IllegalStateException(&quot;Listing &quot; + listing.getId() + &quot; is not pending review&quot;);</span>
         }
-<span class="fc" id="L724">    }</span>
+<span class="fc" id="L807">    }</span>
 
     private static String requireText(String value, String what) {
-<span class="pc bpc" id="L727" title="1 of 4 branches missed.">        if (value == null || value.isBlank()) {</span>
-<span class="fc" id="L728">            throw new IllegalArgumentException(what + &quot; is required&quot;);</span>
+<span class="fc bfc" id="L810" title="All 4 branches covered.">        if (value == null || value.isBlank()) {</span>
+<span class="fc" id="L811">            throw new IllegalArgumentException(what + &quot; is required&quot;);</span>
         }
-<span class="fc" id="L730">        return value.trim();</span>
+<span class="fc" id="L813">        return value.trim();</span>
     }
 
     private static String blankToNull(String value) {
-<span class="pc bpc" id="L734" title="2 of 4 branches missed.">        return value == null || value.isBlank() ? null : value.trim();</span>
+<span class="fc bfc" id="L817" title="All 4 branches covered.">        return value == null || value.isBlank() ? null : value.trim();</span>
     }
 
     private static boolean isBlank(String text) {
-<span class="pc bpc" id="L738" title="1 of 4 branches missed.">        return text == null || text.isBlank();</span>
+<span class="fc bfc" id="L821" title="All 4 branches covered.">        return text == null || text.isBlank();</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

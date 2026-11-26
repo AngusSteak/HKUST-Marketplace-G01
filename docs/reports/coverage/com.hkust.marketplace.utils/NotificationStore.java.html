@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">NotificationStore.java</span></div><h1>NotificationStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.utils</a> &gt; <span class="el_source">NotificationStore.java</span></div><h1>NotificationStore.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Notification;
 import com.hkust.marketplace.models.NotificationCategory;
@@ -41,8 +41,8 @@ public class NotificationStore {
 <span class="fc" id="L41">        String id = notification.getId();</span>
         try {
 <span class="pc bpc" id="L43" title="2 of 4 branches missed.">            return id != null &amp;&amp; id.startsWith(&quot;N&quot;) ? Integer.parseInt(id.substring(1)) : 0;</span>
-<span class="nc" id="L44">        } catch (NumberFormatException e) {</span>
-<span class="nc" id="L45">            return 0;</span>
+<span class="fc" id="L44">        } catch (NumberFormatException e) {</span>
+<span class="fc" id="L45">            return 0;</span>
         }
     }
 
@@ -66,7 +66,7 @@ public class NotificationStore {
                                String content, NotificationRef relatedRef) {
 <span class="fc" id="L67">        Objects.requireNonNull(recipient, &quot;recipient&quot;);</span>
 <span class="fc" id="L68">        Objects.requireNonNull(category, &quot;category&quot;);</span>
-<span class="pc bpc" id="L69" title="1 of 4 branches missed.">        if (content == null || content.isBlank()) {</span>
+<span class="fc bfc" id="L69" title="All 4 branches covered.">        if (content == null || content.isBlank()) {</span>
 <span class="fc" id="L70">            throw new IllegalArgumentException(&quot;Notification content must not be blank&quot;);</span>
         }
 <span class="fc" id="L72">        Notification n = new Notification(recipient, category.getLabel(), content, category, relatedRef);</span>
@@ -76,7 +76,7 @@ public class NotificationStore {
 
     /** Saves and shows an already-built notification. */
     public synchronized void add(Notification n) {
-<span class="pc bpc" id="L79" title="1 of 2 branches missed.">        if (n.getId() == null) {</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        if (n.getId() == null) {</span>
 <span class="fc" id="L80">            n.setId(&quot;N&quot; + idCounter.getAndIncrement());</span>
         }
 <span class="fc" id="L82">        NotificationRef ref = n.getRelatedRef();</span>
@@ -97,8 +97,8 @@ public class NotificationStore {
     public synchronized void markRead(Notification n, boolean read) {
 <span class="fc" id="L98">        Objects.requireNonNull(n, &quot;notification&quot;);</span>
 <span class="fc" id="L99">        int rows = db.update(&quot;UPDATE notifications SET read = ? WHERE id = ?&quot;, read, n.getId());</span>
-<span class="pc bpc" id="L100" title="1 of 2 branches missed.">        if (rows == 0) {</span>
-<span class="nc" id="L101">            throw new IllegalArgumentException(&quot;Unknown notification: &quot; + n.getId());</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        if (rows == 0) {</span>
+<span class="fc" id="L101">            throw new IllegalArgumentException(&quot;Unknown notification: &quot; + n.getId());</span>
         }
 <span class="fc" id="L103">        n.setRead(read);</span>
 <span class="fc" id="L104">    }</span>

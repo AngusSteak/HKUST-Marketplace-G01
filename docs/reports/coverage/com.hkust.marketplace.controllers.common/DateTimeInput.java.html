@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DateTimeInput.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.common</a> &gt; <span class="el_source">DateTimeInput.java</span></div><h1>DateTimeInput.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.common;
+
+import javafx.geometry.Pos;
+import javafx.scene.control.DatePicker;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+
+/**
+ * A date picker and a time box side by side, used wherever a borrow period is entered (the
+ * buyer's borrow request and the seller's counter-period). Seconds are optional so the shortest
+ * allowed borrow period (5 seconds) can be entered.
+ */
+public final class DateTimeInput {
+
+<span class="fc" id="L22">    private static final DateTimeFormatter TIME_DISPLAY = DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;);</span>
+<span class="fc" id="L23">    private static final DateTimeFormatter TIME_INPUT = new DateTimeFormatterBuilder()</span>
+<span class="fc" id="L24">            .appendPattern(&quot;H:mm&quot;)</span>
+<span class="fc" id="L25">            .optionalStart().appendPattern(&quot;:ss&quot;).optionalEnd()</span>
+<span class="fc" id="L26">            .toFormatter();</span>
+
+    private final DatePicker date;
+    private final TextField time;
+    private final HBox node;
+
+    /** Starts at {@code initial}, or empty if it is {@code null}. */
+<span class="fc" id="L33">    public DateTimeInput(LocalDateTime initial) {</span>
+<span class="pc bpc" id="L34" title="1 of 2 branches missed.">        date = new DatePicker(initial == null ? null : initial.toLocalDate());</span>
+<span class="fc" id="L35">        date.setPrefWidth(150);</span>
+<span class="pc bpc" id="L36" title="1 of 2 branches missed.">        time = new TextField(initial == null ? &quot;&quot; : initial.toLocalTime().format(TIME_DISPLAY));</span>
+<span class="fc" id="L37">        time.setPromptText(&quot;HH:mm:ss&quot;);</span>
+<span class="fc" id="L38">        time.setPrefWidth(90);</span>
+<span class="fc" id="L39">        node = new HBox(8, date, time);</span>
+<span class="fc" id="L40">        node.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L41">    }</span>
+
+    /** The picker and the time box, to add to a layout. */
+    public HBox node() {
+<span class="fc" id="L45">        return node;</span>
+    }
+
+    /**
+     * The entered date and time.
+     *
+     * @param which &quot;start&quot; or &quot;end&quot;, used in the error message
+     * @throws IllegalArgumentException with a message for the user if the date is missing or the
+     *         time is not {@code H:mm} or {@code H:mm:ss}
+     */
+    public LocalDateTime value(String which) {
+<span class="fc" id="L56">        return parse(date.getValue(), time.getText(), which);</span>
+    }
+
+    /** Combines a date and an {@code H:mm} or {@code H:mm:ss} time, keeping the seconds. */
+    public static LocalDateTime parse(LocalDate date, String timeText, String which) {
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (date == null) {</span>
+<span class="fc" id="L62">            throw new IllegalArgumentException(&quot;Please choose a &quot; + which + &quot; date.&quot;);</span>
+        }
+        try {
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">            return date.atTime(LocalTime.parse(timeText == null ? &quot;&quot; : timeText.trim(), TIME_INPUT));</span>
+<span class="fc" id="L66">        } catch (DateTimeParseException e) {</span>
+<span class="fc" id="L67">            throw new IllegalArgumentException(&quot;Enter the &quot; + which + &quot; time as HH:mm:ss, e.g. 14:30:00.&quot;);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

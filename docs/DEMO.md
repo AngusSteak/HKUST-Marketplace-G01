@@ -213,7 +213,7 @@ This covers 1.5, 1.6 (start), 2.5 and notifications.
 
 Say these, and show the pages you prepared:
 
-- **503 JUnit tests pass**; JaCoCo report open; 78.7% branch coverage on business logic (83.2% lines), models 96%, services 89%, persistence 82%.
+- **665 JUnit tests pass**; JaCoCo report open; 76.2% branch coverage including the JavaFX controllers (84.9% lines), 89.0% branch on the business logic alone.
 - **JavaDoc** builds clean (`mvnw javadoc:javadoc`).
 - **RBAC**: `AccessControl.require` runs inside `AdminService` and `SellerService` before
   every change, so a buyer session cannot call seller/admin actions even if the UI is bypassed.
@@ -241,7 +241,7 @@ Use section 7.
 4. Buyer login → My Deals → Accept Counter → Mark Complete → Rate 5★ (1.5 min).
 5. Seller Stats (pie now visible) + Reviews reply (1 min).
 6. Admin login → approve the speaker (create it first if time) + Manage Users (1 min).
-7. One technical sentence: 503 tests, RBAC in services, BCrypt, SQLite (30s).
+7. One technical sentence: 665 tests, RBAC in services, BCrypt, SQLite (30s).
 
 ---
 
@@ -296,9 +296,9 @@ Use section 7.
 > recommended option.
 
 **"What is tested?"**
-> 503 JUnit tests across models, stores, services and the database. JaCoCo report shows
-> 96% line coverage for models, 89% for services/utils, 82% for persistence. Controllers
-> are covered lightly because they are UI.
+> 665 JUnit tests across models, stores, services, the database and the screens. JaCoCo
+> shows 76.2% branch coverage over every package, controllers included; line coverage is 97%
+> for models, 96% for services/utils, 82% for persistence and 78% for the controllers.
 
 **"What is not finished?"**
 > Be honest about the two gaps in section 8.

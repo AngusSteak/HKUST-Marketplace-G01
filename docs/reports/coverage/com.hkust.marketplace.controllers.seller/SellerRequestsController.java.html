@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SellerRequestsController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.seller</a> &gt; <span class="el_source">SellerRequestsController.java</span></div><h1>SellerRequestsController.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.seller;
+
+import com.hkust.marketplace.controllers.common.DateTimeInput;
+import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.ChatThread;
+import com.hkust.marketplace.models.DealRequest;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.Money;
+import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.models.User;
+import com.hkust.marketplace.utils.ChatService;
+import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.SellerService;
+import com.hkust.marketplace.utils.SessionManager;
+import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
+
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Consumer;
+
+/** Handles the standalone seller requests screen (offers and borrow requests per listing). */
+<span class="fc" id="L38">public class SellerRequestsController {</span>
+
+<span class="fc" id="L40">    private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern(&quot;dd MMM HH:mm&quot;);</span>
+
+<span class="fc" id="L42">    private final SellerService sellerService = new SellerService(DummyDataService.getInstance());</span>
+<span class="fc" id="L43">    private final ChatService chatService = new ChatService(DummyDataService.getInstance());</span>
+
+    @FXML private VBox requestsBox;
+    @FXML private Label feedbackLabel;
+    @FXML private Button backButton;
+    @FXML private Button refreshButton;
+
+    private Consumer&lt;ChatThread&gt; onOpenChat;
+    private Runnable onBackToChat;
+    private Listing filter;
+
+    /** Sets what runs when the seller opens a chat from a request. */
+    public void setOnOpenChat(Consumer&lt;ChatThread&gt; onOpenChat) {
+<span class="fc" id="L56">        this.onOpenChat = onOpenChat;</span>
+<span class="fc" id="L57">    }</span>
+
+    void setOnBackToChat(Runnable onBackToChat) {
+<span class="fc" id="L60">        this.onBackToChat = onBackToChat;</span>
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        boolean show = onBackToChat != null;</span>
+<span class="fc" id="L62">        backButton.setVisible(show);</span>
+<span class="fc" id="L63">        backButton.setManaged(show);</span>
+<span class="fc" id="L64">    }</span>
+
+    @FXML
+    private void handleBackToChat() {
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (onBackToChat != null) {</span>
+<span class="nc" id="L69">            onBackToChat.run();</span>
+        }
+<span class="nc" id="L71">    }</span>
+
+    /** Re-queries and re-renders the requests, keeping the current filtered-vs-all mode. */
+    @FXML
+    private void handleRefresh() {
+<span class="fc" id="L76">        render();</span>
+<span class="fc" id="L77">    }</span>
+
+    static String backToChatLabel() {
+<span class="fc" id="L80">        return &quot;\u2190 Back to Chat&quot;;</span>
+    }
+
+    /** Shows the requests for one listing only. */
+    public void renderFiltered(Listing listing) {
+<span class="nc" id="L85">        this.filter = Objects.requireNonNull(listing, &quot;listing&quot;);</span>
+<span class="nc" id="L86">        render();</span>
+<span class="nc" id="L87">    }</span>
+
+    /** Prepares the header once the FXML is loaded. */
+    @FXML
+    public void initialize() {
+<span class="fc" id="L92">        backButton.setText(backToChatLabel());</span>
+<span class="fc" id="L93">        backButton.getStyleClass().addAll(&quot;btn-outline&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L94">    }</span>
+
+    /** Draws the request cards for the signed-in seller. */
+    public void render() {
+<span class="fc" id="L98">        User user = SessionManager.getCurrentUser();</span>
+<span class="fc" id="L99">        requestsBox.getChildren().clear();</span>
+<span class="fc" id="L100">        hideFeedback();</span>
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">        if (!(user instanceof Seller)) {</span>
+<span class="nc" id="L102">            showFeedback(&quot;Log in as a seller to manage requests.&quot;);</span>
+<span class="nc" id="L103">            return;</span>
+        }
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">        if (filter != null) {</span>
+<span class="nc" id="L106">            renderFilteredListing(user);</span>
+<span class="nc" id="L107">            return;</span>
+        }
+<span class="fc" id="L109">        LinkedHashMap&lt;Listing, List&lt;DealRequest&gt;&gt; groups = sellerService.pendingRequestsByListing(user);</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        if (groups.isEmpty()) {</span>
+<span class="fc" id="L111">            Label empty = new Label(&quot;No requests are waiting for a response.&quot;);</span>
+<span class="fc" id="L112">            empty.setStyle(&quot;-fx-text-fill: #5a5a7a;&quot;);</span>
+<span class="fc" id="L113">            requestsBox.getChildren().add(empty);</span>
+<span class="fc" id="L114">            return;</span>
+        }
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        for (Map.Entry&lt;Listing, List&lt;DealRequest&gt;&gt; entry : groups.entrySet()) {</span>
+<span class="fc" id="L117">            requestsBox.getChildren().add(buildListingGroup(entry.getKey(), entry.getValue(), user));</span>
+<span class="fc" id="L118">        }</span>
+<span class="fc" id="L119">    }</span>
+
+    private void renderFilteredListing(User user) {
+<span class="nc" id="L122">        List&lt;DealRequest&gt; requests = sellerService.pendingRequestsForListing(user, filter);</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (requests.isEmpty()) {</span>
+<span class="nc" id="L124">            Label empty = new Label(&quot;No requests are waiting for a response on '&quot; + filter.getTitle() + &quot;'.&quot;);</span>
+<span class="nc" id="L125">            empty.setStyle(&quot;-fx-text-fill: #5a5a7a;&quot;);</span>
+<span class="nc" id="L126">            requestsBox.getChildren().add(empty);</span>
+<span class="nc" id="L127">            return;</span>
+        }
+<span class="nc" id="L129">        requestsBox.getChildren().add(buildDeclineAllBar(filter, requests.size(), user));</span>
+<span class="nc" id="L130">        requestsBox.getChildren().add(buildListingGroup(filter, requests, user));</span>
+<span class="nc" id="L131">    }</span>
+
+    private HBox buildDeclineAllBar(Listing listing, int count, User user) {
+<span class="nc" id="L134">        HBox bar = new HBox(8);</span>
+<span class="nc" id="L135">        bar.setAlignment(Pos.CENTER_RIGHT);</span>
+<span class="nc" id="L136">        Button declineAll = new Button(&quot;Decline all (&quot; + count + &quot;)&quot;);</span>
+<span class="nc" id="L137">        declineAll.getStyleClass().addAll(&quot;btn-danger&quot;, &quot;btn-sm&quot;);</span>
+<span class="nc" id="L138">        declineAll.setOnAction(e -&gt; confirmDeclineAll(listing, count, user));</span>
+<span class="nc" id="L139">        bar.getChildren().add(declineAll);</span>
+<span class="nc" id="L140">        return bar;</span>
+    }
+
+    private void confirmDeclineAll(Listing listing, int count, User user) {
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        String noun = count == 1 ? &quot; offer&quot; : &quot; offers&quot;;</span>
+<span class="nc" id="L145">        String message = &quot;Decline all &quot; + count + noun + &quot; on '&quot; + listing.getTitle() + &quot;'?\n\n&quot;</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">                + &quot;All &quot; + count + &quot; buyer&quot; + (count == 1 ? &quot;&quot; : &quot;s&quot;) + &quot; will be notified.&quot;;</span>
+<span class="nc" id="L147">        confirm(&quot;Decline all offers&quot;, message, () -&gt; {</span>
+            try {
+<span class="nc" id="L149">                sellerService.declineAllForListing(user, listing);</span>
+<span class="nc" id="L150">                render();</span>
+<span class="nc" id="L151">                showFeedback(&quot;Declined &quot; + count + noun + &quot; on '&quot; + listing.getTitle() + &quot;'.&quot;);</span>
+<span class="nc" id="L152">            } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {</span>
+<span class="nc" id="L153">                showFeedback(readable(ex));</span>
+<span class="nc" id="L154">            } catch (RuntimeException ex) {</span>
+<span class="nc" id="L155">                showFeedback(&quot;Could not complete the action: &quot; + readable(ex));</span>
+<span class="nc" id="L156">            }</span>
+<span class="nc" id="L157">        });</span>
+<span class="nc" id="L158">    }</span>
+
+    private VBox buildListingGroup(Listing listing, List&lt;DealRequest&gt; requests, User user) {
+<span class="fc" id="L161">        VBox card = new VBox(10);</span>
+<span class="fc" id="L162">        card.getStyleClass().add(&quot;card&quot;);</span>
+
+<span class="fc" id="L164">        Label title = new Label(listing.getTitle());</span>
+<span class="fc" id="L165">        title.getStyleClass().add(&quot;section-title&quot;);</span>
+<span class="fc" id="L166">        Label meta = new Label(listing.getTypeDisplay() + &quot;  ·  &quot; + listing.getPriceDisplay()</span>
+<span class="pc bpc" id="L167" title="1 of 2 branches missed.">                + &quot;  ·  &quot; + requests.size() + &quot; open request&quot; + (requests.size() == 1 ? &quot;&quot; : &quot;s&quot;));</span>
+<span class="fc" id="L168">        meta.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 12px;&quot;);</span>
+<span class="fc" id="L169">        card.getChildren().addAll(title, meta);</span>
+
+<span class="fc bfc" id="L171" title="All 2 branches covered.">        for (DealRequest request : requests) {</span>
+<span class="fc" id="L172">            card.getChildren().add(buildRequestRow(request, user));</span>
+<span class="fc" id="L173">        }</span>
+<span class="fc" id="L174">        return card;</span>
+    }
+
+    private VBox buildRequestRow(DealRequest request, User user) {
+<span class="fc" id="L178">        VBox row = new VBox(8);</span>
+<span class="fc" id="L179">        row.getStyleClass().add(&quot;offer-card&quot;);</span>
+<span class="fc" id="L180">        row.setPadding(new Insets(10, 12, 10, 12));</span>
+
+<span class="fc" id="L182">        HBox top = new HBox(10);</span>
+<span class="fc" id="L183">        top.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L184">        Label who = new Label(request.getBuyerDisplayName());</span>
+<span class="fc" id="L185">        who.setStyle(&quot;-fx-font-weight: bold; -fx-font-size: 13px;&quot;);</span>
+<span class="fc" id="L186">        Label terms = new Label(requestTerms(request));</span>
+<span class="fc" id="L187">        terms.setStyle(&quot;-fx-text-fill: #003974; -fx-font-size: 13px;&quot;);</span>
+<span class="fc" id="L188">        Label status = new Label(statusText(request));</span>
+<span class="fc" id="L189">        status.getStyleClass().addAll(&quot;badge&quot;, statusStyle(request));</span>
+<span class="fc" id="L190">        Region spacer = new Region();</span>
+<span class="fc" id="L191">        HBox.setHgrow(spacer, Priority.ALWAYS);</span>
+<span class="fc" id="L192">        top.getChildren().addAll(who, terms, spacer, status);</span>
+
+<span class="fc" id="L194">        Label submitted = new Label(&quot;Submitted &quot; + request.getSubmittedTime().format(SHORT_DATE));</span>
+<span class="fc" id="L195">        submitted.setStyle(&quot;-fx-text-fill: #9aa0b0; -fx-font-size: 11px;&quot;);</span>
+
+<span class="fc" id="L197">        VBox editorHost = new VBox(8);</span>
+<span class="fc" id="L198">        row.getChildren().addAll(top, submitted, editorHost);</span>
+<span class="fc" id="L199">        editorHost.getChildren().add(buildActionBar(request, user, editorHost));</span>
+<span class="fc" id="L200">        return row;</span>
+    }
+
+    private HBox buildActionBar(DealRequest request, User user, VBox editorHost) {
+<span class="fc" id="L204">        HBox bar = new HBox(8);</span>
+<span class="fc" id="L205">        bar.setAlignment(Pos.CENTER_LEFT);</span>
+
+<span class="fc bfc" id="L207" title="All 2 branches covered.">        boolean countered = request.getStatus() == RequestStatus.COUNTERED;</span>
+<span class="fc bfc" id="L208" title="All 2 branches covered.">        if (countered) {</span>
+<span class="fc" id="L209">            Label awaiting = new Label(&quot;Awaiting buyer&quot;);</span>
+<span class="fc" id="L210">            awaiting.setStyle(&quot;-fx-text-fill: #ed6c02; -fx-font-size: 12px; -fx-font-weight: bold;&quot;);</span>
+<span class="fc" id="L211">            bar.getChildren().add(awaiting);</span>
+<span class="fc" id="L212">        } else {</span>
+<span class="fc" id="L213">            Button accept = new Button(&quot;Accept&quot;);</span>
+<span class="fc" id="L214">            accept.getStyleClass().addAll(&quot;btn-primary&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L215">            accept.setOnAction(e -&gt; confirmAccept(request, user));</span>
+<span class="fc" id="L216">            bar.getChildren().add(accept);</span>
+        }
+
+<span class="fc" id="L219">        Button decline = new Button(&quot;Decline&quot;);</span>
+<span class="fc" id="L220">        decline.getStyleClass().addAll(&quot;btn-outline&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L221">        decline.setOnAction(e -&gt; confirmDecline(request, user));</span>
+<span class="fc" id="L222">        bar.getChildren().add(decline);</span>
+
+<span class="fc bfc" id="L224" title="All 4 branches covered.">        if (!countered &amp;&amp; canCounter(request)) {</span>
+<span class="fc" id="L225">            Button counter = new Button(&quot;Counter&quot;);</span>
+<span class="fc" id="L226">            counter.getStyleClass().addAll(&quot;btn-gold&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L227">            counter.setOnAction(e -&gt; {</span>
+<span class="fc" id="L228">                editorHost.getChildren().clear();</span>
+<span class="fc" id="L229">                editorHost.getChildren().add(buildCounterEditor(request, user, editorHost));</span>
+<span class="fc" id="L230">            });</span>
+<span class="fc" id="L231">            bar.getChildren().add(counter);</span>
+        }
+
+<span class="fc" id="L234">        Button openChat = new Button(&quot;Open chat&quot;);</span>
+<span class="fc" id="L235">        openChat.getStyleClass().addAll(&quot;btn-outline&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L236">        openChat.setOnAction(e -&gt; openChat(request, user));</span>
+<span class="fc" id="L237">        bar.getChildren().add(openChat);</span>
+<span class="fc" id="L238">        return bar;</span>
+    }
+
+    private static boolean canCounter(DealRequest request) {
+<span class="fc bfc" id="L242" title="All 4 branches covered.">        return request instanceof PriceOffer || request instanceof BorrowRequest;</span>
+    }
+
+    private VBox buildCounterEditor(DealRequest request, User user, VBox editorHost) {
+<span class="fc" id="L246">        VBox editor = new VBox(8);</span>
+<span class="fc" id="L247">        editor.setPadding(new Insets(8, 0, 0, 0));</span>
+
+<span class="fc bfc" id="L249" title="All 2 branches covered.">        Label heading = new Label(request instanceof PriceOffer ? &quot;Counter Price&quot; : &quot;Counter Period&quot;);</span>
+<span class="fc" id="L250">        heading.setStyle(&quot;-fx-font-weight: bold; -fx-text-fill: #003974;&quot;);</span>
+
+<span class="fc" id="L252">        Label validation = new Label();</span>
+<span class="fc" id="L253">        validation.getStyleClass().add(&quot;input-error-label&quot;);</span>
+<span class="fc" id="L254">        validation.setWrapText(true);</span>
+<span class="fc" id="L255">        validation.setVisible(false);</span>
+<span class="fc" id="L256">        validation.setManaged(false);</span>
+
+        final TextField price;
+        final DateTimeInput start;
+        final DateTimeInput end;
+<span class="fc bfc" id="L261" title="All 2 branches covered.">        if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L262">            price = new TextField();</span>
+<span class="fc" id="L263">            price.setPromptText(&quot;e.g. &quot; + offer.agreedPrice().toPlainString());</span>
+<span class="fc" id="L264">            price.setPrefWidth(160);</span>
+<span class="fc" id="L265">            start = null;</span>
+<span class="fc" id="L266">            end = null;</span>
+<span class="fc" id="L267">            HBox fields = new HBox(8, new Label(&quot;Price (HK$)&quot;), price);</span>
+<span class="fc" id="L268">            fields.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L269">            editor.getChildren().addAll(heading, fields, validation);</span>
+<span class="fc" id="L270">        } else {</span>
+            // The same date picker and HH:mm:ss time box as the buyer's borrow request,
+            // filled in with the current terms so the seller only changes what differs.
+<span class="fc" id="L273">            BorrowRequest borrow = (BorrowRequest) request;</span>
+<span class="fc" id="L274">            price = null;</span>
+<span class="fc" id="L275">            start = new DateTimeInput(borrow.agreedStart());</span>
+<span class="fc" id="L276">            end = new DateTimeInput(borrow.agreedEnd());</span>
+<span class="fc" id="L277">            editor.getChildren().addAll(heading, periodRow(&quot;Start&quot;, start), periodRow(&quot;End&quot;, end), validation);</span>
+        }
+
+<span class="fc" id="L280">        Button confirm = new Button(&quot;Confirm&quot;);</span>
+<span class="fc" id="L281">        confirm.getStyleClass().addAll(&quot;btn-primary&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L282">        Button cancel = new Button(&quot;Cancel&quot;);</span>
+<span class="fc" id="L283">        cancel.getStyleClass().addAll(&quot;btn-outline&quot;, &quot;btn-sm&quot;);</span>
+<span class="fc" id="L284">        cancel.setOnAction(e -&gt; editorHost.getChildren().setAll(buildActionBar(request, user, editorHost)));</span>
+<span class="fc" id="L285">        HBox buttons = new HBox(8, confirm, cancel);</span>
+<span class="fc" id="L286">        editor.getChildren().add(buttons);</span>
+
+<span class="fc" id="L288">        confirm.setOnAction(e -&gt; submitCounter(request, user, price, start, end, validation));</span>
+<span class="fc" id="L289">        return editor;</span>
+    }
+
+    private static HBox periodRow(String name, DateTimeInput input) {
+<span class="fc" id="L293">        Label label = new Label(name);</span>
+<span class="fc" id="L294">        label.setMinWidth(40);</span>
+<span class="fc" id="L295">        HBox row = new HBox(8, label, input.node());</span>
+<span class="fc" id="L296">        row.setAlignment(Pos.CENTER_LEFT);</span>
+<span class="fc" id="L297">        return row;</span>
+    }
+
+    private void submitCounter(DealRequest request, User user, TextField price,
+                               DateTimeInput start, DateTimeInput end, Label validation) {
+<span class="fc" id="L302">        validation.setVisible(false);</span>
+<span class="fc" id="L303">        validation.setManaged(false);</span>
+<span class="fc bfc" id="L304" title="All 2 branches covered.">        if (price != null) {</span>
+<span class="fc" id="L305">            price.getStyleClass().remove(&quot;input-error&quot;);</span>
+        }
+        try {
+<span class="fc bfc" id="L308" title="All 2 branches covered.">            if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L309">                sellerService.counterPriceOffer(user, offer, price.getText());</span>
+            } else {
+<span class="fc" id="L311">                BorrowRequest borrow = (BorrowRequest) request;</span>
+<span class="nc" id="L312">                sellerService.counterBorrowRequest(user, borrow, start.value(&quot;start&quot;), end.value(&quot;end&quot;));</span>
+            }
+<span class="fc" id="L314">            render();</span>
+<span class="fc" id="L315">            showFeedback(&quot;Counter sent to &quot; + request.getBuyerDisplayName() + &quot; — awaiting buyer.&quot;);</span>
+<span class="fc" id="L316">        } catch (NumberFormatException ex) {</span>
+<span class="fc" id="L317">            showInlineError(validation, price, &quot;Enter a valid counter price (e.g. 120 or 99.50).&quot;);</span>
+<span class="fc" id="L318">        } catch (IllegalArgumentException ex) {</span>
+<span class="fc" id="L319">            showInlineError(validation, price, readable(ex));</span>
+<span class="nc" id="L320">        } catch (IllegalStateException | SecurityException ex) {</span>
+<span class="nc" id="L321">            showInlineError(validation, price, readable(ex));</span>
+<span class="nc" id="L322">        } catch (RuntimeException ex) {</span>
+<span class="nc" id="L323">            showFeedback(&quot;Could not complete the action: &quot; + readable(ex));</span>
+<span class="pc" id="L324">        }</span>
+<span class="fc" id="L325">    }</span>
+
+    private void confirmAccept(DealRequest request, User user) {
+<span class="fc" id="L328">        String message = &quot;Accept the request from &quot; + request.getBuyerDisplayName()</span>
+<span class="fc" id="L329">                + &quot; for '&quot; + request.getListing().getTitle() + &quot;'?\n\n&quot;</span>
+                + &quot;This creates the deal and declines the other open requests on this listing.&quot;;
+<span class="fc" id="L331">        confirm(&quot;Accept request&quot;, message, () -&gt; {</span>
+            try {
+<span class="fc" id="L333">                sellerService.acceptRequest(user, request);</span>
+<span class="fc" id="L334">                render();</span>
+<span class="fc" id="L335">                showFeedback(&quot;Request accepted. Deal created and other offers declined.&quot;);</span>
+<span class="nc" id="L336">            } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {</span>
+<span class="nc" id="L337">                showFeedback(readable(ex));</span>
+<span class="nc" id="L338">            } catch (RuntimeException ex) {</span>
+<span class="nc" id="L339">                showFeedback(&quot;Could not complete the action: &quot; + readable(ex));</span>
+<span class="pc" id="L340">            }</span>
+<span class="fc" id="L341">        });</span>
+<span class="fc" id="L342">    }</span>
+
+    private void confirmDecline(DealRequest request, User user) {
+<span class="fc" id="L345">        String message = &quot;Decline the request from &quot; + request.getBuyerDisplayName()</span>
+<span class="fc" id="L346">                + &quot; for '&quot; + request.getListing().getTitle() + &quot;'?&quot;;</span>
+<span class="fc" id="L347">        confirm(&quot;Decline request&quot;, message, () -&gt; {</span>
+            try {
+<span class="fc" id="L349">                sellerService.declineRequest(user, request);</span>
+<span class="fc" id="L350">                render();</span>
+<span class="fc" id="L351">                showFeedback(&quot;Request declined.&quot;);</span>
+<span class="nc" id="L352">            } catch (SecurityException | IllegalStateException | IllegalArgumentException ex) {</span>
+<span class="nc" id="L353">                showFeedback(readable(ex));</span>
+<span class="nc" id="L354">            } catch (RuntimeException ex) {</span>
+<span class="nc" id="L355">                showFeedback(&quot;Could not complete the action: &quot; + readable(ex));</span>
+<span class="pc" id="L356">            }</span>
+<span class="fc" id="L357">        });</span>
+<span class="fc" id="L358">    }</span>
+
+    private static void confirm(String title, String message, Runnable action) {
+<span class="fc" id="L361">        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, ButtonType.OK, ButtonType.CANCEL);</span>
+<span class="fc" id="L362">        alert.setTitle(title);</span>
+<span class="fc" id="L363">        alert.setHeaderText(null);</span>
+<span class="fc" id="L364">        alert.showAndWait().filter(ButtonType.OK::equals).ifPresent(bt -&gt; action.run());</span>
+<span class="fc" id="L365">    }</span>
+
+    private void openChat(DealRequest request, User user) {
+<span class="pc bpc" id="L368" title="1 of 2 branches missed.">        if (onOpenChat == null) {</span>
+<span class="nc" id="L369">            showFeedback(&quot;Chat is not available here.&quot;);</span>
+<span class="nc" id="L370">            return;</span>
+        }
+<span class="pc bpc" id="L372" title="1 of 2 branches missed.">        if (!(user instanceof Seller seller)) {</span>
+<span class="nc" id="L373">            showFeedback(&quot;Log in as a seller to open chats.&quot;);</span>
+<span class="nc" id="L374">            return;</span>
+        }
+<span class="fc" id="L376">        ChatThread thread = chatService.threadsForSeller(seller).stream()</span>
+<span class="fc bfc" id="L377" title="All 2 branches covered.">                .filter(t -&gt; t.getListing().getId().equals(request.getListing().getId())</span>
+<span class="pc bpc" id="L378" title="1 of 2 branches missed.">                        &amp;&amp; t.getBuyer().getUsername().equalsIgnoreCase(request.getBuyerUsername()))</span>
+<span class="fc" id="L379">                .findFirst().orElse(null);</span>
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">        if (thread == null) {</span>
+<span class="fc" id="L381">            showFeedback(&quot;No conversation with &quot; + request.getBuyerDisplayName()</span>
+                    + &quot; for this item yet.&quot;);
+<span class="fc" id="L383">            return;</span>
+        }
+<span class="nc" id="L385">        onOpenChat.accept(thread);</span>
+<span class="nc" id="L386">    }</span>
+
+    private static String requestTerms(DealRequest request) {
+<span class="fc bfc" id="L389" title="All 2 branches covered.">        if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L390">            return &quot;Price offer: &quot; + new Money(offer.getOfferedPrice()).getDisplay();</span>
+        }
+<span class="fc bfc" id="L392" title="All 2 branches covered.">        if (request instanceof BorrowRequest borrow) {</span>
+<span class="fc" id="L393">            return &quot;Borrow: &quot; + borrow.getStartDate().format(SHORT_DATE)</span>
+<span class="fc" id="L394">                    + &quot; – &quot; + borrow.getEndDate().format(SHORT_DATE);</span>
+        }
+<span class="fc" id="L396">        return &quot;Giveaway claim&quot;;</span>
+    }
+
+    private static String statusText(DealRequest request) {
+<span class="fc bfc" id="L400" title="All 2 branches covered.">        if (request.getStatus() == RequestStatus.COUNTERED) {</span>
+<span class="pc bpc" id="L401" title="1 of 2 branches missed.">            if (request instanceof PriceOffer offer) {</span>
+<span class="fc" id="L402">                return &quot;Countered · Counter Price &quot; + new Money(offer.agreedPrice()).getDisplay();</span>
+            }
+<span class="nc bnc" id="L404" title="All 2 branches missed.">            if (request instanceof BorrowRequest borrow) {</span>
+<span class="nc" id="L405">                return &quot;Countered · Counter Period &quot; + borrow.agreedStart().format(SHORT_DATE)</span>
+<span class="nc" id="L406">                        + &quot; – &quot; + borrow.agreedEnd().format(SHORT_DATE);</span>
+            }
+        }
+<span class="fc" id="L409">        return request.getStatus().name().replace('_', ' ');</span>
+    }
+
+    private static String statusStyle(DealRequest request) {
+<span class="fc bfc" id="L413" title="All 2 branches covered.">        return request.getStatus() == RequestStatus.COUNTERED ? &quot;badge-sold&quot; : &quot;badge-pending&quot;;</span>
+    }
+
+    private static String readable(Exception ex) {
+<span class="fc" id="L417">        String message = ex.getMessage();</span>
+<span class="pc bpc" id="L418" title="2 of 4 branches missed.">        return message == null || message.isBlank()</span>
+<span class="nc" id="L419">                ? &quot;That action could not be completed. Please check the details and try again.&quot;</span>
+<span class="fc" id="L420">                : message;</span>
+    }
+
+    private static void showInlineError(Label validation, TextField field, String message) {
+<span class="fc" id="L424">        validation.setText(message);</span>
+<span class="fc" id="L425">        validation.setVisible(true);</span>
+<span class="fc" id="L426">        validation.setManaged(true);</span>
+<span class="pc bpc" id="L427" title="1 of 4 branches missed.">        if (field != null &amp;&amp; !field.getStyleClass().contains(&quot;input-error&quot;)) {</span>
+<span class="fc" id="L428">            field.getStyleClass().add(&quot;input-error&quot;);</span>
+        }
+<span class="fc" id="L430">    }</span>
+
+    private void showFeedback(String message) {
+<span class="fc" id="L433">        feedbackLabel.setText(message);</span>
+<span class="fc" id="L434">        feedbackLabel.setVisible(true);</span>
+<span class="fc" id="L435">        feedbackLabel.setManaged(true);</span>
+<span class="fc" id="L436">    }</span>
+
+    private void hideFeedback() {
+<span class="fc" id="L439">        feedbackLabel.setText(&quot;&quot;);</span>
+<span class="fc" id="L440">        feedbackLabel.setVisible(false);</span>
+<span class="fc" id="L441">        feedbackLabel.setManaged(false);</span>
+<span class="fc" id="L442">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

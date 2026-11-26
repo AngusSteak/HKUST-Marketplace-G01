@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SellerRegisterController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.controllers.seller</a> &gt; <span class="el_source">SellerRegisterController.java</span></div><h1>SellerRegisterController.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.controllers.seller;
+
+import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.PasswordRule;
+import com.hkust.marketplace.models.Seller;
+import com.hkust.marketplace.models.UserRole;
+import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.RegistrationService;
+import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.PasswordVisibility;
+import com.hkust.marketplace.utils.SceneManager;
+import com.hkust.marketplace.utils.UserStore;
+import javafx.fxml.FXML;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.GridPane;
+
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Set;
+
+/** Handles the seller registration form, including the UC-1.1 password rules. */
+<span class="fc" id="L23">public class SellerRegisterController {</span>
+
+    @FXML private TextField usernameField;
+    @FXML private TextField fullNameField;
+    @FXML private PasswordField passwordField;
+    @FXML private PasswordField confirmPasswordField;
+    @FXML private HBox passwordRow;
+    @FXML private HBox confirmPasswordRow;
+    @FXML private GridPane meetupGrid;
+    @FXML private TextArea bioArea;
+    @FXML private Label errorLabel;
+    @FXML private Label successLabel;
+
+<span class="fc" id="L36">    private final EnumMap&lt;Location, CheckBox&gt; meetupBoxes = new EnumMap&lt;&gt;(Location.class);</span>
+
+    /** Fills the multi-select meet-up location choices. */
+    @FXML
+    public void initialize() {
+<span class="fc" id="L41">        PasswordVisibility.attach(passwordField, passwordRow);</span>
+<span class="fc" id="L42">        PasswordVisibility.attach(confirmPasswordField, confirmPasswordRow);</span>
+<span class="fc" id="L43">        int i = 0;</span>
+<span class="fc bfc" id="L44" title="All 2 branches covered.">        for (Location location : Location.values()) {</span>
+<span class="fc" id="L45">            CheckBox box = new CheckBox(location.getLabel());</span>
+<span class="fc" id="L46">            meetupGrid.add(box, i % 2, i / 2);</span>
+<span class="fc" id="L47">            meetupBoxes.put(location, box);</span>
+<span class="fc" id="L48">            i++;</span>
+        }
+<span class="fc" id="L50">    }</span>
+
+    @FXML
+    private void handleRegister() {
+<span class="fc" id="L54">        hideMessages();</span>
+<span class="fc" id="L55">        String username = usernameField.getText().trim();</span>
+<span class="fc" id="L56">        String fullName = fullNameField.getText().trim();</span>
+<span class="fc" id="L57">        String password = passwordField.getText();</span>
+<span class="fc" id="L58">        String confirm = confirmPasswordField.getText();</span>
+
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (username.isEmpty()) { showError(&quot;Username is required.&quot;); return; }</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (DummyDataService.getInstance().users().usernameExists(username)) {</span>
+<span class="fc" id="L62">            showError(&quot;Username already taken.&quot;); return;</span>
+        }
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        if (fullName.isEmpty()) { showError(&quot;Full Name cannot be empty.&quot;); return; }</span>
+<span class="fc" id="L65">        Set&lt;PasswordRule&gt; failed = UserStore.checkPasswordStrength(password, username);</span>
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        if (!failed.isEmpty()) { showError(UserStore.formatPasswordErrors(failed)); return; }</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        if (!password.equals(confirm)) { showError(&quot;Passwords do not match.&quot;); return; }</span>
+
+<span class="fc" id="L69">        Seller user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);</span>
+<span class="fc" id="L70">        EnumSet&lt;Location&gt; meetups = EnumSet.noneOf(Location.class);</span>
+<span class="fc" id="L71">        meetupBoxes.forEach((location, box) -&gt; {</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">            if (box.isSelected()) meetups.add(location);</span>
+<span class="fc" id="L73">        });</span>
+<span class="fc" id="L74">        user.setPreferredMeetup(meetups);</span>
+<span class="pc bpc" id="L75" title="2 of 4 branches missed.">        if (bioArea.getText() != null &amp;&amp; !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());</span>
+        // Saves the account and notifies the admin (SRS UC-2.1, like UC-1.1 step 7).
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">        if (!new RegistrationService(DummyDataService.getInstance()).register(user)) {</span>
+<span class="nc" id="L78">            showError(&quot;Username already taken.&quot;); return;</span>
+        }
+
+<span class="fc" id="L81">        String message = &quot;Seller account created! You can now login.&quot;;</span>
+<span class="fc" id="L82">        showSuccess(message);</span>
+<span class="fc" id="L83">        usernameField.clear(); fullNameField.clear(); passwordField.clear();</span>
+<span class="fc" id="L84">        confirmPasswordField.clear(); meetupBoxes.values().forEach(box -&gt; box.setSelected(false)); bioArea.clear();</span>
+<span class="fc" id="L85">        showInfo(&quot;Seller account created&quot;, message);</span>
+<span class="fc" id="L86">        SceneManager.showSellerLogin();</span>
+<span class="fc" id="L87">    }</span>
+
+    private void showError(String msg) {
+<span class="fc" id="L90">        errorLabel.setText(msg); errorLabel.setVisible(true); errorLabel.setManaged(true);</span>
+<span class="fc" id="L91">    }</span>
+    private void showSuccess(String msg) {
+<span class="fc" id="L93">        successLabel.setText(msg); successLabel.setVisible(true); successLabel.setManaged(true);</span>
+<span class="fc" id="L94">    }</span>
+    private void hideMessages() {
+<span class="fc" id="L96">        errorLabel.setVisible(false); errorLabel.setManaged(false);</span>
+<span class="fc" id="L97">        successLabel.setVisible(false); successLabel.setManaged(false);</span>
+<span class="fc" id="L98">    }</span>
+
+    private void showInfo(String title, String message) {
+<span class="fc" id="L101">        Alert alert = new Alert(Alert.AlertType.INFORMATION);</span>
+<span class="fc" id="L102">        alert.setTitle(title);</span>
+<span class="fc" id="L103">        alert.setHeaderText(null);</span>
+<span class="fc" id="L104">        alert.setContentText(message);</span>
+<span class="fc" id="L105">        alert.showAndWait();</span>
+<span class="fc" id="L106">    }</span>
+
+<span class="fc" id="L108">    @FXML private void goLogin() { SceneManager.showSellerLogin(); }</span>
+<span class="fc" id="L109">    @FXML private void goWelcome() { SceneManager.showWelcome(); }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

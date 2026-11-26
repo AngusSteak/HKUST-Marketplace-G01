@@ -1,9 +1,12 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ListingFormComponent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.forms</a> &gt; <span class="el_source">ListingFormComponent.java</span></div><h1>ListingFormComponent.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.forms;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ListingFormComponent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">HKUST Marketplace</a> &gt; <a href="index.source.html" class="el_package">com.hkust.marketplace.forms</a> &gt; <span class="el_source">ListingFormComponent.java</span></div><h1>ListingFormComponent.java</h1><pre class="source lang-java linenums">package com.hkust.marketplace.forms;
 
 import com.hkust.marketplace.models.Category;
 import com.hkust.marketplace.models.Condition;
+import com.hkust.marketplace.models.LendListing;
+import com.hkust.marketplace.models.Listing;
 import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.Location;
+import com.hkust.marketplace.models.SaleListing;
 import com.hkust.marketplace.models.Seller;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -23,6 +26,8 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +37,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * A standalone, reusable create-listing form.
+ * A standalone, reusable create/edit listing form.
  *
  * &lt;p&gt;The component owns a {@link ListingFormState} and exposes only neutral hooks
  * ({@link #getView()}, {@link #validate()}, {@link #setOnSubmit(Consumer)}), so a future
@@ -43,359 +48,470 @@ import java.util.function.Supplier;
 public class ListingFormComponent {
 
     private final Supplier&lt;Seller&gt; sellerSupplier;
-<span class="nc" id="L46">    private final ListingFormState state = new ListingFormState();</span>
-<span class="nc" id="L47">    private final VBox root = new VBox(12);</span>
-<span class="nc" id="L48">    private final Map&lt;String, Label&gt; errorLabels = new LinkedHashMap&lt;&gt;();</span>
-<span class="nc" id="L49">    private final Map&lt;String, Node&gt; fieldControls = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L51">    private final ListingFormState state = new ListingFormState();</span>
+<span class="fc" id="L52">    private final VBox root = new VBox(12);</span>
+<span class="fc" id="L53">    private final Label heading = new Label(&quot;Post a new item&quot;);</span>
+<span class="fc" id="L54">    private final Map&lt;String, Label&gt; errorLabels = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L55">    private final Map&lt;String, Node&gt; fieldControls = new HashMap&lt;&gt;();</span>
 
-<span class="nc" id="L51">    private final ComboBox&lt;String&gt; typeCombo =</span>
-<span class="nc" id="L52">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(&quot;Sell&quot;, &quot;Lend&quot;, &quot;Give Away&quot;));</span>
-<span class="nc" id="L53">    private final TextField nameField = new TextField();</span>
-<span class="nc" id="L54">    private final ComboBox&lt;Category&gt; categoryCombo =</span>
-<span class="nc" id="L55">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(Category.values()));</span>
-<span class="nc" id="L56">    private final ComboBox&lt;Condition&gt; conditionCombo =</span>
-<span class="nc" id="L57">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(Condition.values()));</span>
-<span class="nc" id="L58">    private final ComboBox&lt;Location&gt; locationCombo =</span>
-<span class="nc" id="L59">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(Location.values()));</span>
-<span class="nc" id="L60">    private final TextArea descriptionArea = new TextArea();</span>
+<span class="fc" id="L57">    private final ComboBox&lt;String&gt; typeCombo =</span>
+<span class="fc" id="L58">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(&quot;Sell&quot;, &quot;Lend&quot;, &quot;Give Away&quot;));</span>
+<span class="fc" id="L59">    private final TextField nameField = new TextField();</span>
+<span class="fc" id="L60">    private final ComboBox&lt;Category&gt; categoryCombo =</span>
+<span class="fc" id="L61">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(Category.values()));</span>
+<span class="fc" id="L62">    private final ComboBox&lt;Condition&gt; conditionCombo =</span>
+<span class="fc" id="L63">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(Condition.values()));</span>
+<span class="fc" id="L64">    private final ComboBox&lt;Location&gt; locationCombo =</span>
+<span class="fc" id="L65">            new ComboBox&lt;&gt;(FXCollections.observableArrayList(Location.values()));</span>
+<span class="fc" id="L66">    private final TextArea descriptionArea = new TextArea();</span>
 
-<span class="nc" id="L62">    private final TextField priceField = new TextField();</span>
-<span class="nc" id="L63">    private final TextField daysField = new TextField();</span>
-<span class="nc" id="L64">    private final TextField hoursField = new TextField();</span>
-<span class="nc" id="L65">    private final TextField secondsField = new TextField();</span>
+<span class="fc" id="L68">    private final TextField priceField = new TextField();</span>
+<span class="fc" id="L69">    private final TextField daysField = new TextField();</span>
+<span class="fc" id="L70">    private final TextField hoursField = new TextField();</span>
+<span class="fc" id="L71">    private final TextField minutesField = new TextField();</span>
+<span class="fc" id="L72">    private final TextField secondsField = new TextField();</span>
 
-<span class="nc" id="L67">    private final HBox priceRow = new HBox(8);</span>
-<span class="nc" id="L68">    private final HBox durationRow = new HBox(8);</span>
-<span class="nc" id="L69">    private final VBox photoArea = new VBox(8);</span>
-<span class="nc" id="L70">    private final HBox thumbnailStrip = new HBox(8);</span>
-<span class="nc" id="L71">    private final Button addPhotosButton = new Button(&quot;Add photos&quot;);</span>
-<span class="nc" id="L72">    private final Label photoHint = new Label();</span>
+<span class="fc" id="L74">    private final HBox priceRow = new HBox(8);</span>
+<span class="fc" id="L75">    private final HBox durationRow = new HBox(8);</span>
+<span class="fc" id="L76">    private final VBox durationSection = new VBox(6);</span>
+<span class="fc" id="L77">    private final VBox photoArea = new VBox(8);</span>
+<span class="fc" id="L78">    private final HBox thumbnailStrip = new HBox(8);</span>
+<span class="fc" id="L79">    private final Button addPhotosButton = new Button(&quot;Add photos&quot;);</span>
+<span class="fc" id="L80">    private final Label photoHint = new Label();</span>
 
-<span class="nc" id="L74">    private final Button submitButton = new Button(&quot;Submit for Review&quot;);</span>
-<span class="nc" id="L75">    private final Button cancelButton = new Button(&quot;Cancel&quot;);</span>
+<span class="fc" id="L82">    private final Button submitButton = new Button(&quot;Submit for Review&quot;);</span>
+<span class="fc" id="L83">    private final Button cancelButton = new Button(&quot;Cancel&quot;);</span>
 
     private Consumer&lt;ListingFormState&gt; onSubmit;
     private Runnable onCancel;
 
     /** Creates the form; the seller is read when the form is submitted. */
-<span class="nc" id="L81">    public ListingFormComponent(Supplier&lt;Seller&gt; sellerSupplier, Consumer&lt;ListingFormState&gt; onSubmit) {</span>
-<span class="nc" id="L82">        this.sellerSupplier = sellerSupplier;</span>
-<span class="nc" id="L83">        this.onSubmit = onSubmit;</span>
-<span class="nc" id="L84">        buildView();</span>
-<span class="nc" id="L85">        bindControls();</span>
-<span class="nc" id="L86">        updateTypeFields();</span>
-<span class="nc" id="L87">    }</span>
+<span class="fc" id="L89">    public ListingFormComponent(Supplier&lt;Seller&gt; sellerSupplier, Consumer&lt;ListingFormState&gt; onSubmit) {</span>
+<span class="fc" id="L90">        this.sellerSupplier = sellerSupplier;</span>
+<span class="fc" id="L91">        this.onSubmit = onSubmit;</span>
+<span class="fc" id="L92">        buildView();</span>
+<span class="fc" id="L93">        bindControls();</span>
+<span class="fc" id="L94">        updateTypeFields();</span>
+<span class="fc" id="L95">    }</span>
 
     /** The root node, placeable in any Pane. */
     public Node getView() {
-<span class="nc" id="L91">        return root;</span>
+<span class="fc" id="L99">        return root;</span>
     }
 
     /** The state this component is editing (used by the submit pipeline). */
     public ListingFormState getState() {
-<span class="nc" id="L96">        return state;</span>
+<span class="nc" id="L104">        return state;</span>
     }
 
     /** Validates against the supplied seller. */
     public Map&lt;String, String&gt; validate() {
-<span class="nc" id="L101">        return state.validate(sellerSupplier.get());</span>
+<span class="nc" id="L109">        return state.validate(sellerSupplier.get());</span>
     }
 
     /** Sets what runs when the form is submitted. */
     public void setOnSubmit(Consumer&lt;ListingFormState&gt; onSubmit) {
-<span class="nc" id="L106">        this.onSubmit = onSubmit;</span>
-<span class="nc" id="L107">    }</span>
+<span class="nc" id="L114">        this.onSubmit = onSubmit;</span>
+<span class="nc" id="L115">    }</span>
 
     /** Lets the admin-on-behalf flow label the button for its own outcome (saved as Live). */
     public void setSubmitLabel(String label) {
-<span class="nc" id="L111">        submitButton.setText(label);</span>
-<span class="nc" id="L112">    }</span>
+<span class="fc" id="L119">        submitButton.setText(label);</span>
+<span class="fc" id="L120">    }</span>
+
+    /**
+     * Fills every control from an existing listing so it can be edited. The listing type is
+     * locked, and photos already saved with the listing are shown as read-only thumbnails.
+     *
+     * @param listing the listing being edited
+     */
+    public void prefillFrom(Listing listing) {
+<span class="nc" id="L129">        state.loadFrom(listing);</span>
+
+<span class="nc" id="L131">        typeCombo.setValue(typeLabel(listing.getType()));</span>
+<span class="nc" id="L132">        nameField.setText(state.getTitle());</span>
+<span class="nc" id="L133">        descriptionArea.setText(state.getDescription());</span>
+<span class="nc" id="L134">        categoryCombo.setValue(state.getCategory());</span>
+<span class="nc" id="L135">        conditionCombo.setValue(state.getCondition());</span>
+<span class="nc" id="L136">        locationCombo.setValue(state.getMeetupLocation());</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (listing instanceof SaleListing) {</span>
+<span class="nc" id="L138">            priceField.setText(state.getRawPrice());</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        } else if (listing instanceof LendListing) {</span>
+<span class="nc" id="L140">            daysField.setText(state.getRawDurationDays());</span>
+<span class="nc" id="L141">            hoursField.setText(state.getRawDurationHours());</span>
+<span class="nc" id="L142">            minutesField.setText(state.getRawDurationMinutes());</span>
+<span class="nc" id="L143">            secondsField.setText(state.getRawDurationSeconds());</span>
+        }
+
+<span class="nc" id="L146">        updateTypeFields();</span>
+<span class="nc" id="L147">        typeCombo.setDisable(true);</span>
+<span class="nc" id="L148">        heading.setText(&quot;Edit item&quot;);</span>
+<span class="nc" id="L149">        setSubmitLabel(&quot;Save and resubmit&quot;);</span>
+<span class="nc" id="L150">        rebuildThumbnails();</span>
+<span class="nc" id="L151">    }</span>
 
     /** Renders a field-key to message map into the per-field error labels. */
     public void showErrors(Map&lt;String, String&gt; errors) {
-<span class="nc" id="L116">        clearErrors();</span>
-<span class="nc" id="L117">        errors.forEach((key, message) -&gt; {</span>
-<span class="nc" id="L118">            Label label = errorLabels.get(key);</span>
-<span class="nc bnc" id="L119" title="All 2 branches missed.">            if (label != null) {</span>
-<span class="nc" id="L120">                label.setText(message);</span>
-<span class="nc" id="L121">                label.setVisible(true);</span>
-<span class="nc" id="L122">                label.setManaged(true);</span>
+<span class="fc" id="L155">        clearErrors();</span>
+<span class="fc" id="L156">        errors.forEach((key, message) -&gt; {</span>
+<span class="fc" id="L157">            Label label = errorLabels.get(key);</span>
+<span class="pc bpc" id="L158" title="1 of 2 branches missed.">            if (label != null) {</span>
+<span class="fc" id="L159">                label.setText(message);</span>
+<span class="fc" id="L160">                label.setVisible(true);</span>
+<span class="fc" id="L161">                label.setManaged(true);</span>
             }
-<span class="nc" id="L124">            Node control = fieldControls.get(key);</span>
-<span class="nc bnc" id="L125" title="All 2 branches missed.">            if (control != null) {</span>
-<span class="nc" id="L126">                control.getStyleClass().add(&quot;input-error&quot;);</span>
+<span class="fc" id="L163">            Node control = fieldControls.get(key);</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">            if (control != null) {</span>
+<span class="fc" id="L165">                control.getStyleClass().add(&quot;input-error&quot;);</span>
             }
-<span class="nc" id="L128">        });</span>
-<span class="nc" id="L129">    }</span>
+<span class="fc" id="L167">        });</span>
+<span class="fc" id="L168">    }</span>
 
     /** Clears every error label without touching any input value. */
     public void clearErrors() {
-<span class="nc" id="L133">        errorLabels.values().forEach(label -&gt; {</span>
-<span class="nc" id="L134">            label.setText(&quot;&quot;);</span>
-<span class="nc" id="L135">            label.setVisible(false);</span>
-<span class="nc" id="L136">            label.setManaged(false);</span>
-<span class="nc" id="L137">        });</span>
-<span class="nc" id="L138">        fieldControls.values().forEach(control -&gt; control.getStyleClass().remove(&quot;input-error&quot;));</span>
-<span class="nc" id="L139">    }</span>
+<span class="fc" id="L172">        errorLabels.values().forEach(label -&gt; {</span>
+<span class="fc" id="L173">            label.setText(&quot;&quot;);</span>
+<span class="fc" id="L174">            label.setVisible(false);</span>
+<span class="fc" id="L175">            label.setManaged(false);</span>
+<span class="fc" id="L176">        });</span>
+<span class="fc" id="L177">        fieldControls.values().forEach(control -&gt; control.getStyleClass().remove(&quot;input-error&quot;));</span>
+<span class="fc" id="L178">    }</span>
 
     /** Clears only one field's error, leaving its typed value intact. */
     private void clearError(String key) {
-<span class="nc" id="L143">        Label label = errorLabels.get(key);</span>
-<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (label != null) {</span>
-<span class="nc" id="L145">            label.setText(&quot;&quot;);</span>
-<span class="nc" id="L146">            label.setVisible(false);</span>
-<span class="nc" id="L147">            label.setManaged(false);</span>
+<span class="fc" id="L182">        Label label = errorLabels.get(key);</span>
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">        if (label != null) {</span>
+<span class="fc" id="L184">            label.setText(&quot;&quot;);</span>
+<span class="fc" id="L185">            label.setVisible(false);</span>
+<span class="fc" id="L186">            label.setManaged(false);</span>
         }
-<span class="nc" id="L149">        Node control = fieldControls.get(key);</span>
-<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (control != null) {</span>
-<span class="nc" id="L151">            control.getStyleClass().remove(&quot;input-error&quot;);</span>
+<span class="fc" id="L188">        Node control = fieldControls.get(key);</span>
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">        if (control != null) {</span>
+<span class="fc" id="L190">            control.getStyleClass().remove(&quot;input-error&quot;);</span>
         }
-<span class="nc" id="L153">    }</span>
+<span class="fc" id="L192">    }</span>
 
     /** Sets what runs when the form is cancelled. */
     public void setOnCancel(Runnable onCancel) {
-<span class="nc" id="L157">        this.onCancel = onCancel;</span>
-<span class="nc" id="L158">    }</span>
+<span class="fc" id="L196">        this.onCancel = onCancel;</span>
+<span class="fc" id="L197">    }</span>
 
     /** The photo area, filled by the photo chooser step. */
     protected VBox getPhotoArea() {
-<span class="nc" id="L162">        return photoArea;</span>
+<span class="nc" id="L201">        return photoArea;</span>
     }
 
     protected Button getCancelButton() {
-<span class="nc" id="L166">        return cancelButton;</span>
+<span class="nc" id="L205">        return cancelButton;</span>
     }
 
     protected Button getSubmitButton() {
-<span class="nc" id="L170">        return submitButton;</span>
+<span class="nc" id="L209">        return submitButton;</span>
     }
 
     // --- Construction ---------------------------------------------------------------
 
     private void buildView() {
-<span class="nc" id="L176">        root.getStyleClass().add(&quot;card&quot;);</span>
-<span class="nc" id="L177">        root.setPadding(new Insets(20));</span>
-<span class="nc" id="L178">        root.setMaxWidth(560);</span>
+<span class="fc" id="L215">        root.getStyleClass().add(&quot;card&quot;);</span>
+<span class="fc" id="L216">        root.setPadding(new Insets(20));</span>
+<span class="fc" id="L217">        root.setMaxWidth(560);</span>
 
-<span class="nc" id="L180">        Label heading = new Label(&quot;Post a new item&quot;);</span>
-<span class="nc" id="L181">        heading.getStyleClass().add(&quot;section-title&quot;);</span>
+<span class="fc" id="L219">        heading.getStyleClass().add(&quot;section-title&quot;);</span>
 
-<span class="nc" id="L183">        typeCombo.setPromptText(&quot;Listing type *&quot;);</span>
-<span class="nc" id="L184">        typeCombo.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="fc" id="L221">        typeCombo.setPromptText(&quot;Listing type *&quot;);</span>
+<span class="fc" id="L222">        typeCombo.setMaxWidth(Double.MAX_VALUE);</span>
 
-<span class="nc" id="L186">        nameField.setPromptText(&quot;Item name *&quot;);</span>
-<span class="nc" id="L187">        categoryCombo.setPromptText(&quot;Category *&quot;);</span>
-<span class="nc" id="L188">        categoryCombo.setMaxWidth(Double.MAX_VALUE);</span>
-<span class="nc" id="L189">        conditionCombo.setPromptText(&quot;Condition *&quot;);</span>
-<span class="nc" id="L190">        conditionCombo.setMaxWidth(Double.MAX_VALUE);</span>
-<span class="nc" id="L191">        locationCombo.setPromptText(&quot;Meet-up location *&quot;);</span>
-<span class="nc" id="L192">        locationCombo.setMaxWidth(Double.MAX_VALUE);</span>
-<span class="nc" id="L193">        descriptionArea.setPromptText(&quot;Description&quot;);</span>
-<span class="nc" id="L194">        descriptionArea.setPrefRowCount(3);</span>
+<span class="fc" id="L224">        nameField.setPromptText(&quot;Item name *&quot;);</span>
+<span class="fc" id="L225">        categoryCombo.setPromptText(&quot;Category *&quot;);</span>
+<span class="fc" id="L226">        categoryCombo.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="fc" id="L227">        conditionCombo.setPromptText(&quot;Condition *&quot;);</span>
+<span class="fc" id="L228">        conditionCombo.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="fc" id="L229">        locationCombo.setPromptText(&quot;Meet-up location *&quot;);</span>
+<span class="fc" id="L230">        locationCombo.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="fc" id="L231">        descriptionArea.setPromptText(&quot;Description&quot;);</span>
+<span class="fc" id="L232">        descriptionArea.setPrefRowCount(3);</span>
 
-<span class="nc" id="L196">        priceField.setPromptText(&quot;Price (HK$)&quot;);</span>
-<span class="nc" id="L197">        priceField.setMaxWidth(Double.MAX_VALUE);</span>
-<span class="nc" id="L198">        priceRow.getChildren().add(priceField);</span>
-<span class="nc" id="L199">        HBox.setHgrow(priceField, Priority.ALWAYS);</span>
+<span class="fc" id="L234">        priceField.setPromptText(&quot;Price (HK$)&quot;);</span>
+<span class="fc" id="L235">        priceField.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="fc" id="L236">        priceRow.getChildren().add(priceField);</span>
+<span class="fc" id="L237">        HBox.setHgrow(priceField, Priority.ALWAYS);</span>
 
-<span class="nc" id="L201">        daysField.setPromptText(&quot;Days&quot;);</span>
-<span class="nc" id="L202">        hoursField.setPromptText(&quot;Hours&quot;);</span>
-<span class="nc" id="L203">        secondsField.setPromptText(&quot;Seconds (min 5)&quot;);</span>
-<span class="nc bnc" id="L204" title="All 2 branches missed.">        for (TextField field : new TextField[]{daysField, hoursField, secondsField}) {</span>
-<span class="nc" id="L205">            field.setMaxWidth(Double.MAX_VALUE);</span>
-<span class="nc" id="L206">            HBox.setHgrow(field, Priority.ALWAYS);</span>
+<span class="fc" id="L239">        daysField.setPromptText(&quot;0&quot;);</span>
+<span class="fc" id="L240">        hoursField.setPromptText(&quot;0&quot;);</span>
+<span class="fc" id="L241">        minutesField.setPromptText(&quot;0&quot;);</span>
+<span class="fc" id="L242">        secondsField.setPromptText(&quot;0&quot;);</span>
+<span class="fc bfc" id="L243" title="All 2 branches covered.">        for (TextField field : new TextField[]{daysField, hoursField, minutesField, secondsField}) {</span>
+<span class="fc" id="L244">            field.setMaxWidth(Double.MAX_VALUE);</span>
         }
-<span class="nc" id="L208">        durationRow.getChildren().addAll(daysField, hoursField, secondsField);</span>
+<span class="fc" id="L246">        durationRow.getChildren().addAll(</span>
+<span class="fc" id="L247">                durationField(&quot;Days&quot;, daysField),</span>
+<span class="fc" id="L248">                durationField(&quot;Hours&quot;, hoursField),</span>
+<span class="fc" id="L249">                durationField(&quot;Minutes&quot;, minutesField),</span>
+<span class="fc" id="L250">                durationField(&quot;Seconds&quot;, secondsField));</span>
+<span class="fc" id="L251">        Label durationHint = new Label(</span>
+                &quot;Enter days / hours / minutes / seconds (minimum total 5 seconds).&quot;);
+<span class="fc" id="L253">        durationHint.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 12px;&quot;);</span>
+<span class="fc" id="L254">        durationSection.getChildren().addAll(durationRow, durationHint);</span>
 
-<span class="nc" id="L210">        setupPhotoChooser();</span>
+<span class="fc" id="L256">        setupPhotoChooser();</span>
 
-<span class="nc" id="L212">        submitButton.getStyleClass().add(&quot;btn-gold&quot;);</span>
-<span class="nc" id="L213">        submitButton.setOnAction(event -&gt; {</span>
-<span class="nc bnc" id="L214" title="All 2 branches missed.">            if (onSubmit != null) {</span>
-<span class="nc" id="L215">                onSubmit.accept(state);</span>
+<span class="fc" id="L258">        submitButton.getStyleClass().add(&quot;btn-gold&quot;);</span>
+<span class="fc" id="L259">        submitButton.setOnAction(event -&gt; {</span>
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">            if (onSubmit != null) {</span>
+<span class="fc" id="L261">                onSubmit.accept(state);</span>
             }
-<span class="nc" id="L217">        });</span>
-<span class="nc" id="L218">        cancelButton.getStyleClass().add(&quot;btn-outline&quot;);</span>
-<span class="nc" id="L219">        cancelButton.setOnAction(event -&gt; {</span>
-<span class="nc bnc" id="L220" title="All 2 branches missed.">            if (state.isDirty()) {</span>
-<span class="nc" id="L221">                Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION,</span>
+<span class="fc" id="L263">        });</span>
+<span class="fc" id="L264">        cancelButton.getStyleClass().add(&quot;btn-outline&quot;);</span>
+<span class="fc" id="L265">        cancelButton.setOnAction(event -&gt; {</span>
+<span class="pc bpc" id="L266" title="1 of 2 branches missed.">            if (state.isDirty()) {</span>
+<span class="fc" id="L267">                Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION,</span>
                         &quot;Discard your unsaved changes and return to My Listings?&quot;);
-<span class="nc" id="L223">                confirmation.setHeaderText(&quot;Unsaved changes&quot;);</span>
-<span class="nc bnc" id="L224" title="All 2 branches missed.">                if (confirmation.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {</span>
-<span class="nc" id="L225">                    return;</span>
+<span class="fc" id="L269">                confirmation.setHeaderText(&quot;Unsaved changes&quot;);</span>
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">                if (confirmation.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {</span>
+<span class="nc" id="L271">                    return;</span>
                 }
             }
-<span class="nc bnc" id="L228" title="All 2 branches missed.">            if (onCancel != null) {</span>
-<span class="nc" id="L229">                onCancel.run();</span>
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">            if (onCancel != null) {</span>
+<span class="fc" id="L275">                onCancel.run();</span>
             }
-<span class="nc" id="L231">        });</span>
+<span class="fc" id="L277">        });</span>
 
-<span class="nc" id="L233">        HBox actions = new HBox(10, submitButton, cancelButton);</span>
+<span class="fc" id="L279">        HBox actions = new HBox(10, submitButton, cancelButton);</span>
 
-<span class="nc" id="L235">        root.getChildren().addAll(</span>
+<span class="fc" id="L281">        root.getChildren().addAll(</span>
                 heading,
-<span class="nc" id="L237">                field(&quot;Listing Type *&quot;, typeCombo, &quot;type&quot;),</span>
-<span class="nc" id="L238">                field(&quot;Item Name *&quot;, nameField, &quot;title&quot;),</span>
-<span class="nc" id="L239">                field(&quot;Category *&quot;, categoryCombo, &quot;category&quot;),</span>
-<span class="nc" id="L240">                field(&quot;Condition *&quot;, conditionCombo, &quot;condition&quot;),</span>
-<span class="nc" id="L241">                field(&quot;Meet-up Location *&quot;, locationCombo, &quot;location&quot;),</span>
-<span class="nc" id="L242">                field(&quot;Description *&quot;, descriptionArea, &quot;description&quot;),</span>
-<span class="nc" id="L243">                field(&quot;Price (Sell only)&quot;, priceRow, &quot;price&quot;),</span>
-<span class="nc" id="L244">                field(&quot;Lending Duration (Lend only)&quot;, durationRow, &quot;duration&quot;),</span>
+<span class="fc" id="L283">                field(&quot;Listing Type *&quot;, typeCombo, &quot;type&quot;),</span>
+<span class="fc" id="L284">                field(&quot;Item Name *&quot;, nameField, &quot;title&quot;),</span>
+<span class="fc" id="L285">                field(&quot;Category *&quot;, categoryCombo, &quot;category&quot;),</span>
+<span class="fc" id="L286">                field(&quot;Condition *&quot;, conditionCombo, &quot;condition&quot;),</span>
+<span class="fc" id="L287">                field(&quot;Meet-up Location *&quot;, locationCombo, &quot;location&quot;),</span>
+<span class="fc" id="L288">                field(&quot;Description *&quot;, descriptionArea, &quot;description&quot;),</span>
+<span class="fc" id="L289">                field(&quot;Price (Sell only)&quot;, priceRow, &quot;price&quot;),</span>
+<span class="fc" id="L290">                field(&quot;Lending Duration (Lend only: days, hours, minutes, seconds)&quot;, durationSection, &quot;duration&quot;),</span>
                 photoArea,
                 actions);
-<span class="nc" id="L247">    }</span>
+<span class="fc" id="L293">    }</span>
+
+    private static VBox durationField(String unit, TextField field) {
+<span class="fc" id="L296">        Label unitLabel = new Label(unit);</span>
+<span class="fc" id="L297">        unitLabel.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 12px;&quot;);</span>
+<span class="fc" id="L298">        VBox box = new VBox(4, unitLabel, field);</span>
+<span class="fc" id="L299">        box.setMaxWidth(Double.MAX_VALUE);</span>
+<span class="fc" id="L300">        HBox.setHgrow(box, Priority.ALWAYS);</span>
+<span class="fc" id="L301">        return box;</span>
+    }
 
     /** Wraps a control with a caption and an (initially hidden) error label. */
     private VBox field(String caption, Node control, String errorKey) {
-<span class="nc" id="L251">        Label captionLabel = new Label(caption);</span>
-<span class="nc" id="L252">        VBox box = new VBox(4, captionLabel, control);</span>
-<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (errorKey != null) {</span>
-<span class="nc" id="L254">            Label errorLabel = new Label();</span>
-<span class="nc" id="L255">            errorLabel.getStyleClass().add(&quot;input-error-label&quot;);</span>
-<span class="nc" id="L256">            errorLabel.setVisible(false);</span>
-<span class="nc" id="L257">            errorLabel.setManaged(false);</span>
-<span class="nc" id="L258">            errorLabels.put(errorKey, errorLabel);</span>
-<span class="nc" id="L259">            fieldControls.put(errorKey, control);</span>
-<span class="nc" id="L260">            box.getChildren().add(errorLabel);</span>
+<span class="fc" id="L306">        Label captionLabel = new Label(caption);</span>
+<span class="fc" id="L307">        VBox box = new VBox(4, captionLabel, control);</span>
+<span class="pc bpc" id="L308" title="1 of 2 branches missed.">        if (errorKey != null) {</span>
+<span class="fc" id="L309">            Label errorLabel = new Label();</span>
+<span class="fc" id="L310">            errorLabel.getStyleClass().add(&quot;input-error-label&quot;);</span>
+<span class="fc" id="L311">            errorLabel.setVisible(false);</span>
+<span class="fc" id="L312">            errorLabel.setManaged(false);</span>
+<span class="fc" id="L313">            errorLabels.put(errorKey, errorLabel);</span>
+<span class="fc" id="L314">            fieldControls.put(errorKey, control);</span>
+<span class="fc" id="L315">            box.getChildren().add(errorLabel);</span>
         }
-<span class="nc" id="L262">        return box;</span>
+<span class="fc" id="L317">        return box;</span>
     }
 
     private void setupPhotoChooser() {
-<span class="nc" id="L266">        addPhotosButton.getStyleClass().add(&quot;btn-outline&quot;);</span>
-<span class="nc" id="L267">        addPhotosButton.setOnAction(event -&gt; {</span>
-<span class="nc" id="L268">            FileChooser chooser = new FileChooser();</span>
-<span class="nc" id="L269">            chooser.setTitle(&quot;Choose photos (JPEG/PNG, up to 6)&quot;);</span>
-<span class="nc" id="L270">            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(</span>
+<span class="fc" id="L321">        addPhotosButton.getStyleClass().add(&quot;btn-outline&quot;);</span>
+<span class="fc" id="L322">        addPhotosButton.setOnAction(event -&gt; {</span>
+<span class="nc" id="L323">            FileChooser chooser = new FileChooser();</span>
+<span class="nc" id="L324">            chooser.setTitle(&quot;Choose photos (JPEG/PNG, up to 6)&quot;);</span>
+<span class="nc" id="L325">            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(</span>
                     &quot;Images&quot;, &quot;*.jpg&quot;, &quot;*.jpeg&quot;, &quot;*.png&quot;));
-<span class="nc bnc" id="L272" title="All 2 branches missed.">            var window = root.getScene() == null ? null : root.getScene().getWindow();</span>
-<span class="nc" id="L273">            List&lt;File&gt; files = chooser.showOpenMultipleDialog(window);</span>
-<span class="nc bnc" id="L274" title="All 2 branches missed.">            if (files == null) {</span>
-<span class="nc" id="L275">                return;</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">            var window = root.getScene() == null ? null : root.getScene().getWindow();</span>
+<span class="nc" id="L328">            List&lt;File&gt; files = chooser.showOpenMultipleDialog(window);</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">            if (files == null) {</span>
+<span class="nc" id="L330">                return;</span>
             }
-<span class="nc bnc" id="L277" title="All 2 branches missed.">            for (File file : files) {</span>
-<span class="nc bnc" id="L278" title="All 2 branches missed.">                if (!state.canAddMorePhotos()) {</span>
-<span class="nc" id="L279">                    break;</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            for (File file : files) {</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">                if (!state.canAddMorePhotos()) {</span>
+<span class="nc" id="L334">                    break;</span>
                 }
-<span class="nc bnc" id="L281" title="All 2 branches missed.">                if (isSupportedImage(file.getName())) {</span>
-<span class="nc" id="L282">                    state.addChosenPhoto(new PhotoDraft(file.toPath(), file.getName()));</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">                if (isSupportedImage(file.getName())) {</span>
+<span class="nc" id="L337">                    state.addChosenPhoto(new PhotoDraft(file.toPath(), file.getName()));</span>
                 }
-<span class="nc" id="L284">            }</span>
-<span class="nc" id="L285">            rebuildThumbnails();</span>
-<span class="nc" id="L286">        });</span>
+<span class="nc" id="L339">            }</span>
+<span class="nc" id="L340">            rebuildThumbnails();</span>
+<span class="nc" id="L341">        });</span>
 
-<span class="nc" id="L288">        photoArea.getChildren().addAll(</span>
+<span class="fc" id="L343">        photoArea.getChildren().addAll(</span>
                 new Label(&quot;Photos (up to 6, JPEG/PNG)&quot;),
                 addPhotosButton,
                 photoHint,
                 thumbnailStrip);
-<span class="nc" id="L293">        rebuildThumbnails();</span>
-<span class="nc" id="L294">    }</span>
+<span class="fc" id="L348">        rebuildThumbnails();</span>
+<span class="fc" id="L349">    }</span>
 
     private static boolean isSupportedImage(String filename) {
-<span class="nc" id="L297">        int dot = filename.lastIndexOf('.');</span>
-<span class="nc bnc" id="L298" title="All 2 branches missed.">        if (dot &lt; 0) {</span>
-<span class="nc" id="L299">            return false;</span>
+<span class="nc" id="L352">        int dot = filename.lastIndexOf('.');</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        if (dot &lt; 0) {</span>
+<span class="nc" id="L354">            return false;</span>
         }
-<span class="nc" id="L301">        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);</span>
-<span class="nc bnc" id="L302" title="All 6 branches missed.">        return extension.equals(&quot;jpg&quot;) || extension.equals(&quot;jpeg&quot;) || extension.equals(&quot;png&quot;);</span>
+<span class="nc" id="L356">        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);</span>
+<span class="nc bnc" id="L357" title="All 6 branches missed.">        return extension.equals(&quot;jpg&quot;) || extension.equals(&quot;jpeg&quot;) || extension.equals(&quot;png&quot;);</span>
     }
 
     private void rebuildThumbnails() {
-<span class="nc" id="L306">        thumbnailStrip.getChildren().clear();</span>
-<span class="nc bnc" id="L307" title="All 2 branches missed.">        for (PhotoDraft draft : state.getChosenPhotos()) {</span>
-<span class="nc" id="L308">            VBox thumbnail = new VBox(4);</span>
+<span class="fc" id="L361">        thumbnailStrip.getChildren().clear();</span>
+<span class="pc bpc" id="L362" title="1 of 2 branches missed.">        for (String path : state.getPhotoPaths()) {</span>
+<span class="nc" id="L363">            thumbnailStrip.getChildren().add(storedPhotoThumbnail(path));</span>
+<span class="nc" id="L364">        }</span>
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">        for (PhotoDraft draft : state.getChosenPhotos()) {</span>
+<span class="nc" id="L366">            VBox thumbnail = new VBox(4);</span>
             try {
-<span class="nc" id="L310">                Image image = new Image(draft.source().toUri().toString(), 80, 80, true, true);</span>
-<span class="nc" id="L311">                ImageView view = new ImageView(image);</span>
-<span class="nc" id="L312">                view.setFitWidth(80);</span>
-<span class="nc" id="L313">                view.setFitHeight(80);</span>
-<span class="nc" id="L314">                view.setPreserveRatio(true);</span>
-<span class="nc" id="L315">                thumbnail.getChildren().add(view);</span>
-<span class="nc" id="L316">            } catch (RuntimeException ex) {</span>
-<span class="nc" id="L317">                thumbnail.getChildren().add(new Label(&quot;Preview unavailable&quot;));</span>
-<span class="nc" id="L318">            }</span>
-<span class="nc" id="L319">            Button remove = new Button(&quot;Remove&quot;);</span>
-<span class="nc" id="L320">            remove.getStyleClass().addAll(&quot;btn-danger&quot;, &quot;btn-sm&quot;);</span>
-<span class="nc" id="L321">            PhotoDraft target = draft;</span>
-<span class="nc" id="L322">            remove.setOnAction(event -&gt; {</span>
-<span class="nc" id="L323">                state.removeChosenPhoto(target);</span>
-<span class="nc" id="L324">                rebuildThumbnails();</span>
-<span class="nc" id="L325">            });</span>
-<span class="nc" id="L326">            thumbnail.getChildren().add(remove);</span>
-<span class="nc" id="L327">            thumbnailStrip.getChildren().add(thumbnail);</span>
-<span class="nc" id="L328">        }</span>
-<span class="nc bnc" id="L329" title="All 2 branches missed.">        addPhotosButton.setDisable(!state.canAddMorePhotos());</span>
-<span class="nc bnc" id="L330" title="All 2 branches missed.">        photoHint.setText(state.canAddMorePhotos()</span>
-<span class="nc" id="L331">                ? &quot;&quot;</span>
-<span class="nc" id="L332">                : &quot;Maximum of 6 photos reached. Remove one to add another.&quot;);</span>
-<span class="nc" id="L333">    }</span>
+<span class="nc" id="L368">                Image image = new Image(draft.source().toUri().toString(), 80, 80, true, true);</span>
+<span class="nc" id="L369">                ImageView view = new ImageView(image);</span>
+<span class="nc" id="L370">                view.setFitWidth(80);</span>
+<span class="nc" id="L371">                view.setFitHeight(80);</span>
+<span class="nc" id="L372">                view.setPreserveRatio(true);</span>
+<span class="nc" id="L373">                thumbnail.getChildren().add(view);</span>
+<span class="nc" id="L374">            } catch (RuntimeException ex) {</span>
+<span class="nc" id="L375">                thumbnail.getChildren().add(new Label(&quot;Preview unavailable&quot;));</span>
+<span class="nc" id="L376">            }</span>
+<span class="nc" id="L377">            Button remove = new Button(&quot;Remove&quot;);</span>
+<span class="nc" id="L378">            remove.getStyleClass().addAll(&quot;btn-danger&quot;, &quot;btn-sm&quot;);</span>
+<span class="nc" id="L379">            PhotoDraft target = draft;</span>
+<span class="nc" id="L380">            remove.setOnAction(event -&gt; {</span>
+<span class="nc" id="L381">                state.removeChosenPhoto(target);</span>
+<span class="nc" id="L382">                rebuildThumbnails();</span>
+<span class="nc" id="L383">            });</span>
+<span class="nc" id="L384">            thumbnail.getChildren().add(remove);</span>
+<span class="nc" id="L385">            thumbnailStrip.getChildren().add(thumbnail);</span>
+<span class="nc" id="L386">        }</span>
+<span class="pc bpc" id="L387" title="1 of 2 branches missed.">        addPhotosButton.setDisable(!state.canAddMorePhotos());</span>
+<span class="fc" id="L388">        photoHint.setText(photoHintText());</span>
+<span class="fc" id="L389">    }</span>
+
+    private String photoHintText() {
+<span class="pc bpc" id="L392" title="1 of 2 branches missed.">        if (state.canAddMorePhotos()) {</span>
+<span class="fc" id="L393">            return &quot;&quot;;</span>
+        }
+<span class="nc bnc" id="L395" title="All 2 branches missed.">        if (state.getChosenPhotos().isEmpty()) {</span>
+<span class="nc" id="L396">            return &quot;Maximum of &quot; + ListingFormState.MAX_PHOTOS + &quot; photos reached. &quot;</span>
+                    + &quot;Saved photos cannot be removed here.&quot;;
+        }
+<span class="nc" id="L399">        return &quot;Maximum of &quot; + ListingFormState.MAX_PHOTOS + &quot; photos reached. Remove one to add another.&quot;;</span>
+    }
+
+    private VBox storedPhotoThumbnail(String path) {
+<span class="nc" id="L403">        VBox thumbnail = new VBox(4);</span>
+<span class="nc" id="L404">        thumbnail.getChildren().add(storedPhotoImage(path));</span>
+<span class="nc" id="L405">        Label saved = new Label(&quot;Saved photo&quot;);</span>
+<span class="nc" id="L406">        saved.setStyle(&quot;-fx-text-fill: #5a5a7a; -fx-font-size: 11px;&quot;);</span>
+<span class="nc" id="L407">        thumbnail.getChildren().add(saved);</span>
+<span class="nc" id="L408">        return thumbnail;</span>
+    }
+
+    private Node storedPhotoImage(String path) {
+<span class="nc bnc" id="L412" title="All 4 branches missed.">        if (path != null &amp;&amp; !path.isBlank()) {</span>
+            try {
+<span class="nc" id="L414">                Path file = Path.of(path).toAbsolutePath();</span>
+<span class="nc bnc" id="L415" title="All 2 branches missed.">                if (Files.isRegularFile(file)) {</span>
+<span class="nc" id="L416">                    Image image = new Image(file.toUri().toString(), 80, 80, true, true);</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">                    if (!image.isError()) {</span>
+<span class="nc" id="L418">                        ImageView view = new ImageView(image);</span>
+<span class="nc" id="L419">                        view.setFitWidth(80);</span>
+<span class="nc" id="L420">                        view.setFitHeight(80);</span>
+<span class="nc" id="L421">                        view.setPreserveRatio(true);</span>
+<span class="nc" id="L422">                        return view;</span>
+                    }
+                }
+<span class="nc" id="L425">            } catch (RuntimeException ex) {</span>
+                // The placeholder below covers an unreadable or missing file.
+<span class="nc" id="L427">            }</span>
+        }
+<span class="nc" id="L429">        Label missing = new Label(&quot;Photo unavailable&quot;);</span>
+<span class="nc" id="L430">        missing.setStyle(&quot;-fx-text-fill: #9aa0b0; -fx-font-size: 11px;&quot;);</span>
+<span class="nc" id="L431">        missing.setWrapText(true);</span>
+<span class="nc" id="L432">        missing.setPrefWidth(80);</span>
+<span class="nc" id="L433">        return missing;</span>
+    }
 
     private void bindControls() {
-<span class="nc" id="L336">        typeCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L337">            state.setType(toListingType(value));</span>
-<span class="nc" id="L338">            updateTypeFields();</span>
-<span class="nc" id="L339">            clearError(&quot;type&quot;);</span>
-<span class="nc" id="L340">        });</span>
-<span class="nc" id="L341">        nameField.textProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L342">            state.setTitle(value);</span>
-<span class="nc" id="L343">            clearError(&quot;title&quot;);</span>
-<span class="nc" id="L344">        });</span>
-<span class="nc" id="L345">        descriptionArea.textProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L346">            state.setDescription(value);</span>
-<span class="nc" id="L347">            clearError(&quot;description&quot;);</span>
-<span class="nc" id="L348">        });</span>
-<span class="nc" id="L349">        categoryCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L350">            state.setCategory(value);</span>
-<span class="nc" id="L351">            clearError(&quot;category&quot;);</span>
-<span class="nc" id="L352">        });</span>
-<span class="nc" id="L353">        conditionCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L354">            state.setCondition(value);</span>
-<span class="nc" id="L355">            clearError(&quot;condition&quot;);</span>
-<span class="nc" id="L356">        });</span>
-<span class="nc" id="L357">        locationCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L358">            state.setMeetupLocation(value);</span>
-<span class="nc" id="L359">            clearError(&quot;location&quot;);</span>
-<span class="nc" id="L360">        });</span>
-<span class="nc" id="L361">        priceField.textProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L362">            state.setRawPrice(value);</span>
-<span class="nc" id="L363">            clearError(&quot;price&quot;);</span>
-<span class="nc" id="L364">        });</span>
-<span class="nc" id="L365">        daysField.textProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L366">            state.setRawDurationDays(value);</span>
-<span class="nc" id="L367">            clearError(&quot;duration&quot;);</span>
-<span class="nc" id="L368">        });</span>
-<span class="nc" id="L369">        hoursField.textProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L370">            state.setRawDurationHours(value);</span>
-<span class="nc" id="L371">            clearError(&quot;duration&quot;);</span>
-<span class="nc" id="L372">        });</span>
-<span class="nc" id="L373">        secondsField.textProperty().addListener((obs, old, value) -&gt; {</span>
-<span class="nc" id="L374">            state.setRawDurationSeconds(value);</span>
-<span class="nc" id="L375">            clearError(&quot;duration&quot;);</span>
-<span class="nc" id="L376">        });</span>
-<span class="nc" id="L377">    }</span>
+<span class="fc" id="L437">        typeCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L438">            state.setType(toListingType(value));</span>
+<span class="fc" id="L439">            updateTypeFields();</span>
+<span class="fc" id="L440">            clearError(&quot;type&quot;);</span>
+<span class="fc" id="L441">        });</span>
+<span class="fc" id="L442">        nameField.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L443">            state.setTitle(value);</span>
+<span class="fc" id="L444">            clearError(&quot;title&quot;);</span>
+<span class="fc" id="L445">        });</span>
+<span class="fc" id="L446">        descriptionArea.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L447">            state.setDescription(value);</span>
+<span class="fc" id="L448">            clearError(&quot;description&quot;);</span>
+<span class="fc" id="L449">        });</span>
+<span class="fc" id="L450">        categoryCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L451">            state.setCategory(value);</span>
+<span class="fc" id="L452">            clearError(&quot;category&quot;);</span>
+<span class="fc" id="L453">        });</span>
+<span class="fc" id="L454">        conditionCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L455">            state.setCondition(value);</span>
+<span class="fc" id="L456">            clearError(&quot;condition&quot;);</span>
+<span class="fc" id="L457">        });</span>
+<span class="fc" id="L458">        locationCombo.valueProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L459">            state.setMeetupLocation(value);</span>
+<span class="fc" id="L460">            clearError(&quot;location&quot;);</span>
+<span class="fc" id="L461">        });</span>
+<span class="fc" id="L462">        priceField.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L463">            state.setRawPrice(value);</span>
+<span class="fc" id="L464">            clearError(&quot;price&quot;);</span>
+<span class="fc" id="L465">        });</span>
+<span class="fc" id="L466">        daysField.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="fc" id="L467">            state.setRawDurationDays(value);</span>
+<span class="fc" id="L468">            clearError(&quot;duration&quot;);</span>
+<span class="fc" id="L469">        });</span>
+<span class="fc" id="L470">        hoursField.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="nc" id="L471">            state.setRawDurationHours(value);</span>
+<span class="nc" id="L472">            clearError(&quot;duration&quot;);</span>
+<span class="nc" id="L473">        });</span>
+<span class="fc" id="L474">        minutesField.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="nc" id="L475">            state.setRawDurationMinutes(value);</span>
+<span class="nc" id="L476">            clearError(&quot;duration&quot;);</span>
+<span class="nc" id="L477">        });</span>
+<span class="fc" id="L478">        secondsField.textProperty().addListener((obs, old, value) -&gt; {</span>
+<span class="nc" id="L479">            state.setRawDurationSeconds(value);</span>
+<span class="nc" id="L480">            clearError(&quot;duration&quot;);</span>
+<span class="nc" id="L481">        });</span>
+<span class="fc" id="L482">    }</span>
 
     /** Shows exactly the active type's specific row; never re-creates controls. */
     private void updateTypeFields() {
-<span class="nc" id="L381">        String value = typeCombo.getValue();</span>
-<span class="nc" id="L382">        boolean sell = &quot;Sell&quot;.equals(value);</span>
-<span class="nc" id="L383">        boolean lend = &quot;Lend&quot;.equals(value);</span>
-<span class="nc" id="L384">        priceRow.setVisible(sell);</span>
-<span class="nc" id="L385">        priceRow.setManaged(sell);</span>
-<span class="nc" id="L386">        durationRow.setVisible(lend);</span>
-<span class="nc" id="L387">        durationRow.setManaged(lend);</span>
-<span class="nc" id="L388">    }</span>
+<span class="fc" id="L486">        String value = typeCombo.getValue();</span>
+<span class="fc" id="L487">        boolean sell = &quot;Sell&quot;.equals(value);</span>
+<span class="fc" id="L488">        boolean lend = &quot;Lend&quot;.equals(value);</span>
+<span class="fc" id="L489">        priceRow.setVisible(sell);</span>
+<span class="fc" id="L490">        priceRow.setManaged(sell);</span>
+<span class="fc" id="L491">        durationSection.setVisible(lend);</span>
+<span class="fc" id="L492">        durationSection.setManaged(lend);</span>
+<span class="fc" id="L493">    }</span>
 
     private static ListingType toListingType(String value) {
-<span class="nc bnc" id="L391" title="All 2 branches missed.">        if (value == null) {</span>
-<span class="nc" id="L392">            return null;</span>
+<span class="pc bpc" id="L496" title="1 of 2 branches missed.">        if (value == null) {</span>
+<span class="nc" id="L497">            return null;</span>
         }
-<span class="nc bnc" id="L394" title="All 4 branches missed.">        return switch (value) {</span>
-<span class="nc" id="L395">            case &quot;Sell&quot; -&gt; ListingType.SELL;</span>
-<span class="nc" id="L396">            case &quot;Lend&quot; -&gt; ListingType.LEND;</span>
-<span class="nc" id="L397">            case &quot;Give Away&quot; -&gt; ListingType.GIVEAWAY;</span>
-<span class="nc" id="L398">            default -&gt; null;</span>
+<span class="pc bpc" id="L499" title="1 of 4 branches missed.">        return switch (value) {</span>
+<span class="fc" id="L500">            case &quot;Sell&quot; -&gt; ListingType.SELL;</span>
+<span class="fc" id="L501">            case &quot;Lend&quot; -&gt; ListingType.LEND;</span>
+<span class="fc" id="L502">            case &quot;Give Away&quot; -&gt; ListingType.GIVEAWAY;</span>
+<span class="nc" id="L503">            default -&gt; null;</span>
+        };
+    }
+
+    private static String typeLabel(ListingType type) {
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if (type == null) {</span>
+<span class="nc" id="L509">            return null;</span>
+        }
+<span class="nc bnc" id="L511" title="All 3 branches missed.">        return switch (type) {</span>
+<span class="nc" id="L512">            case SELL -&gt; &quot;Sell&quot;;</span>
+<span class="nc" id="L513">            case LEND -&gt; &quot;Lend&quot;;</span>
+<span class="nc" id="L514">            case GIVEAWAY -&gt; &quot;Give Away&quot;;</span>
         };
     }
 }
