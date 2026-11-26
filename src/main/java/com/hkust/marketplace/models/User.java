@@ -55,6 +55,14 @@ public abstract class User {
      */
     public String getDisplayName() { return deleted ? "deleted user" : fullName; }
 
+    /**
+     * The display name followed by the username, e.g. "Charlie Lee @charlie", so two people
+     * with the same full name can be told apart (used in chats).
+     *
+     * @return the name and username, or "deleted user" after a soft delete
+     */
+    public String getNameWithUsername() { return deleted ? "deleted user" : fullName + " @" + username; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 

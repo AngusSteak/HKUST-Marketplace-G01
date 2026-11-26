@@ -126,8 +126,8 @@ public final class ChatViewBuilder {
         header.getStyleClass().add("card");
         Label title = new Label(thread.getListing().getTitle());
         title.getStyleClass().add("section-title");
-        Label participants = new Label("Buyer: " + thread.getBuyer().getFullName()
-                + "   \u00b7   Seller: " + thread.getSeller().getFullName()
+        Label participants = new Label("Buyer: " + thread.getBuyer().getNameWithUsername()
+                + "   \u00b7   Seller: " + thread.getSeller().getNameWithUsername()
                 + "   \u00b7   " + thread.getListing().getStatus().name().replace('_', ' '));
         participants.getStyleClass().add("subtitle-label");
         header.getChildren().addAll(title, participants);
@@ -148,7 +148,7 @@ public final class ChatViewBuilder {
         bubble.getStyleClass().addAll("chat-bubble", own ? "chat-bubble-own" : "chat-bubble-other");
         bubble.setMaxWidth(520);
 
-        Label sender = new Label(own ? "You" : message.getSender().getFullName());
+        Label sender = new Label(own ? "You" : message.getSender().getNameWithUsername());
         sender.getStyleClass().add("chat-sender");
         Label text = new Label(message.getContent());
         text.setWrapText(true);
@@ -186,7 +186,7 @@ public final class ChatViewBuilder {
         Label listing = new Label(request.getListing().getTitle());
         listing.getStyleClass().add("offer-listing");
 
-        Label meta = new Label((own ? "You" : message.getSender().getFullName())
+        Label meta = new Label((own ? "You" : message.getSender().getNameWithUsername())
                 + " \u00b7 " + message.getSentTime().format(TIME_FORMAT));
         meta.getStyleClass().add("chat-time");
 

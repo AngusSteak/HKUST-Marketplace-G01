@@ -339,7 +339,7 @@ public class SellerDashboardController {
         HBox.setHgrow(info, Priority.ALWAYS);
         Label title = new Label(thread.getListing().getTitle());
         title.setStyle("-fx-font-weight: bold; -fx-font-size: 15px;");
-        Label buyer = new Label("Buyer: " + thread.getBuyer().getFullName());
+        Label buyer = new Label("Buyer: " + thread.getBuyer().getNameWithUsername());
         buyer.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
         List<Message> history = chatService.history(thread);
         String preview = history.isEmpty()

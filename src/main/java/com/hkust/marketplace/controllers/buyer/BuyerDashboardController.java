@@ -634,7 +634,7 @@ public class BuyerDashboardController {
             String preview = last == null ? "No messages yet"
                     : (last.getSenderUsername().equalsIgnoreCase(buyer.getUsername()) ? "You: " : "")
                     + last.getContent();
-            Label detail = muted("with " + thread.getSeller().getDisplayName() + "  \u00b7  " + preview);
+            Label detail = muted("with " + thread.getSeller().getNameWithUsername() + "  \u00b7  " + preview);
             detail.setMaxWidth(700);
             detail.setWrapText(false);
             Label time = new Label(last == null ? "" : last.getSentTime().format(when));
