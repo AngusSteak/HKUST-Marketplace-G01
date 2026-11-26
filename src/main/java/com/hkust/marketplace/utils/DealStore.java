@@ -89,10 +89,14 @@ public class DealStore {
                 .toList();
     }
 
-    /** The buyer's requests still waiting on a response: Pending or Countered (My Deals). */
+    /**
+     * The buyer's requests still waiting on a response (My Deals). Countered ones come first,
+     * since those wait on the buyer; within each group the order is unchanged.
+     */
     public List<DealRequest> openRequestsByBuyer(String username) {
         return requestsByBuyer(username).stream()
                 .filter(r -> r.getStatus() == RequestStatus.PENDING || r.getStatus() == RequestStatus.COUNTERED)
+                .sorted(java.util.Comparator.comparing(r -> r.getStatus() != RequestStatus.COUNTERED))
                 .toList();
     }
 
@@ -112,6 +116,16 @@ public class DealStore {
         Collections.reverse(past);
         past.sort(Comparator.comparing(Deal::getCompletedDate).reversed());
         return List.copyOf(past);
+    }
+
+    /**
+     * The buyer's recently returned loans: Returned or Auto-Returned, most recently finished first
+     * (My Deals "Recently returned"). A loan moved on to Completed is no longer included.
+     */
+    public List<Deal> returnedDealsForBuyer(String username) {
+        return pastDealsForBuyer(username).stream()
+                .filter(d -> d.getStatus() == DealStatus.RETURNED || d.getStatus() == DealStatus.AUTO_RETURNED)
+                .toList();
     }
 
     // ---------- Persistence ----------

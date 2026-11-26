@@ -6,6 +6,7 @@ import com.hkust.marketplace.models.User;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,10 +50,46 @@ class AdminFiltersTest {
     void reviewKeywordMatchesSellerBuyerOrComment() {
         Review review = review("bob", "charlie", 5, "Smooth textbook deal", false, false);
 
-        assertTrue(AdminFilters.matchesReview(review, "CHarlie", 0, "All reviews"));
-        assertTrue(AdminFilters.matchesReview(review, "bob", 0, "All reviews"));
-        assertTrue(AdminFilters.matchesReview(review, "textbook", 0, "All reviews"));
-        assertFalse(AdminFilters.matchesReview(review, "diana", 0, "All reviews"));
+        assertTrue(AdminFilters.matchesReview(review, "CHarlie", 0, "All reviews", null, null));
+        assertTrue(AdminFilters.matchesReview(review, "bob", 0, "All reviews", null, null));
+        assertTrue(AdminFilters.matchesReview(review, "textbook", 0, "All reviews", null, null));
+        assertFalse(AdminFilters.matchesReview(review, "diana", 0, "All reviews", null, null));
+    }
+
+    @Test
+    void reviewDateRangeIsInclusiveAndCombinesWithOtherFilters() {
+        Review inRange = review("bob", "charlie", 5, "Great", false, false);
+        inRange.setCreatedAt(LocalDateTime.of(2026, 3, 10, 12, 0));
+        Review outOfRange = review("bob", "charlie", 5, "Old", false, false);
+        outOfRange.setCreatedAt(LocalDateTime.of(2026, 2, 1, 9, 0));
+
+        LocalDate day = LocalDate.of(2026, 3, 10);
+        assertTrue(AdminFilters.matchesReview(inRange, "", 0, "All reviews", day, day),
+                "the first and last day are both inside the range");
+        assertFalse(AdminFilters.matchesReview(outOfRange, "", 0, "All reviews", day, day));
+        assertFalse(AdminFilters.matchesReview(inRange, "", 0, "All reviews",
+                day.plusDays(1), day.plusDays(5)));
+
+        assertTrue(AdminFilters.matchesReview(inRange, "charlie", 1, "Visible",
+                day.minusDays(1), day.plusDays(1)),
+                "the date range is combined with keyword, score and visibility");
+        assertFalse(AdminFilters.matchesReview(inRange, "diana", 1, "Visible",
+                day.minusDays(1), day.plusDays(1)));
+    }
+
+    @Test
+    void reviewDateRangeAllowsOpenEndedRanges() {
+        Review review = review("bob", "charlie", 4, "Good", false, false);
+        LocalDate day = LocalDate.of(2026, 5, 20);
+        review.setCreatedAt(day.atTime(8, 30));
+
+        assertTrue(AdminFilters.matchesReview(review, "", 0, "All reviews", null, null));
+        assertTrue(AdminFilters.matchesReview(review, "", 0, "All reviews", day, null));
+        assertTrue(AdminFilters.matchesReview(review, "", 0, "All reviews", null, day));
+        assertTrue(AdminFilters.matchesReview(review, "", 0, "All reviews", day.minusDays(1), null));
+        assertTrue(AdminFilters.matchesReview(review, "", 0, "All reviews", null, day.plusDays(1)));
+        assertFalse(AdminFilters.matchesReview(review, "", 0, "All reviews", day.plusDays(1), null));
+        assertFalse(AdminFilters.matchesReview(review, "", 0, "All reviews", null, day.minusDays(1)));
     }
 
     @Test
@@ -88,6 +125,16 @@ class AdminFiltersTest {
     }
 
     @Test
+    void dealDateRangeIsValidUnlessTheStartIsAfterTheEnd() {
+        LocalDate day = LocalDate.of(2026, 1, 10);
+
+        assertTrue(AdminFilters.isValidDealDateRange(null, null));
+        assertTrue(AdminFilters.isValidDealDateRange(day, day.plusDays(1)));
+        assertTrue(AdminFilters.isValidDealDateRange(day, day));
+        assertFalse(AdminFilters.isValidDealDateRange(day.plusDays(1), day));
+    }
+
+    @Test
     void deletedAccountsReadAsDeletedUserInHistory() {
         User charlie = data.users().find("charlie");
         assertEquals("Charlie Lee (@charlie)", AdminFilters.partyLabel(charlie, "charlie"));
@@ -97,8 +144,13 @@ class AdminFiltersTest {
     }
 
     private List<Review> filter(List<Review> reviews, String keyword, int scoreIndex, String visibility) {
+        return filter(reviews, keyword, scoreIndex, visibility, null, null);
+    }
+
+    private List<Review> filter(List<Review> reviews, String keyword, int scoreIndex, String visibility,
+                                LocalDate from, LocalDate to) {
         return reviews.stream()
-                .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, visibility))
+                .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, visibility, from, to))
                 .toList();
     }
 

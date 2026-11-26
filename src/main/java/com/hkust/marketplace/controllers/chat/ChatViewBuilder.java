@@ -77,8 +77,25 @@ public final class ChatViewBuilder {
         banner.setManaged(offersClosed);
         root.getChildren().add(banner);
 
-        root.getChildren().add(searchPanel(chatService, currentUser, () -> refresh[0].run(),
-                onViewRequest));
+        // Search looks only inside this thread (SRS UC-1.5 step 3.3); matches replace the
+        // message list until the search is cleared.
+        TextField keyword = new TextField();
+        ComboBox<MessageSearchFilter> kind = new ComboBox<>(
+                FXCollections.observableArrayList(MessageSearchFilter.values()));
+        Label searchStatus = new Label();
+        searchStatus.getStyleClass().add("subtitle-label");
+        Hyperlink clearSearch = new Hyperlink("Clear");
+        HBox searchInfo = new HBox(6, searchStatus, clearSearch);
+        searchInfo.setAlignment(Pos.CENTER_LEFT);
+        searchInfo.setVisible(false);
+        searchInfo.setManaged(false);
+        root.getChildren().add(searchPanel(keyword, kind, () -> refresh[0].run()));
+        root.getChildren().add(searchInfo);
+        clearSearch.setOnAction(e -> {
+            keyword.clear();
+            kind.setValue(MessageSearchFilter.ALL);
+            refresh[0].run();
+        });
 
         VBox messageList = new VBox(8);
         messageList.setPadding(new Insets(4));
@@ -88,14 +105,29 @@ public final class ChatViewBuilder {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         root.getChildren().add(scroll);
 
-        HBox composerRow = composer(chatService, currentUser, thread, () -> refresh[0].run());
+        // Sending clears any search, so the new message is never hidden by it.
+        HBox composerRow = composer(chatService, currentUser, thread, () -> {
+            keyword.clear();
+            kind.setValue(MessageSearchFilter.ALL);
+            refresh[0].run();
+        });
         root.getChildren().add(composerRow);
 
         Runnable rerender = () -> {
             messageList.getChildren().clear();
-            List<Message> history = chatService.history(thread);
+            String query = keyword.getText() == null ? "" : keyword.getText().trim();
+            boolean searching = !query.isEmpty() || kind.getValue() != MessageSearchFilter.ALL;
+            List<Message> history = searching
+                    ? chatService.searchThread(currentUser, thread, query, kind.getValue())
+                    : chatService.history(thread);
+            searchInfo.setVisible(searching);
+            searchInfo.setManaged(searching);
+            if (searching) {
+                searchStatus.setText(searchSummary(history.size(), query, kind.getValue()));
+            }
             if (history.isEmpty()) {
-                Label empty = new Label("No messages yet.");
+                // A3: nothing in this thread matches the search.
+                Label empty = new Label(searching ? "No messages found." : "No messages yet.");
                 empty.getStyleClass().add("subtitle-label");
                 messageList.getChildren().add(empty);
             } else {
@@ -126,8 +158,8 @@ public final class ChatViewBuilder {
         header.getStyleClass().add("card");
         Label title = new Label(thread.getListing().getTitle());
         title.getStyleClass().add("section-title");
-        Label participants = new Label("Buyer: " + thread.getBuyer().getFullName()
-                + "   \u00b7   Seller: " + thread.getSeller().getFullName()
+        Label participants = new Label("Buyer: " + thread.getBuyer().getNameWithUsername()
+                + "   \u00b7   Seller: " + thread.getSeller().getNameWithUsername()
                 + "   \u00b7   " + thread.getListing().getStatus().name().replace('_', ' '));
         participants.getStyleClass().add("subtitle-label");
         header.getChildren().addAll(title, participants);
@@ -148,7 +180,7 @@ public final class ChatViewBuilder {
         bubble.getStyleClass().addAll("chat-bubble", own ? "chat-bubble-own" : "chat-bubble-other");
         bubble.setMaxWidth(520);
 
-        Label sender = new Label(own ? "You" : message.getSender().getFullName());
+        Label sender = new Label(own ? "You" : message.getSender().getNameWithUsername());
         sender.getStyleClass().add("chat-sender");
         Label text = new Label(message.getContent());
         text.setWrapText(true);
@@ -186,7 +218,7 @@ public final class ChatViewBuilder {
         Label listing = new Label(request.getListing().getTitle());
         listing.getStyleClass().add("offer-listing");
 
-        Label meta = new Label((own ? "You" : message.getSender().getFullName())
+        Label meta = new Label((own ? "You" : message.getSender().getNameWithUsername())
                 + " \u00b7 " + message.getSentTime().format(TIME_FORMAT));
         meta.getStyleClass().add("chat-time");
 
@@ -266,62 +298,40 @@ public final class ChatViewBuilder {
         };
     }
 
-    private static VBox searchPanel(ChatService chatService, User currentUser, Runnable refresh,
-                                    Consumer<DealRequest> onViewRequest) {
+    private static VBox searchPanel(TextField keyword, ComboBox<MessageSearchFilter> kind, Runnable refresh) {
         VBox panel = new VBox(8);
         panel.getStyleClass().add("card");
         panel.setPadding(new Insets(10));
 
-        TextField keyword = new TextField();
-        keyword.setPromptText("Search all my chats...");
+        keyword.setPromptText("Search this chat...");
         HBox.setHgrow(keyword, Priority.ALWAYS);
-
-        ComboBox<MessageSearchFilter> filter = new ComboBox<>(
-                FXCollections.observableArrayList(MessageSearchFilter.values()));
-        filter.setValue(MessageSearchFilter.ALL);
+        kind.setValue(MessageSearchFilter.ALL);
 
         Button search = new Button("Search");
         search.getStyleClass().addAll("btn-primary", "btn-sm");
 
-        HBox controls = new HBox(8, keyword, filter, search);
+        HBox controls = new HBox(8, keyword, kind, search);
         controls.setAlignment(Pos.CENTER_LEFT);
 
-        VBox results = new VBox(8);
-        ScrollPane resultsScroll = new ScrollPane(results);
-        resultsScroll.setFitToWidth(true);
-        resultsScroll.setPrefViewportHeight(200);
-        resultsScroll.setVisible(false);
-        resultsScroll.setManaged(false);
+        search.setOnAction(e -> refresh.run());
+        keyword.setOnAction(e -> refresh.run());
+        kind.setOnAction(e -> refresh.run());
 
-        Runnable[] searchAgain = new Runnable[1];
-        Runnable runSearch = () -> {
-            results.getChildren().clear();
-            List<Message> matches =
-                    chatService.search(currentUser, keyword.getText(), filter.getValue());
-            resultsScroll.setVisible(true);
-            resultsScroll.setManaged(true);
-            if (matches.isEmpty()) {
-                Label empty = new Label("No matching messages.");
-                empty.getStyleClass().add("subtitle-label");
-                results.getChildren().add(empty);
-            } else {
-                for (Message message : matches) {
-                    results.getChildren().add(messageRow(message, currentUser, chatService,
-                            () -> {
-                                refresh.run();
-                                searchAgain[0].run();
-                            }, onViewRequest));
-                }
-            }
-        };
-        searchAgain[0] = runSearch;
-
-        search.setOnAction(e -> runSearch.run());
-        keyword.setOnAction(e -> runSearch.run());
-        filter.setOnAction(e -> runSearch.run());
-
-        panel.getChildren().addAll(controls, resultsScroll);
+        panel.getChildren().add(controls);
         return panel;
+    }
+
+    /** E.g. "2 messages match 'lamp'" or "1 offer in this chat". */
+    static String searchSummary(int count, String query, MessageSearchFilter kind) {
+        String noun = switch (kind) {
+            case OFFERS_ONLY -> count == 1 ? "offer" : "offers";
+            case TEXT_ONLY -> count == 1 ? "text message" : "text messages";
+            case ALL -> count == 1 ? "message" : "messages";
+        };
+        if (query.isEmpty()) {
+            return count + " " + noun + " in this chat";
+        }
+        return count + " " + noun + (count == 1 ? " matches '" : " match '") + query + "'";
     }
 
     private static final String MAKE_OFFER_ID = "chat-make-offer";
@@ -401,10 +411,24 @@ public final class ChatViewBuilder {
         dialog.setHeaderText("Formal borrow request for: " + thread.getListing().getTitle());
 
         TextField days = new TextField();
-        days.setPromptText("Days");
+        days.setPromptText("0");
         TextField hours = new TextField();
-        hours.setPromptText("Hours (0\u201323)");
-        VBox form = new VBox(8, new Label("Proposed lending period"), days, hours);
+        hours.setPromptText("0");
+        TextField minutes = new TextField();
+        minutes.setPromptText("0");
+        TextField seconds = new TextField();
+        seconds.setPromptText("0");
+        HBox periodFields = new HBox(8,
+                durationField("Days", days),
+                durationField("Hours", hours),
+                durationField("Minutes", minutes),
+                durationField("Seconds", seconds));
+        Label periodHint = new Label(
+                "Enter days / hours / minutes / seconds (minimum total 5 seconds).");
+        periodHint.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        VBox form = new VBox(8,
+                new Label("Proposed lending period (days, hours, minutes, seconds)"),
+                periodFields, periodHint);
         form.setPadding(new Insets(8));
         dialog.getDialogPane().setContent(form);
 
@@ -413,7 +437,7 @@ public final class ChatViewBuilder {
         dialog.showAndWait().filter(send::equals).ifPresent(ignored -> {
             Duration period;
             try {
-                period = parsePeriod(days, hours);
+                period = parsePeriod(days, hours, minutes, seconds);
             } catch (RuntimeException ex) {
                 new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
                 return;
@@ -434,18 +458,56 @@ public final class ChatViewBuilder {
                 submit(() -> chatService.submitFormalOffer(currentUser, thread), afterPost));
     }
 
-    private static Duration parsePeriod(TextField daysField, TextField hoursField) {
-        String daysText = daysField.getText().trim();
-        String hoursText = hoursField.getText().trim();
-        if (daysText.isEmpty() && hoursText.isEmpty()) {
-            throw new IllegalArgumentException("Enter a lending period in days and/or hours.");
+    private static VBox durationField(String unit, TextField field) {
+        Label unitLabel = new Label(unit);
+        unitLabel.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        field.setMaxWidth(Double.MAX_VALUE);
+        VBox box = new VBox(4, unitLabel, field);
+        box.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
+    }
+
+    private static Duration parsePeriod(TextField daysField, TextField hoursField,
+                                        TextField minutesField, TextField secondsField) {
+        return parsePeriod(daysField.getText(), hoursField.getText(),
+                minutesField.getText(), secondsField.getText());
+    }
+
+    /**
+     * Parses a lending period in days, hours, minutes and seconds; blank parts count as zero.
+     * Seconds allow the shortest allowed borrow period (5 seconds) to be requested.
+     */
+    public static Duration parsePeriod(String daysText, String hoursText,
+                                       String minutesText, String secondsText) {
+        String days = daysText.trim();
+        String hours = hoursText.trim();
+        String minutes = minutesText.trim();
+        String seconds = secondsText.trim();
+        if (days.isEmpty() && hours.isEmpty() && minutes.isEmpty() && seconds.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Enter a lending period in days, hours, minutes and/or seconds.");
         }
-        long days = daysText.isEmpty() ? 0 : Long.parseLong(daysText);
-        long hours = hoursText.isEmpty() ? 0 : Long.parseLong(hoursText);
-        if (days < 0 || hours < 0) {
-            throw new IllegalArgumentException("Days and hours must be non-negative.");
+        long dayCount = parsePart(days, "Days");
+        long hourCount = parsePart(hours, "Hours");
+        long minuteCount = parsePart(minutes, "Minutes");
+        long secondCount = parsePart(seconds, "Seconds");
+        if (dayCount < 0 || hourCount < 0 || minuteCount < 0 || secondCount < 0) {
+            throw new IllegalArgumentException("Days, hours, minutes and seconds must be non-negative.");
         }
-        return Duration.ofDays(days).plusHours(hours);
+        return Duration.ofDays(dayCount).plusHours(hourCount)
+                .plusMinutes(minuteCount).plusSeconds(secondCount);
+    }
+
+    private static long parsePart(String text, String label) {
+        if (text.isEmpty()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(label + " must be a whole number.");
+        }
     }
 
     private static void submit(Runnable action, Runnable afterPost) {

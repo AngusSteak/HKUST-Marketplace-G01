@@ -308,6 +308,45 @@ class ChatServiceTest {
     }
 
     @Test
+    void threadSearchLooksOnlyInThatThread() {
+        ChatThread here = chat.openThread(ALICE, charlieListing);
+        ChatThread elsewhere = chat.openThread(ALICE, dianaListing);
+        chat.sendText(ALICE, here, "Is the Lamp still free?");
+        chat.sendText(CHARLIE, here, "No, sorry");
+        chat.sendText(CHARLIE, here, "Another lamp is coming");
+        chat.sendText(ALICE, elsewhere, "Do you have a lamp too?");
+
+        // Case-insensitive, oldest first like the thread itself, and nothing from the other thread.
+        assertEquals(List.of("Is the Lamp still free?", "Another lamp is coming"),
+                contents(chat.searchThread(ALICE, here, "LAMP", MessageSearchFilter.ALL)));
+        assertTrue(chat.searchThread(CHARLIE, here, "camera", MessageSearchFilter.ALL).isEmpty());
+    }
+
+    @Test
+    void threadSearchWithABlankKeywordKeepsEveryMessageOfTheChosenKind() {
+        Listing sale = saleListing("S20", CHARLIE, "100");
+        ChatThread thread = chat.openThread(ALICE, sale);
+        chat.sendText(ALICE, thread, "hello");
+        chat.submitFormalOffer(ALICE, thread, new BigDecimal("80"));
+
+        assertEquals(2, chat.searchThread(ALICE, thread, "  ", MessageSearchFilter.ALL).size());
+        List<Message> offers = chat.searchThread(ALICE, thread, "", MessageSearchFilter.OFFERS_ONLY);
+        assertEquals(1, offers.size());
+        assertTrue(offers.get(0).isFormalOffer());
+    }
+
+    @Test
+    void onlyTheThreadsBuyerAndSellerCanSearchIt() {
+        ChatThread thread = chat.openThread(ALICE, charlieListing);
+        chat.sendText(ALICE, thread, "private note");
+
+        assertThrows(SecurityException.class,
+                () -> chat.searchThread(BOB, thread, "private", MessageSearchFilter.ALL));
+        assertThrows(SecurityException.class,
+                () -> chat.searchThread(DIANA, thread, "private", MessageSearchFilter.ALL));
+    }
+
+    @Test
     void allFilterReturnsTextAndFormalOffers() {
         Listing sale = saleListing("S10", CHARLIE, "100");
         ChatThread thread = chat.openThread(ALICE, sale);

@@ -42,6 +42,7 @@ public class ListingFormState {
     private String rawPrice;
     private String rawDurationDays;
     private String rawDurationHours;
+    private String rawDurationMinutes;
     private String rawDurationSeconds;
 
     private final List<PhotoDraft> chosenPhotos = new ArrayList<>();
@@ -123,6 +124,14 @@ public class ListingFormState {
         this.rawDurationHours = rawDurationHours;
     }
 
+    public String getRawDurationMinutes() {
+        return rawDurationMinutes;
+    }
+
+    public void setRawDurationMinutes(String rawDurationMinutes) {
+        this.rawDurationMinutes = rawDurationMinutes;
+    }
+
     public String getRawDurationSeconds() {
         return rawDurationSeconds;
     }
@@ -138,12 +147,17 @@ public class ListingFormState {
         return Collections.unmodifiableList(chosenPhotos);
     }
 
-    /** Whether another photo can be added (at most six). */
+    /**
+     * Whether another photo can be added (at most six overall).
+     *
+     * <p>Photos already saved with the listing count toward the cap too, so an edit form can
+     * never hold more than {@link #MAX_PHOTOS} photos between its stored and newly chosen ones.
+     */
     public boolean canAddMorePhotos() {
-        return chosenPhotos.size() < MAX_PHOTOS;
+        return photoPaths.size() + chosenPhotos.size() < MAX_PHOTOS;
     }
 
-    /** Adds a photo chosen in the form, rejecting a seventh. */
+    /** Adds a photo chosen in the form, rejecting one past the overall cap. */
     public void addChosenPhoto(PhotoDraft draft) {
         if (draft == null) {
             throw new IllegalArgumentException("Photo draft must not be null");
@@ -170,6 +184,46 @@ public class ListingFormState {
             throw new IllegalArgumentException("A listing can have at most " + MAX_PHOTOS + " photos");
         }
         this.photoPaths = photoPaths == null ? new ArrayList<>() : new ArrayList<>(photoPaths);
+    }
+
+    // --- Editing -------------------------------------------------------------------
+
+    /**
+     * Loads an existing listing into this state so the edit form can start prefilled.
+     *
+     * <p>The stored photo paths are copied for display, and the type-specific raw values are
+     * taken from the concrete subclass. Values belonging to the other kinds are cleared first,
+     * so a reused state can never leak a stale price or duration into the edited listing.
+     *
+     * @param listing the listing being edited
+     */
+    public void loadFrom(Listing listing) {
+        if (listing == null) {
+            throw new IllegalArgumentException("Listing must not be null");
+        }
+        setType(listing.getType());
+        setTitle(listing.getTitle());
+        setDescription(listing.getDescription());
+        setCategory(listing.getCategory());
+        setCondition(listing.getCondition());
+        setMeetupLocation(listing.getMeetupLocation());
+        setPhotoPaths(listing.getPhotoPaths());
+
+        setRawPrice(null);
+        setRawDurationDays(null);
+        setRawDurationHours(null);
+        setRawDurationMinutes(null);
+        setRawDurationSeconds(null);
+
+        if (listing instanceof SaleListing sale) {
+            setRawPrice(sale.getPrice().amount().toPlainString());
+        } else if (listing instanceof LendListing lend) {
+            long totalSeconds = lend.getLendingDuration().getSeconds();
+            setRawDurationDays(String.valueOf(totalSeconds / 86_400));
+            setRawDurationHours(String.valueOf((totalSeconds % 86_400) / 3_600));
+            setRawDurationMinutes(String.valueOf((totalSeconds % 3_600) / 60));
+            setRawDurationSeconds(String.valueOf(totalSeconds % 60));
+        }
     }
 
     // --- Validation ----------------------------------------------------------------
@@ -225,7 +279,8 @@ public class ListingFormState {
     public boolean isDirty() {
         return type != null
                 || hasText(title) || hasText(description) || hasText(rawPrice)
-                || hasText(rawDurationDays) || hasText(rawDurationHours) || hasText(rawDurationSeconds)
+                || hasText(rawDurationDays) || hasText(rawDurationHours)
+                || hasText(rawDurationMinutes) || hasText(rawDurationSeconds)
                 || category != null || condition != null || meetupLocation != null
                 || !chosenPhotos.isEmpty() || !photoPaths.isEmpty();
     }
@@ -263,24 +318,27 @@ public class ListingFormState {
         return LendingRules.requireLendingDuration(parsedDuration());
     }
 
-    /** Parses the raw days/hours strings; numeric-rule checking stays in LendingRules. */
+    /** Parses the raw days/hours/minutes/seconds strings; numeric-rule checking stays in LendingRules. */
     private Duration parsedDuration() {
         String days = rawDurationDays == null ? "" : rawDurationDays.trim();
         String hours = rawDurationHours == null ? "" : rawDurationHours.trim();
+        String minutes = rawDurationMinutes == null ? "" : rawDurationMinutes.trim();
         String seconds = rawDurationSeconds == null ? "" : rawDurationSeconds.trim();
-        if (days.isEmpty() && hours.isEmpty() && seconds.isEmpty()) {
+        if (days.isEmpty() && hours.isEmpty() && minutes.isEmpty() && seconds.isEmpty()) {
             throw new IllegalArgumentException("Lending duration is required");
         }
         try {
             long d = days.isEmpty() ? 0 : Long.parseLong(days);
             long h = hours.isEmpty() ? 0 : Long.parseLong(hours);
+            long m = minutes.isEmpty() ? 0 : Long.parseLong(minutes);
             long s = seconds.isEmpty() ? 0 : Long.parseLong(seconds);
-            if (d < 0 || h < 0 || s < 0) {
+            if (d < 0 || h < 0 || m < 0 || s < 0) {
                 throw new IllegalArgumentException("Lending duration must not be negative");
             }
-            return Duration.ofDays(d).plusHours(h).plusSeconds(s);
+            return Duration.ofDays(d).plusHours(h).plusMinutes(m).plusSeconds(s);
         } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException("Lending days, hours and seconds must be whole numbers", ex);
+            throw new IllegalArgumentException(
+                    "Lending days, hours, minutes and seconds must be whole numbers", ex);
         }
     }
 

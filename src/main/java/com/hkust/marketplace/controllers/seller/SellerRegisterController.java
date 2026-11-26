@@ -7,12 +7,15 @@ import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.RegistrationService;
 import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.UserStore;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.GridPane;
 
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -23,15 +26,27 @@ public class SellerRegisterController {
     @FXML private TextField fullNameField;
     @FXML private PasswordField passwordField;
     @FXML private PasswordField confirmPasswordField;
-    @FXML private ComboBox<Location> meetupCombo;
+    @FXML private HBox passwordRow;
+    @FXML private HBox confirmPasswordRow;
+    @FXML private GridPane meetupGrid;
     @FXML private TextArea bioArea;
     @FXML private Label errorLabel;
     @FXML private Label successLabel;
 
-    /** Fills the meetup-location choices. */
+    private final EnumMap<Location, CheckBox> meetupBoxes = new EnumMap<>(Location.class);
+
+    /** Fills the multi-select meet-up location choices. */
     @FXML
     public void initialize() {
-        meetupCombo.setItems(FXCollections.observableArrayList(Location.values()));
+        PasswordVisibility.attach(passwordField, passwordRow);
+        PasswordVisibility.attach(confirmPasswordField, confirmPasswordRow);
+        int i = 0;
+        for (Location location : Location.values()) {
+            CheckBox box = new CheckBox(location.getLabel());
+            meetupGrid.add(box, i % 2, i / 2);
+            meetupBoxes.put(location, box);
+            i++;
+        }
     }
 
     @FXML
@@ -52,17 +67,23 @@ public class SellerRegisterController {
         if (!password.equals(confirm)) { showError("Passwords do not match."); return; }
 
         Seller user = new Seller(username.toLowerCase(), fullName, PasswordHasher.hash(password), UserRole.SELLER);
-        Location meetup = meetupCombo.getValue();
-        if (meetup != null) user.setPreferredMeetup(EnumSet.of(meetup));
+        EnumSet<Location> meetups = EnumSet.noneOf(Location.class);
+        meetupBoxes.forEach((location, box) -> {
+            if (box.isSelected()) meetups.add(location);
+        });
+        user.setPreferredMeetup(meetups);
         if (bioArea.getText() != null && !bioArea.getText().isBlank()) user.setBio(bioArea.getText().trim());
         // Saves the account and notifies the admin (SRS UC-2.1, like UC-1.1 step 7).
         if (!new RegistrationService(DummyDataService.getInstance()).register(user)) {
             showError("Username already taken."); return;
         }
 
-        showSuccess("Seller account created! You can now login.");
+        String message = "Seller account created! You can now login.";
+        showSuccess(message);
         usernameField.clear(); fullNameField.clear(); passwordField.clear();
-        confirmPasswordField.clear(); meetupCombo.getSelectionModel().clearSelection(); bioArea.clear();
+        confirmPasswordField.clear(); meetupBoxes.values().forEach(box -> box.setSelected(false)); bioArea.clear();
+        showInfo("Seller account created", message);
+        SceneManager.showSellerLogin();
     }
 
     private void showError(String msg) {
@@ -74,6 +95,14 @@ public class SellerRegisterController {
     private void hideMessages() {
         errorLabel.setVisible(false); errorLabel.setManaged(false);
         successLabel.setVisible(false); successLabel.setManaged(false);
+    }
+
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     @FXML private void goLogin() { SceneManager.showSellerLogin(); }

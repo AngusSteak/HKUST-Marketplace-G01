@@ -2,6 +2,7 @@ package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
+import com.hkust.marketplace.models.Claim;
 import com.hkust.marketplace.models.Condition;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.Listing;
@@ -113,6 +114,19 @@ class SellerRequestListingTest {
                 groups.get(c).stream().map(DealRequest::getId).toList());
         assertEquals(List.of(a2.getId(), a1.getId()),
                 groups.get(a).stream().map(DealRequest::getId).toList());
+    }
+
+    @Test
+    void includesThePendingClaimOnAReservedGiveaway() {
+        Listing lamp = data.listings().find("L102");
+        data.deals().lifecycle().decline(data.deals().findRequest("Q2"));
+        Claim claim = data.deals().lifecycle().submitClaim((Buyer) bob, lamp);
+        assertEquals(ListingStatus.RESERVED, lamp.getStatus());
+
+        LinkedHashMap<Listing, List<DealRequest>> groups = seller.pendingRequestsByListing(diana);
+
+        assertTrue(groups.containsKey(lamp), "the reserved giveaway's pending claim must be listed");
+        assertEquals(List.of(claim.getId()), groups.get(lamp).stream().map(DealRequest::getId).toList());
     }
 
     @Test

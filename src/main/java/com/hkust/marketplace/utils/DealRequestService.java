@@ -11,6 +11,7 @@ import com.hkust.marketplace.models.Money;
 import com.hkust.marketplace.models.NotificationCategory;
 import com.hkust.marketplace.models.NotificationRef;
 import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.Seller;
 import com.hkust.marketplace.models.User;
 import com.hkust.marketplace.models.UserRole;
 
@@ -73,7 +74,7 @@ public final class DealRequestService {
      */
     public Claim claim(User actor, Listing listing) {
         Buyer buyer = requireBuyer(actor);
-        requireAvailable(listing, ListingType.GIVEAWAY);
+        requireClaimable(listing);
         Claim claim = record(() -> data.deals().lifecycle().submitClaim(buyer, listing), listing);
         notifySeller(claim, buyer.getDisplayName() + " claimed your giveaway '" + listing.getTitle() + "'.");
         return claim;
@@ -91,6 +92,27 @@ public final class DealRequestService {
         }
         if (!ListingSearch.isBrowsable(listing)) {
             throw new IllegalStateException(NOT_AVAILABLE);
+        }
+    }
+
+    /**
+     * A4/A1 for a claim: the listing must be a giveaway whose seller is active and not deleted.
+     * A giveaway left Reserved was claimed by someone else (A4); every other non-live state
+     * (sold, given, taken down, deleted, inactive or deleted seller) is simply unavailable (A1).
+     */
+    private static void requireClaimable(Listing listing) {
+        Objects.requireNonNull(listing, "listing");
+        if (listing.getType() != ListingType.GIVEAWAY) {
+            throw new IllegalArgumentException("This action is only for " + ListingType.GIVEAWAY + " listings.");
+        }
+        Seller seller = listing.getSeller();
+        if (listing.isDeleted() || !seller.isActive() || seller.isDeleted()) {
+            throw new IllegalStateException(NOT_AVAILABLE);
+        }
+        switch (listing.getStatus()) {
+            case LIVE -> { }
+            case RESERVED -> throw new IllegalStateException(ALREADY_CLAIMED);
+            default -> throw new IllegalStateException(NOT_AVAILABLE);
         }
     }
 

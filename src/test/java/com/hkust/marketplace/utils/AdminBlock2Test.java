@@ -1,6 +1,7 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Category;
 import com.hkust.marketplace.models.Condition;
@@ -19,7 +20,9 @@ import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.persistence.Database;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -171,6 +174,54 @@ class AdminBlock2Test {
         assertThrows(IllegalArgumentException.class, () -> admin.editListing(adminUser, back,
                 "Still Live", "", Category.ELECTRONICS, Condition.USED, Location.LIBRARY, "not a price", null));
         assertEquals("MacBook charger", data.listings().find("L101").getTitle());
+    }
+
+    @Test
+    void adminEditsListingPhotosKeepingSomeAndAddingOthers() {
+        Listing charger = data.listings().find("L101");
+        charger.setPhotoPaths(List.of("data/photos/charlie/L101/keep.jpg",
+                "data/photos/charlie/L101/removed.jpg"));
+        data.listings().update(charger);
+
+        List<String> storedFor = new ArrayList<>();
+        PhotoStorage photos = (source, username, listingId) -> {
+            storedFor.add(username + "/" + listingId + "/" + source.getFileName());
+            return "data/photos/" + username + "/" + listingId + "/" + source.getFileName();
+        };
+
+        admin.editListing(adminUser, charger, "MacBook charger", "New description",
+                Category.ELECTRONICS, Condition.USED, Location.LIBRARY, "299", null,
+                List.of("data/photos/charlie/L101/keep.jpg"),
+                List.of(new PhotoDraft(Path.of("new.jpg"), "new.jpg")), photos);
+
+        DummyDataService saved = DummyDataService.open(db);
+        Listing back = saved.listings().find("L101");
+        assertEquals(List.of("data/photos/charlie/L101/keep.jpg",
+                "data/photos/charlie/L101/new.jpg"), back.getPhotoPaths());
+        assertEquals(List.of("charlie/L101/new.jpg"), storedFor);
+        assertEquals(ListingStatus.LIVE, back.getStatus());
+        assertEquals("Edited", saved.audit().all().get(0).getAction());
+        assertEquals(NotificationCategory.ANNOUNCEMENT,
+                saved.notifications().forUser("charlie").get(0).getCategory());
+    }
+
+    @Test
+    void adminEditRejectsMoreThanSixPhotosAndUnsupportedTypes() {
+        Listing charger = data.listings().find("L101");
+        PhotoStorage photos = (source, username, listingId) -> "stored/" + source.getFileName();
+        List<String> sixKept = List.of("a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg");
+
+        assertThrows(IllegalArgumentException.class, () -> admin.editListing(adminUser, charger,
+                "MacBook charger", "New description", Category.ELECTRONICS, Condition.USED, Location.LIBRARY,
+                "299", null, sixKept, List.of(new PhotoDraft(Path.of("g.png"), "g.png")), photos));
+        assertThrows(IllegalArgumentException.class, () -> admin.editListing(adminUser, charger,
+                "MacBook charger", "New description", Category.ELECTRONICS, Condition.USED, Location.LIBRARY,
+                "299", null, List.of(), List.of(new PhotoDraft(Path.of("notes.gif"), "notes.gif")), photos));
+
+        Listing back = DummyDataService.open(db).listings().find("L101");
+        assertEquals(List.of(), back.getPhotoPaths());
+        assertEquals(ListingStatus.LIVE, back.getStatus());
+        assertTrue(data.audit().all().isEmpty());
     }
 
     @Test

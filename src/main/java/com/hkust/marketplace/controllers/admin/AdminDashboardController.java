@@ -4,30 +4,38 @@ import com.hkust.marketplace.controllers.common.ListingDetailDialog;
 import com.hkust.marketplace.controllers.notifications.NotificationBoardView;
 import com.hkust.marketplace.forms.ListingFormComponent;
 import com.hkust.marketplace.forms.ListingFormState;
+import com.hkust.marketplace.forms.PhotoDraft;
 import com.hkust.marketplace.controllers.common.ListingPhotos;
 import com.hkust.marketplace.models.*;
 import com.hkust.marketplace.utils.AdminFilters;
 import com.hkust.marketplace.utils.AdminService;
 import com.hkust.marketplace.utils.DummyDataService;
+import com.hkust.marketplace.utils.DurationText;
 import com.hkust.marketplace.utils.LocalPhotoStorage;
 import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.SessionManager;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 
+import java.io.File;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -106,6 +114,14 @@ public class AdminDashboardController {
         Label label = new Label(text);
         label.getStyleClass().add("section-title");
         return label;
+    }
+
+    private static VBox durationField(String unit, TextField field) {
+        Label unitLabel = label(unit, "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        VBox box = new VBox(4, unitLabel, field);
+        box.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
     }
 
     private static String statusText(ListingStatus status) {
@@ -351,6 +367,7 @@ public class AdminDashboardController {
         TextField price = new TextField();
         TextField days = new TextField();
         TextField hours = new TextField();
+        TextField minutes = new TextField();
         TextField seconds = new TextField();
         if (listing instanceof SaleListing sale) {
             price.setText(sale.getPrice().amount().toPlainString());
@@ -358,8 +375,40 @@ public class AdminDashboardController {
             Duration duration = lend.getLendingDuration();
             days.setText(String.valueOf(duration.toDays()));
             hours.setText(String.valueOf(duration.toHoursPart()));
+            minutes.setText(String.valueOf(duration.toMinutesPart()));
             seconds.setText(String.valueOf(duration.toSecondsPart()));
         }
+
+        List<String> keptPhotoPaths = new ArrayList<>(listing.getPhotoPaths());
+        List<PhotoDraft> newPhotos = new ArrayList<>();
+        HBox photoStrip = new HBox(8);
+        Button addPhotos = new Button("Add photos");
+        addPhotos.getStyleClass().addAll("btn-outline", "btn-sm");
+        Label photoHint = new Label();
+        addPhotos.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Choose photos (JPEG/PNG, up to " + ListingFormState.MAX_PHOTOS + ")");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                    "Images", "*.jpg", "*.jpeg", "*.png"));
+            var window = dialog.getDialogPane().getScene() == null
+                    ? null : dialog.getDialogPane().getScene().getWindow();
+            List<File> files = chooser.showOpenMultipleDialog(window);
+            if (files == null) {
+                return;
+            }
+            for (File file : files) {
+                if (keptPhotoPaths.size() + newPhotos.size() >= ListingFormState.MAX_PHOTOS) {
+                    break;
+                }
+                if (isSupportedImageFile(file.getName())) {
+                    newPhotos.add(new PhotoDraft(file.toPath(), file.getName()));
+                }
+            }
+            refreshAdminPhotoStrip(photoStrip, addPhotos, photoHint, keptPhotoPaths, newPhotos);
+        });
+        VBox photoArea = new VBox(8,
+                new Label("Photos (up to " + ListingFormState.MAX_PHOTOS + ", JPEG/PNG)"),
+                addPhotos, photoHint, photoStrip);
 
         VBox form = new VBox(8,
                 new Label("Title"), title,
@@ -370,34 +419,169 @@ public class AdminDashboardController {
         if (listing instanceof SaleListing) {
             form.getChildren().addAll(new Label("Asking price"), price);
         } else if (listing instanceof LendListing) {
-            HBox durationRow = new HBox(8, days, hours, seconds);
-            HBox.setHgrow(days, Priority.ALWAYS);
-            HBox.setHgrow(hours, Priority.ALWAYS);
-            HBox.setHgrow(seconds, Priority.ALWAYS);
-            days.setPromptText("Days");
-            hours.setPromptText("Hours");
-            seconds.setPromptText("Seconds (min 5)");
-            form.getChildren().addAll(new Label("Lending duration"), durationRow);
+            days.setPromptText("0");
+            hours.setPromptText("0");
+            minutes.setPromptText("0");
+            seconds.setPromptText("0");
+            HBox durationRow = new HBox(8,
+                    durationField("Days", days),
+                    durationField("Hours", hours),
+                    durationField("Minutes", minutes),
+                    durationField("Seconds", seconds));
+            Label durationHint = label(
+                    "Enter days / hours / minutes / seconds (minimum total 5 seconds).",
+                    "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+            VBox durationBox = new VBox(6, durationRow, durationHint);
+            form.getChildren().addAll(new Label("Lending duration"), durationBox);
         }
+        form.getChildren().add(photoArea);
+        Label errorSummary = new Label();
+        errorSummary.getStyleClass().add("input-error-label");
+        errorSummary.setWrapText(true);
+        errorSummary.setVisible(false);
+        errorSummary.setManaged(false);
+        form.getChildren().add(errorSummary);
+        refreshAdminPhotoStrip(photoStrip, addPhotos, photoHint, keptPhotoPaths, newPhotos);
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        ListingType type = listing instanceof SaleListing ? ListingType.SELL
+                : listing instanceof LendListing ? ListingType.LEND : ListingType.GIVEAWAY;
+        List<Node> inputs = List.<Node>of(title, description, price, days, hours, minutes, seconds);
+        Map<String, List<Node>> errorControls = Map.of(
+                "title", List.<Node>of(title),
+                "description", List.<Node>of(description),
+                "price", List.<Node>of(price),
+                "duration", List.<Node>of(days, hours, minutes, seconds));
+        Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okButton.addEventFilter(ActionEvent.ACTION, event -> {
+            inputs.forEach(field -> field.getStyleClass().remove("input-error"));
+            errorSummary.setText("");
+            errorSummary.setVisible(false);
+            errorSummary.setManaged(false);
+            Map<String, String> errors = adminEditErrors(type, title.getText(), description.getText(),
+                    price.getText(), days.getText(), hours.getText(), minutes.getText(), seconds.getText());
+            if (errors.isEmpty()) {
+                return;
+            }
+            errors.forEach((key, message) -> errorControls.getOrDefault(key, List.of())
+                    .forEach(field -> field.getStyleClass().add("input-error")));
+            errorSummary.setText(String.join("\n", errors.values()));
+            errorSummary.setVisible(true);
+            errorSummary.setManaged(true);
+            event.consume();
+        });
 
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
         try {
             Duration duration = listing instanceof LendListing
                     ? Duration.ofDays(parseLong(days.getText())).plusHours(parseLong(hours.getText()))
+                    .plusMinutes(parseLong(minutes.getText()))
                     .plusSeconds(parseLong(seconds.getText()))
                     : null;
             run(() -> adminService.editListing(admin(), listing, title.getText(), description.getText(),
-                    category.getValue(), condition.getValue(), location.getValue(), price.getText(), duration));
+                    category.getValue(), condition.getValue(), location.getValue(), price.getText(), duration,
+                    keptPhotoPaths, newPhotos, photoStorage));
         } catch (NumberFormatException ex) {
-            new Alert(Alert.AlertType.WARNING, "Lending days, hours and seconds must be whole numbers.").showAndWait();
+            new Alert(Alert.AlertType.WARNING,
+                    "Lending days, hours, minutes and seconds must be whole numbers.").showAndWait();
         }
         showAllListings();
     }
 
+    /**
+     * Validates the Admin's listing Edit fields before the dialog closes (SRS UC-3.7 A4),
+     * reusing the same {@link Money} and {@link LendingRules} checks as
+     * {@link AdminService#editListing}. The returned map is keyed by the dialog control that
+     * owns each message: {@code title}, {@code description}, {@code price} or {@code duration}.
+     *
+     * @return field-key to message; empty when the input is valid
+     */
+    static Map<String, String> adminEditErrors(ListingType type, String title, String description,
+                                               String rawPrice, String days, String hours,
+                                               String minutes, String seconds) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        if (title == null || title.isBlank()) {
+            errors.put("title", "Title is required");
+        }
+        if (description == null || description.isBlank()) {
+            errors.put("description", "Description is required");
+        }
+        if (type == ListingType.SELL) {
+            try {
+                Money.of(rawPrice);
+            } catch (IllegalArgumentException ex) {
+                errors.put("price", ex.getMessage());
+            }
+        } else if (type == ListingType.LEND) {
+            try {
+                Duration duration = Duration.ofDays(parseLong(days))
+                        .plusHours(parseLong(hours))
+                        .plusMinutes(parseLong(minutes))
+                        .plusSeconds(parseLong(seconds));
+                LendingRules.requireLendingDuration(duration);
+            } catch (NumberFormatException | ArithmeticException ex) {
+                errors.put("duration", "Lending days, hours, minutes and seconds must be whole numbers.");
+            } catch (IllegalArgumentException ex) {
+                errors.put("duration", ex.getMessage());
+            }
+        }
+        return errors;
+    }
+
     private static long parseLong(String text) {
         return text == null || text.isBlank() ? 0 : Long.parseLong(text.trim());
+    }
+
+    private void refreshAdminPhotoStrip(HBox strip, Button addPhotos, Label hint,
+                                        List<String> keptPaths, List<PhotoDraft> drafts) {
+        strip.getChildren().clear();
+        for (String path : keptPaths) {
+            VBox thumbnail = new VBox(4, ListingPhotos.photo(path, 80, 80));
+            Button remove = new Button("Remove");
+            remove.getStyleClass().addAll("btn-danger", "btn-sm");
+            remove.setOnAction(e -> {
+                keptPaths.remove(path);
+                refreshAdminPhotoStrip(strip, addPhotos, hint, keptPaths, drafts);
+            });
+            thumbnail.getChildren().add(remove);
+            strip.getChildren().add(thumbnail);
+        }
+        for (PhotoDraft draft : drafts) {
+            VBox thumbnail = new VBox(4);
+            try {
+                Image image = new Image(draft.source().toUri().toString(), 80, 80, true, true);
+                ImageView view = new ImageView(image);
+                view.setFitWidth(80);
+                view.setFitHeight(80);
+                view.setPreserveRatio(true);
+                thumbnail.getChildren().add(view);
+            } catch (RuntimeException ex) {
+                thumbnail.getChildren().add(new Label("Preview unavailable"));
+            }
+            Button remove = new Button("Remove");
+            remove.getStyleClass().addAll("btn-danger", "btn-sm");
+            remove.setOnAction(e -> {
+                drafts.remove(draft);
+                refreshAdminPhotoStrip(strip, addPhotos, hint, keptPaths, drafts);
+            });
+            thumbnail.getChildren().add(remove);
+            strip.getChildren().add(thumbnail);
+        }
+        boolean full = keptPaths.size() + drafts.size() >= ListingFormState.MAX_PHOTOS;
+        addPhotos.setDisable(full);
+        hint.setText(full
+                ? "Maximum of " + ListingFormState.MAX_PHOTOS + " photos reached. Remove one to add another."
+                : "");
+    }
+
+    private static boolean isSupportedImageFile(String filename) {
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0) {
+            return false;
+        }
+        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        return extension.equals("jpg") || extension.equals("jpeg") || extension.equals("png");
     }
 
     private void promptTakeDown(Listing listing, Runnable after) {
@@ -575,10 +759,14 @@ public class AdminDashboardController {
 
         Button toggle = new Button(user.isActive() ? "Deactivate" : "Reactivate");
         toggle.getStyleClass().addAll(user.isActive() ? "btn-danger" : "btn-success", "btn-sm");
-        toggle.setOnAction(e -> {
-            run(() -> adminService.setActive(admin(), user, !user.isActive()));
-            showUsers();
-        });
+        // SRS UC-3.3 step 3.3.1: confirm before changing an account's active status.
+        toggle.setOnAction(e -> new Alert(Alert.AlertType.CONFIRMATION, accountStatusMessage(user.isActive()))
+                .showAndWait().ifPresent(r -> {
+                    if (r == ButtonType.OK) {
+                        run(() -> adminService.setActive(admin(), user, !user.isActive()));
+                        showUsers();
+                    }
+                }));
 
         Button delete = new Button("Delete");
         delete.getStyleClass().addAll("btn-danger", "btn-sm");
@@ -586,6 +774,19 @@ public class AdminDashboardController {
 
         row.getChildren().addAll(info, edit, toggle, delete);
         return row;
+    }
+
+    /**
+     * Confirmation wording for deactivating or reactivating an account (SRS UC-3.3 step 3.3.1).
+     * Deactivating blocks login until the account is reactivated, so the two prompts differ.
+     *
+     * @param currentlyActive whether the account is active now
+     * @return the question shown before the status change
+     */
+    static String accountStatusMessage(boolean currentlyActive) {
+        return currentlyActive
+                ? "Deactivate this account? The user will be logged out and blocked from logging in until it is reactivated."
+                : "Reactivate this account? The user will be allowed to log in again.";
     }
 
     private void showAddUser() {
@@ -766,12 +967,29 @@ public class AdminDashboardController {
         table.getColumns().add(dealColumn("Return / complete", d -> dealEnd(d), 120));
         table.getColumns().add(dealColumn("Status", d -> d.getStatus().name(), 100));
 
-        Runnable refresh = () -> table.setItems(FXCollections.observableArrayList(
-                DummyDataService.getInstance().deals().allDeals().stream()
-                        .filter(d -> AdminFilters.matchesDeal(d, search.getText(), type.getValue(),
-                                status.getValue(), from.getValue(), to.getValue()))
-                        .sorted(Comparator.comparing(Deal::getStartDate).reversed())
-                        .toList()));
+        Label message = label("", "-fx-text-fill: #b3261e; -fx-font-size: 12px;");
+        message.setVisible(false);
+        message.setManaged(false);
+
+        Runnable refresh = () -> {
+            if (!AdminFilters.isValidDealDateRange(from.getValue(), to.getValue())) {
+                table.setItems(FXCollections.observableArrayList());
+                showDealMessage(message, AdminFilters.INVALID_DEAL_DATE_RANGE);
+                return;
+            }
+            List<Deal> matches = DummyDataService.getInstance().deals().allDeals().stream()
+                    .filter(d -> AdminFilters.matchesDeal(d, search.getText(), type.getValue(),
+                            status.getValue(), from.getValue(), to.getValue()))
+                    .sorted(Comparator.comparing(Deal::getStartDate).reversed())
+                    .toList();
+            table.setItems(FXCollections.observableArrayList(matches));
+            if (matches.isEmpty()) {
+                showDealMessage(message, "No deals found.");
+            } else {
+                message.setVisible(false);
+                message.setManaged(false);
+            }
+        };
         search.textProperty().addListener((o, a, b) -> refresh.run());
         type.valueProperty().addListener((o, a, b) -> refresh.run());
         status.valueProperty().addListener((o, a, b) -> refresh.run());
@@ -783,8 +1001,15 @@ public class AdminDashboardController {
         table.setFocusTraversable(false);
 
         root.getChildren().addAll(new HBox(10, search, type, status, from, to),
-                label("Click a title to view details.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"), table);
+                label("Click a title to view details.", "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;"),
+                message, table);
         contentPane.getChildren().add(root);
+    }
+
+    private static void showDealMessage(Label message, String text) {
+        message.setText(text);
+        message.setVisible(true);
+        message.setManaged(true);
     }
 
     private static TableColumn<Deal, String> dealColumn(String title,
@@ -833,6 +1058,23 @@ public class AdminDashboardController {
         return "—";
     }
 
+    /**
+     * Builds the listing-basics text on a deal: status, category and type, then the asking price
+     * (Sale) or lending duration (Lend) and the meet-up location (SRS UC-3.5 step 6).
+     */
+    static String listingBasics(Listing listing) {
+        StringBuilder text = new StringBuilder("Status: ")
+                .append(statusText(listing.getStatus()))
+                .append(" · ").append(listing.getCategory())
+                .append(" · ").append(listing.getTypeDisplay());
+        if (listing instanceof SaleListing sale) {
+            text.append('\n').append("Price: ").append(sale.getPriceDisplay());
+        } else if (listing instanceof LendListing lend) {
+            text.append('\n').append("Lending: ").append(DurationText.format(lend.getLendingDuration()));
+        }
+        return text.append('\n').append("Meet-up: ").append(listing.getMeetupLocation().getLabel()).toString();
+    }
+
     private void showDealDetails(Deal deal) {
         VBox content = new VBox(6);
         content.setPrefWidth(460);
@@ -846,9 +1088,7 @@ public class AdminDashboardController {
                 label("Return / due: " + dealEnd(deal), ""),
                 new Separator(),
                 label("Listing", "-fx-font-weight: bold;"),
-                label("Status: " + statusText(deal.getListing().getStatus())
-                        + " · " + deal.getListing().getCategory()
-                        + " · " + deal.getListing().getTypeDisplay(), "-fx-text-fill: #5a5a7a;"),
+                label(listingBasics(deal.getListing()), "-fx-text-fill: #5a5a7a;"),
                 label("Request " + deal.getRequest().getId() + " · " + deal.getRequest().getStatus(),
                         "-fx-text-fill: #5a5a7a;"),
                 label("Submitted: " + deal.getRequest().getSubmittedTime().format(DATE_TIME),
@@ -931,14 +1171,23 @@ public class AdminDashboardController {
         ComboBox<String> visibility = new ComboBox<>(FXCollections.observableArrayList(
                 "All reviews", "Visible", "Hidden", "Flagged"));
         visibility.getSelectionModel().selectFirst();
+        DatePicker reviewFrom = new DatePicker();
+        reviewFrom.setPromptText("From");
+        DatePicker reviewTo = new DatePicker();
+        reviewTo.setPromptText("To");
         VBox reviews = new VBox(8);
         Runnable refreshReviews = () -> {
             reviews.getChildren().clear();
             String keyword = reviewSearch.getText();
             int scoreIndex = score.getSelectionModel().getSelectedIndex();
             String shown = visibility.getValue();
+            if (!AdminFilters.isValidDealDateRange(reviewFrom.getValue(), reviewTo.getValue())) {
+                reviews.getChildren().add(label(AdminFilters.INVALID_DEAL_DATE_RANGE, "-fx-text-fill: #b3261e;"));
+                return;
+            }
             List<Review> found = DummyDataService.getInstance().reviews().all().stream()
-                    .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, shown))
+                    .filter(r -> AdminFilters.matchesReview(r, keyword, scoreIndex, shown,
+                            reviewFrom.getValue(), reviewTo.getValue()))
                     .sorted(Comparator.comparing(Review::getCreatedAt).reversed())
                     .toList();
             if (found.isEmpty()) reviews.getChildren().add(label("No matching reviews.", "-fx-text-fill: #5a5a7a;"));
@@ -947,9 +1196,11 @@ public class AdminDashboardController {
         reviewSearch.textProperty().addListener((o, a, b) -> refreshReviews.run());
         score.valueProperty().addListener((o, a, b) -> refreshReviews.run());
         visibility.valueProperty().addListener((o, a, b) -> refreshReviews.run());
+        reviewFrom.valueProperty().addListener((o, a, b) -> refreshReviews.run());
+        reviewTo.valueProperty().addListener((o, a, b) -> refreshReviews.run());
         refreshReviews.run();
 
-        root.getChildren().addAll(new HBox(10, reviewSearch, score, visibility), reviews);
+        root.getChildren().addAll(new HBox(10, reviewSearch, score, visibility, reviewFrom, reviewTo), reviews);
         contentPane.getChildren().add(scroll(root));
     }
 
@@ -969,12 +1220,28 @@ public class AdminDashboardController {
                 label(review.getCreatedAt().format(DATE_TIME), "-fx-text-fill: #9aa0b0; -fx-font-size: 11px;"));
         Button hide = new Button(review.isHidden() ? "Unhide" : "Hide");
         hide.getStyleClass().addAll("btn-outline", "btn-sm");
-        hide.setOnAction(e -> {
-            run(() -> adminService.setReviewHidden(admin(), review, !review.isHidden()));
-            showRatings();
-        });
+        hide.setOnAction(e -> new Alert(Alert.AlertType.CONFIRMATION, hideReviewMessage(review.isHidden()))
+                .showAndWait().ifPresent(r -> {
+                    if (r == ButtonType.OK) {
+                        run(() -> adminService.setReviewHidden(admin(), review, !review.isHidden()));
+                        showRatings();
+                    }
+                }));
         row.getChildren().addAll(info, hide);
         return row;
+    }
+
+    /**
+     * Confirmation wording for hiding or unhiding a review (SRS UC-3.8 step 5.1 / A2).
+     * A hidden review is left out of the seller's rating, so the two prompts differ.
+     *
+     * @param hidden whether the review is currently hidden
+     * @return the question shown before the visibility change
+     */
+    static String hideReviewMessage(boolean hidden) {
+        return hidden
+                ? "Unhide this review? It will count towards the seller's rating again."
+                : "Hide this review? It will no longer count towards the seller's rating.";
     }
 
     // ---------- Notifications (SRS UC-3.6) ----------
