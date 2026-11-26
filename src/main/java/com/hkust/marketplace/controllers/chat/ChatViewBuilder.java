@@ -401,16 +401,24 @@ public final class ChatViewBuilder {
         dialog.setHeaderText("Formal borrow request for: " + thread.getListing().getTitle());
 
         TextField days = new TextField();
-        days.setPromptText("Days");
+        days.setPromptText("0");
         TextField hours = new TextField();
-        hours.setPromptText("Hours (0\u201323)");
+        hours.setPromptText("0");
+        TextField minutes = new TextField();
+        minutes.setPromptText("0");
         TextField seconds = new TextField();
-        seconds.setPromptText("Seconds (0\u201359)");
-        HBox periodFields = new HBox(8, days, hours, seconds);
-        HBox.setHgrow(days, Priority.ALWAYS);
-        HBox.setHgrow(hours, Priority.ALWAYS);
-        HBox.setHgrow(seconds, Priority.ALWAYS);
-        VBox form = new VBox(8, new Label("Proposed lending period (days, hours, seconds)"), periodFields);
+        seconds.setPromptText("0");
+        HBox periodFields = new HBox(8,
+                durationField("Days", days),
+                durationField("Hours", hours),
+                durationField("Minutes", minutes),
+                durationField("Seconds", seconds));
+        Label periodHint = new Label(
+                "Enter days / hours / minutes / seconds (minimum total 5 seconds).");
+        periodHint.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        VBox form = new VBox(8,
+                new Label("Proposed lending period (days, hours, minutes, seconds)"),
+                periodFields, periodHint);
         form.setPadding(new Insets(8));
         dialog.getDialogPane().setContent(form);
 
@@ -419,7 +427,7 @@ public final class ChatViewBuilder {
         dialog.showAndWait().filter(send::equals).ifPresent(ignored -> {
             Duration period;
             try {
-                period = parsePeriod(days, hours, seconds);
+                period = parsePeriod(days, hours, minutes, seconds);
             } catch (RuntimeException ex) {
                 new Alert(Alert.AlertType.WARNING, ex.getMessage()).showAndWait();
                 return;
@@ -440,28 +448,45 @@ public final class ChatViewBuilder {
                 submit(() -> chatService.submitFormalOffer(currentUser, thread), afterPost));
     }
 
-    private static Duration parsePeriod(TextField daysField, TextField hoursField, TextField secondsField) {
-        return parsePeriod(daysField.getText(), hoursField.getText(), secondsField.getText());
+    private static VBox durationField(String unit, TextField field) {
+        Label unitLabel = new Label(unit);
+        unitLabel.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        field.setMaxWidth(Double.MAX_VALUE);
+        VBox box = new VBox(4, unitLabel, field);
+        box.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
+    }
+
+    private static Duration parsePeriod(TextField daysField, TextField hoursField,
+                                        TextField minutesField, TextField secondsField) {
+        return parsePeriod(daysField.getText(), hoursField.getText(),
+                minutesField.getText(), secondsField.getText());
     }
 
     /**
-     * Parses a lending period in days, hours and seconds; blank parts count as zero. Seconds allow
-     * the shortest allowed borrow period (5 seconds) to be requested.
+     * Parses a lending period in days, hours, minutes and seconds; blank parts count as zero.
+     * Seconds allow the shortest allowed borrow period (5 seconds) to be requested.
      */
-    public static Duration parsePeriod(String daysText, String hoursText, String secondsText) {
+    public static Duration parsePeriod(String daysText, String hoursText,
+                                       String minutesText, String secondsText) {
         String days = daysText.trim();
         String hours = hoursText.trim();
+        String minutes = minutesText.trim();
         String seconds = secondsText.trim();
-        if (days.isEmpty() && hours.isEmpty() && seconds.isEmpty()) {
-            throw new IllegalArgumentException("Enter a lending period in days, hours and/or seconds.");
+        if (days.isEmpty() && hours.isEmpty() && minutes.isEmpty() && seconds.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Enter a lending period in days, hours, minutes and/or seconds.");
         }
         long dayCount = parsePart(days, "Days");
         long hourCount = parsePart(hours, "Hours");
+        long minuteCount = parsePart(minutes, "Minutes");
         long secondCount = parsePart(seconds, "Seconds");
-        if (dayCount < 0 || hourCount < 0 || secondCount < 0) {
-            throw new IllegalArgumentException("Days, hours and seconds must be non-negative.");
+        if (dayCount < 0 || hourCount < 0 || minuteCount < 0 || secondCount < 0) {
+            throw new IllegalArgumentException("Days, hours, minutes and seconds must be non-negative.");
         }
-        return Duration.ofDays(dayCount).plusHours(hourCount).plusSeconds(secondCount);
+        return Duration.ofDays(dayCount).plusHours(hourCount)
+                .plusMinutes(minuteCount).plusSeconds(secondCount);
     }
 
     private static long parsePart(String text, String label) {

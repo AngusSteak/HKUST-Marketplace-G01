@@ -144,6 +144,19 @@ class ListingFormStateTest {
     }
 
     @Test
+    void aMinutesOnlyDurationIsAccepted() {
+        ListingFormState state = validState(ListingType.LEND);
+        state.setRawDurationDays("0");
+        state.setRawDurationHours("1");
+        state.setRawDurationMinutes("30");
+        state.setRawDurationSeconds("0");
+
+        assertTrue(state.validate(CHARLIE).isEmpty());
+        assertEquals(Duration.ofSeconds(5_400),
+                ((LendListing) state.buildListing(CHARLIE)).getLendingDuration());
+    }
+
+    @Test
     void aFiveSecondDurationIsAccepted() {
         ListingFormState state = validState(ListingType.LEND);
         state.setRawDurationDays("0");
@@ -290,6 +303,7 @@ class ListingFormStateTest {
         assertEquals(Location.ACADEMIC_BUILDING, state.getMeetupLocation());
         assertEquals("2", state.getRawDurationDays());
         assertEquals("3", state.getRawDurationHours());
+        assertEquals("0", state.getRawDurationMinutes());
         assertEquals("15", state.getRawDurationSeconds());
         assertEquals(listing.getLendingDuration(), state.getLendingDuration());
         assertEquals(listing.getPhotoPaths(), state.getPhotoPaths());
@@ -314,6 +328,7 @@ class ListingFormStateTest {
         assertNull(state.getRawPrice());
         assertNull(state.getRawDurationDays());
         assertNull(state.getRawDurationHours());
+        assertNull(state.getRawDurationMinutes());
         assertNull(state.getRawDurationSeconds());
         assertEquals(listing.getPhotoPaths(), state.getPhotoPaths());
         assertTrue(state.validate(CHARLIE).isEmpty());

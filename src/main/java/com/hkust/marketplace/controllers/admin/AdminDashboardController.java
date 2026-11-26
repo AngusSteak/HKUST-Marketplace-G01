@@ -116,6 +116,14 @@ public class AdminDashboardController {
         return label;
     }
 
+    private static VBox durationField(String unit, TextField field) {
+        Label unitLabel = label(unit, "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        VBox box = new VBox(4, unitLabel, field);
+        box.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
+    }
+
     private static String statusText(ListingStatus status) {
         return status.name().replace('_', ' ');
     }
@@ -359,6 +367,7 @@ public class AdminDashboardController {
         TextField price = new TextField();
         TextField days = new TextField();
         TextField hours = new TextField();
+        TextField minutes = new TextField();
         TextField seconds = new TextField();
         if (listing instanceof SaleListing sale) {
             price.setText(sale.getPrice().amount().toPlainString());
@@ -366,6 +375,7 @@ public class AdminDashboardController {
             Duration duration = lend.getLendingDuration();
             days.setText(String.valueOf(duration.toDays()));
             hours.setText(String.valueOf(duration.toHoursPart()));
+            minutes.setText(String.valueOf(duration.toMinutesPart()));
             seconds.setText(String.valueOf(duration.toSecondsPart()));
         }
 
@@ -409,14 +419,20 @@ public class AdminDashboardController {
         if (listing instanceof SaleListing) {
             form.getChildren().addAll(new Label("Asking price"), price);
         } else if (listing instanceof LendListing) {
-            HBox durationRow = new HBox(8, days, hours, seconds);
-            HBox.setHgrow(days, Priority.ALWAYS);
-            HBox.setHgrow(hours, Priority.ALWAYS);
-            HBox.setHgrow(seconds, Priority.ALWAYS);
-            days.setPromptText("Days");
-            hours.setPromptText("Hours");
-            seconds.setPromptText("Seconds (min 5)");
-            form.getChildren().addAll(new Label("Lending duration"), durationRow);
+            days.setPromptText("0");
+            hours.setPromptText("0");
+            minutes.setPromptText("0");
+            seconds.setPromptText("0");
+            HBox durationRow = new HBox(8,
+                    durationField("Days", days),
+                    durationField("Hours", hours),
+                    durationField("Minutes", minutes),
+                    durationField("Seconds", seconds));
+            Label durationHint = label(
+                    "Enter days / hours / minutes / seconds (minimum total 5 seconds).",
+                    "-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+            VBox durationBox = new VBox(6, durationRow, durationHint);
+            form.getChildren().addAll(new Label("Lending duration"), durationBox);
         }
         form.getChildren().add(photoArea);
         Label errorSummary = new Label();
@@ -431,12 +447,12 @@ public class AdminDashboardController {
 
         ListingType type = listing instanceof SaleListing ? ListingType.SELL
                 : listing instanceof LendListing ? ListingType.LEND : ListingType.GIVEAWAY;
-        List<Node> inputs = List.<Node>of(title, description, price, days, hours, seconds);
+        List<Node> inputs = List.<Node>of(title, description, price, days, hours, minutes, seconds);
         Map<String, List<Node>> errorControls = Map.of(
                 "title", List.<Node>of(title),
                 "description", List.<Node>of(description),
                 "price", List.<Node>of(price),
-                "duration", List.<Node>of(days, hours, seconds));
+                "duration", List.<Node>of(days, hours, minutes, seconds));
         Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
         okButton.addEventFilter(ActionEvent.ACTION, event -> {
             inputs.forEach(field -> field.getStyleClass().remove("input-error"));
@@ -444,7 +460,7 @@ public class AdminDashboardController {
             errorSummary.setVisible(false);
             errorSummary.setManaged(false);
             Map<String, String> errors = adminEditErrors(type, title.getText(), description.getText(),
-                    price.getText(), days.getText(), hours.getText(), seconds.getText());
+                    price.getText(), days.getText(), hours.getText(), minutes.getText(), seconds.getText());
             if (errors.isEmpty()) {
                 return;
             }
@@ -460,13 +476,15 @@ public class AdminDashboardController {
         try {
             Duration duration = listing instanceof LendListing
                     ? Duration.ofDays(parseLong(days.getText())).plusHours(parseLong(hours.getText()))
+                    .plusMinutes(parseLong(minutes.getText()))
                     .plusSeconds(parseLong(seconds.getText()))
                     : null;
             run(() -> adminService.editListing(admin(), listing, title.getText(), description.getText(),
                     category.getValue(), condition.getValue(), location.getValue(), price.getText(), duration,
                     keptPhotoPaths, newPhotos, photoStorage));
         } catch (NumberFormatException ex) {
-            new Alert(Alert.AlertType.WARNING, "Lending days, hours and seconds must be whole numbers.").showAndWait();
+            new Alert(Alert.AlertType.WARNING,
+                    "Lending days, hours, minutes and seconds must be whole numbers.").showAndWait();
         }
         showAllListings();
     }
@@ -480,7 +498,8 @@ public class AdminDashboardController {
      * @return field-key to message; empty when the input is valid
      */
     static Map<String, String> adminEditErrors(ListingType type, String title, String description,
-                                               String rawPrice, String days, String hours, String seconds) {
+                                               String rawPrice, String days, String hours,
+                                               String minutes, String seconds) {
         Map<String, String> errors = new LinkedHashMap<>();
         if (title == null || title.isBlank()) {
             errors.put("title", "Title is required");
@@ -498,10 +517,11 @@ public class AdminDashboardController {
             try {
                 Duration duration = Duration.ofDays(parseLong(days))
                         .plusHours(parseLong(hours))
+                        .plusMinutes(parseLong(minutes))
                         .plusSeconds(parseLong(seconds));
                 LendingRules.requireLendingDuration(duration);
             } catch (NumberFormatException | ArithmeticException ex) {
-                errors.put("duration", "Lending days, hours and seconds must be whole numbers.");
+                errors.put("duration", "Lending days, hours, minutes and seconds must be whole numbers.");
             } catch (IllegalArgumentException ex) {
                 errors.put("duration", ex.getMessage());
             }

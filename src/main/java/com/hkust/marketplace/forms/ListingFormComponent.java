@@ -68,10 +68,12 @@ public class ListingFormComponent {
     private final TextField priceField = new TextField();
     private final TextField daysField = new TextField();
     private final TextField hoursField = new TextField();
+    private final TextField minutesField = new TextField();
     private final TextField secondsField = new TextField();
 
     private final HBox priceRow = new HBox(8);
     private final HBox durationRow = new HBox(8);
+    private final VBox durationSection = new VBox(6);
     private final VBox photoArea = new VBox(8);
     private final HBox thumbnailStrip = new HBox(8);
     private final Button addPhotosButton = new Button("Add photos");
@@ -137,6 +139,7 @@ public class ListingFormComponent {
         } else if (listing instanceof LendListing) {
             daysField.setText(state.getRawDurationDays());
             hoursField.setText(state.getRawDurationHours());
+            minutesField.setText(state.getRawDurationMinutes());
             secondsField.setText(state.getRawDurationSeconds());
         }
 
@@ -233,14 +236,22 @@ public class ListingFormComponent {
         priceRow.getChildren().add(priceField);
         HBox.setHgrow(priceField, Priority.ALWAYS);
 
-        daysField.setPromptText("Days");
-        hoursField.setPromptText("Hours");
-        secondsField.setPromptText("Seconds (min 5)");
-        for (TextField field : new TextField[]{daysField, hoursField, secondsField}) {
+        daysField.setPromptText("0");
+        hoursField.setPromptText("0");
+        minutesField.setPromptText("0");
+        secondsField.setPromptText("0");
+        for (TextField field : new TextField[]{daysField, hoursField, minutesField, secondsField}) {
             field.setMaxWidth(Double.MAX_VALUE);
-            HBox.setHgrow(field, Priority.ALWAYS);
         }
-        durationRow.getChildren().addAll(daysField, hoursField, secondsField);
+        durationRow.getChildren().addAll(
+                durationField("Days", daysField),
+                durationField("Hours", hoursField),
+                durationField("Minutes", minutesField),
+                durationField("Seconds", secondsField));
+        Label durationHint = new Label(
+                "Enter days / hours / minutes / seconds (minimum total 5 seconds).");
+        durationHint.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        durationSection.getChildren().addAll(durationRow, durationHint);
 
         setupPhotoChooser();
 
@@ -276,9 +287,18 @@ public class ListingFormComponent {
                 field("Meet-up Location *", locationCombo, "location"),
                 field("Description *", descriptionArea, "description"),
                 field("Price (Sell only)", priceRow, "price"),
-                field("Lending Duration (Lend only)", durationRow, "duration"),
+                field("Lending Duration (Lend only: days, hours, minutes, seconds)", durationSection, "duration"),
                 photoArea,
                 actions);
+    }
+
+    private static VBox durationField(String unit, TextField field) {
+        Label unitLabel = new Label(unit);
+        unitLabel.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 12px;");
+        VBox box = new VBox(4, unitLabel, field);
+        box.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
     }
 
     /** Wraps a control with a caption and an (initially hidden) error label. */
@@ -451,6 +471,10 @@ public class ListingFormComponent {
             state.setRawDurationHours(value);
             clearError("duration");
         });
+        minutesField.textProperty().addListener((obs, old, value) -> {
+            state.setRawDurationMinutes(value);
+            clearError("duration");
+        });
         secondsField.textProperty().addListener((obs, old, value) -> {
             state.setRawDurationSeconds(value);
             clearError("duration");
@@ -464,8 +488,8 @@ public class ListingFormComponent {
         boolean lend = "Lend".equals(value);
         priceRow.setVisible(sell);
         priceRow.setManaged(sell);
-        durationRow.setVisible(lend);
-        durationRow.setManaged(lend);
+        durationSection.setVisible(lend);
+        durationSection.setManaged(lend);
     }
 
     private static ListingType toListingType(String value) {

@@ -42,6 +42,7 @@ public class ListingFormState {
     private String rawPrice;
     private String rawDurationDays;
     private String rawDurationHours;
+    private String rawDurationMinutes;
     private String rawDurationSeconds;
 
     private final List<PhotoDraft> chosenPhotos = new ArrayList<>();
@@ -121,6 +122,14 @@ public class ListingFormState {
 
     public void setRawDurationHours(String rawDurationHours) {
         this.rawDurationHours = rawDurationHours;
+    }
+
+    public String getRawDurationMinutes() {
+        return rawDurationMinutes;
+    }
+
+    public void setRawDurationMinutes(String rawDurationMinutes) {
+        this.rawDurationMinutes = rawDurationMinutes;
     }
 
     public String getRawDurationSeconds() {
@@ -203,6 +212,7 @@ public class ListingFormState {
         setRawPrice(null);
         setRawDurationDays(null);
         setRawDurationHours(null);
+        setRawDurationMinutes(null);
         setRawDurationSeconds(null);
 
         if (listing instanceof SaleListing sale) {
@@ -211,7 +221,8 @@ public class ListingFormState {
             long totalSeconds = lend.getLendingDuration().getSeconds();
             setRawDurationDays(String.valueOf(totalSeconds / 86_400));
             setRawDurationHours(String.valueOf((totalSeconds % 86_400) / 3_600));
-            setRawDurationSeconds(String.valueOf(totalSeconds % 3_600));
+            setRawDurationMinutes(String.valueOf((totalSeconds % 3_600) / 60));
+            setRawDurationSeconds(String.valueOf(totalSeconds % 60));
         }
     }
 
@@ -268,7 +279,8 @@ public class ListingFormState {
     public boolean isDirty() {
         return type != null
                 || hasText(title) || hasText(description) || hasText(rawPrice)
-                || hasText(rawDurationDays) || hasText(rawDurationHours) || hasText(rawDurationSeconds)
+                || hasText(rawDurationDays) || hasText(rawDurationHours)
+                || hasText(rawDurationMinutes) || hasText(rawDurationSeconds)
                 || category != null || condition != null || meetupLocation != null
                 || !chosenPhotos.isEmpty() || !photoPaths.isEmpty();
     }
@@ -306,24 +318,27 @@ public class ListingFormState {
         return LendingRules.requireLendingDuration(parsedDuration());
     }
 
-    /** Parses the raw days/hours strings; numeric-rule checking stays in LendingRules. */
+    /** Parses the raw days/hours/minutes/seconds strings; numeric-rule checking stays in LendingRules. */
     private Duration parsedDuration() {
         String days = rawDurationDays == null ? "" : rawDurationDays.trim();
         String hours = rawDurationHours == null ? "" : rawDurationHours.trim();
+        String minutes = rawDurationMinutes == null ? "" : rawDurationMinutes.trim();
         String seconds = rawDurationSeconds == null ? "" : rawDurationSeconds.trim();
-        if (days.isEmpty() && hours.isEmpty() && seconds.isEmpty()) {
+        if (days.isEmpty() && hours.isEmpty() && minutes.isEmpty() && seconds.isEmpty()) {
             throw new IllegalArgumentException("Lending duration is required");
         }
         try {
             long d = days.isEmpty() ? 0 : Long.parseLong(days);
             long h = hours.isEmpty() ? 0 : Long.parseLong(hours);
+            long m = minutes.isEmpty() ? 0 : Long.parseLong(minutes);
             long s = seconds.isEmpty() ? 0 : Long.parseLong(seconds);
-            if (d < 0 || h < 0 || s < 0) {
+            if (d < 0 || h < 0 || m < 0 || s < 0) {
                 throw new IllegalArgumentException("Lending duration must not be negative");
             }
-            return Duration.ofDays(d).plusHours(h).plusSeconds(s);
+            return Duration.ofDays(d).plusHours(h).plusMinutes(m).plusSeconds(s);
         } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException("Lending days, hours and seconds must be whole numbers", ex);
+            throw new IllegalArgumentException(
+                    "Lending days, hours, minutes and seconds must be whole numbers", ex);
         }
     }
 

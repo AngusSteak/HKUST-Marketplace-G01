@@ -14,17 +14,17 @@ class AdminEditListingValidationTest {
     @Test
     void validSaleAndLendInputHasNoErrors() {
         assertTrue(AdminDashboardController.adminEditErrors(
-                ListingType.SELL, "MacBook charger", "Original", "180.00", "", "", "").isEmpty());
+                ListingType.SELL, "MacBook charger", "Original", "180.00", "", "", "", "").isEmpty());
         assertTrue(AdminDashboardController.adminEditErrors(
-                ListingType.LEND, "Projector", "Full HD", "", "0", "1", "0").isEmpty());
+                ListingType.LEND, "Projector", "Full HD", "", "0", "1", "0", "0").isEmpty());
         assertTrue(AdminDashboardController.adminEditErrors(
-                ListingType.GIVEAWAY, "Desk lamp", "Works", "", "", "", "").isEmpty());
+                ListingType.GIVEAWAY, "Desk lamp", "Works", "", "", "", "", "").isEmpty());
     }
 
     @Test
     void blankTitleAndDescriptionAreReported() {
         Map<String, String> errors = AdminDashboardController.adminEditErrors(
-                ListingType.SELL, "  ", "", "180", "", "", "");
+                ListingType.SELL, "  ", "", "180", "", "", "", "");
 
         assertEquals("Title is required", errors.get("title"));
         assertEquals("Description is required", errors.get("description"));
@@ -33,26 +33,42 @@ class AdminEditListingValidationTest {
     @Test
     void invalidSalePriceIsReported() {
         assertEquals("Asking price is required", AdminDashboardController.adminEditErrors(
-                ListingType.SELL, "Chair", "Sturdy", "  ", "", "", "").get("price"));
+                ListingType.SELL, "Chair", "Sturdy", "  ", "", "", "", "").get("price"));
 
         assertTrue(AdminDashboardController.adminEditErrors(
-                ListingType.SELL, "Chair", "Sturdy", "not a number", "", "", "")
+                ListingType.SELL, "Chair", "Sturdy", "not a number", "", "", "", "")
                 .get("price").startsWith("Invalid asking price"));
     }
 
     @Test
     void shortLendDurationIsReported() {
         Map<String, String> errors = AdminDashboardController.adminEditErrors(
-                ListingType.LEND, "Projector", "Full HD", "", "0", "0", "4");
+                ListingType.LEND, "Projector", "Full HD", "", "0", "0", "0", "4");
 
         assertEquals("Lending duration must be at least 5 seconds", errors.get("duration"));
     }
 
     @Test
+    void minutesParticipateInTheLendDuration() {
+        assertTrue(AdminDashboardController.adminEditErrors(
+                ListingType.LEND, "Projector", "Full HD", "", "0", "0", "1", "0").isEmpty());
+        assertTrue(AdminDashboardController.adminEditErrors(
+                ListingType.LEND, "Projector", "Full HD", "", "0", "0", "0", "5").isEmpty());
+    }
+
+    @Test
     void nonNumericLendDurationIsReported() {
-        assertEquals("Lending days, hours and seconds must be whole numbers.",
+        assertEquals("Lending days, hours, minutes and seconds must be whole numbers.",
                 AdminDashboardController.adminEditErrors(
-                        ListingType.LEND, "Projector", "Full HD", "", "1.5", "0", "0")
+                        ListingType.LEND, "Projector", "Full HD", "", "1.5", "0", "0", "0")
+                        .get("duration"));
+    }
+
+    @Test
+    void nonNumericMinutesAreReportedAsADurationError() {
+        assertEquals("Lending days, hours, minutes and seconds must be whole numbers.",
+                AdminDashboardController.adminEditErrors(
+                        ListingType.LEND, "Projector", "Full HD", "", "0", "0", "abc", "0")
                         .get("duration"));
     }
 }

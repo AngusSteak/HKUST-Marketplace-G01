@@ -35,20 +35,29 @@ class BorrowPeriodParsingTest {
 
     @Test
     void chatOfferAcceptsFiveSeconds() {
-        assertEquals(Duration.ofSeconds(5), ChatViewBuilder.parsePeriod("", "", "5"));
+        assertEquals(Duration.ofSeconds(5), ChatViewBuilder.parsePeriod("", "", "", "5"));
     }
 
     @Test
     void chatOfferStillAcceptsLargerPeriods() {
         assertEquals(Duration.ofDays(2).plusHours(3).plusSeconds(4),
-                ChatViewBuilder.parsePeriod("2", "3", "4"));
-        assertEquals(Duration.ofHours(2), ChatViewBuilder.parsePeriod("", "2", ""));
+                ChatViewBuilder.parsePeriod("2", "3", "", "4"));
+        assertEquals(Duration.ofHours(2), ChatViewBuilder.parsePeriod("", "2", "", ""));
+    }
+
+    @Test
+    void chatOfferAcceptsMinutes() {
+        assertEquals(Duration.ofHours(1).plusMinutes(30),
+                ChatViewBuilder.parsePeriod("0", "1", "30", "0"));
+        assertEquals(Duration.ofMinutes(30), ChatViewBuilder.parsePeriod("", "", "30", ""));
+        assertEquals(Duration.ofSeconds(5), ChatViewBuilder.parsePeriod("0", "0", "", "5"));
     }
 
     @Test
     void chatOfferRejectsBlankOrInvalidValues() {
-        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("", "", ""));
-        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("", "abc", ""));
-        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("-1", "", ""));
+        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("", "", "", ""));
+        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("", "abc", "", ""));
+        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("-1", "", "", ""));
+        assertThrows(IllegalArgumentException.class, () -> ChatViewBuilder.parsePeriod("", "", "abc", ""));
     }
 }
