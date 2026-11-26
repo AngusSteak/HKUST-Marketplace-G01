@@ -15,15 +15,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LocationLabelTest {
 
     private static final List<String> CANONICAL_LABELS = List.of(
-            "Academic Building", "Library", "Student Centre", "North Gate", "South Gate",
-            "Shaw Auditorium", "Coffee Shop (LG5)", "Sports Hall",
+            "Academic Building", "LSK", "Library", "Student Centre", "North Gate", "South Gate",
+            "Shaw Auditorium", "McDonald's (LG5)", "LG7 Fusion", "Sports Hall",
             "UG Hall I", "UG Hall II", "UG Hall III", "UG Hall IV",
             "UG Hall V", "UG Hall VI", "UG Hall VII", "UG Hall VIII",
             "PG Hall", "Off-campus");
 
     @Test
-    void hasExactlyThe18CanonicalConstants() {
-        assertEquals(18, Location.values().length);
+    void hasExactlyThe20CanonicalConstants() {
+        assertEquals(20, Location.values().length);
         assertEquals(CANONICAL_LABELS, Arrays.stream(Location.values()).map(Location::getLabel).toList());
     }
 
@@ -54,6 +54,7 @@ class LocationLabelTest {
     @Test
     void rejectsLegacyAndUnknownLabels() {
         assertThrows(IllegalArgumentException.class, () -> Location.fromLabel("Hall 5 Lobby"));
+        assertThrows(IllegalArgumentException.class, () -> Location.fromLabel("Coffee Shop (LG5)"));
         assertThrows(IllegalArgumentException.class, () -> Location.fromLabel("Academic Building (LG1)"));
         assertThrows(IllegalArgumentException.class, () -> Location.fromLabel("UG Hall 5"));
         assertThrows(IllegalArgumentException.class, () -> Location.fromLabel(""));

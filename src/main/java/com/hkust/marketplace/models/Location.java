@@ -3,12 +3,14 @@ package com.hkust.marketplace.models;
 /** The campus meetup locations offered on listings and seller profiles (SRS Appendix A). */
 public enum Location {
     ACADEMIC_BUILDING("Academic Building"),
+    LSK("LSK"),
     LIBRARY("Library"),
     STUDENT_CENTRE("Student Centre"),
     NORTH_GATE("North Gate"),
     SOUTH_GATE("South Gate"),
     SHAW_AUDITORIUM("Shaw Auditorium"),
-    COFFEE_SHOP_LG5("Coffee Shop (LG5)"),
+    MCDONALDS_LG5("McDonald's (LG5)"),
+    LG7_FUSION("LG7 Fusion"),
     SPORTS_HALL("Sports Hall"),
     UG_HALL_I("UG Hall I"),
     UG_HALL_II("UG Hall II"),
