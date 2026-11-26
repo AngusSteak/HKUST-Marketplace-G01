@@ -674,8 +674,10 @@ public class SellerDashboardController {
         TableView<SellerStats.ListingStat> table = new TableView<>();
         table.setEditable(false);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.getStyleClass().add("link-table");
+        table.setFocusTraversable(false);
         table.getColumns().addAll(List.of(
-                statColumn("Listing", SellerStats.ListingStat::title),
+                listingTitleColumn(),
                 statColumn("Status", row -> row.status().name().replace('_', ' ')),
                 statColumn("Outcome", row -> outcomeLabel(row.outcome())),
                 statColumn("Views", row -> String.valueOf(row.views())),
@@ -691,6 +693,40 @@ public class SellerDashboardController {
         TableColumn<SellerStats.ListingStat, String> column = new TableColumn<>(title);
         column.setSortable(false);
         column.setCellValueFactory(cell -> new SimpleStringProperty(value.apply(cell.getValue())));
+        return column;
+    }
+
+    private TableColumn<SellerStats.ListingStat, String> listingTitleColumn() {
+        TableColumn<SellerStats.ListingStat, String> column = statColumn("Listing", SellerStats.ListingStat::title);
+        column.setCellFactory(c -> new TableCell<>() {
+            private final Hyperlink link = new Hyperlink();
+
+            {
+                link.getStyleClass().add("deal-link");
+                link.setOnAction(e -> {
+                    SellerStats.ListingStat row = getTableRow() == null ? null : getTableRow().getItem();
+                    Listing listing = row == null ? null
+                            : DummyDataService.getInstance().listings().find(row.listingId());
+                    if (listing != null) {
+                        ListingDetailDialog.show(
+                                contentPane.getScene() == null ? null : contentPane.getScene().getWindow(), listing);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String title, boolean empty) {
+                super.updateItem(title, empty);
+                if (empty || title == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    link.setText(title);
+                    setGraphic(link);
+                    setText(null);
+                }
+            }
+        });
         return column;
     }
 
