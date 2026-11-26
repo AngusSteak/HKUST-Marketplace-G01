@@ -1,12 +1,16 @@
 package com.hkust.marketplace.utils;
 
 import com.hkust.marketplace.models.BorrowRequest;
+import com.hkust.marketplace.models.Buyer;
 import com.hkust.marketplace.models.Claim;
 import com.hkust.marketplace.models.Deal;
 import com.hkust.marketplace.models.DealRequest;
 import com.hkust.marketplace.models.DealStatus;
 import com.hkust.marketplace.models.DealType;
+import com.hkust.marketplace.models.Listing;
+import com.hkust.marketplace.models.ListingType;
 import com.hkust.marketplace.models.PriceOffer;
+import com.hkust.marketplace.models.RequestStatus;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -48,6 +52,25 @@ class DealStoreTest {
         assertEquals(1, open.size());
         assertInstanceOf(BorrowRequest.class, open.get(0));
         assertTrue(deals.activeDealsForBuyer("bob").isEmpty());
+    }
+
+    @Test
+    void counteredRequestsComeBeforePendingOnes() {
+        DummyDataService data = seeded();
+        DealStore store = data.deals();
+        // alice's seeded claim is older and still Pending; her new offer is countered by the seller
+        Listing sale = data.listings().all().stream()
+                .filter(l -> l.getType() == ListingType.SELL && ListingSearch.isBrowsable(l))
+                .findFirst().orElseThrow();
+        PriceOffer offer = store.lifecycle().submitOffer(
+                (Buyer) data.users().find("alice"), sale, new BigDecimal("100"));
+        store.lifecycle().counterOffer(offer, new BigDecimal("120"));
+
+        List<DealRequest> open = store.openRequestsByBuyer("alice");
+
+        assertEquals(2, open.size());
+        assertEquals(RequestStatus.COUNTERED, open.get(0).getStatus());
+        assertEquals(RequestStatus.PENDING, open.get(1).getStatus());
     }
 
     @Test
