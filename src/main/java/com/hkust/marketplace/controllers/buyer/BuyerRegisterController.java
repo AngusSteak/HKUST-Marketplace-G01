@@ -6,11 +6,13 @@ import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.RegistrationService;
 import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 
 import java.util.Set;
 
@@ -21,6 +23,8 @@ public class BuyerRegisterController {
     @FXML private TextField fullNameField;
     @FXML private PasswordField passwordField;
     @FXML private PasswordField confirmPasswordField;
+    @FXML private HBox passwordRow;
+    @FXML private HBox confirmPasswordRow;
     @FXML private ComboBox<String> residenceCombo;
     @FXML private Label errorLabel;
     @FXML private Label successLabel;
@@ -28,6 +32,8 @@ public class BuyerRegisterController {
     /** Fills the residence-hall choices. */
     @FXML
     public void initialize() {
+        PasswordVisibility.attach(passwordField, passwordRow);
+        PasswordVisibility.attach(confirmPasswordField, confirmPasswordRow);
         residenceCombo.setItems(FXCollections.observableArrayList(
                 "Hall 1", "Hall 2", "Hall 3", "Hall 4", "Hall 5",
                 "Hall 6", "Hall 7", "Hall 8", "Hall 9",

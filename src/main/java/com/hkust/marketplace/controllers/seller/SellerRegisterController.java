@@ -7,10 +7,12 @@ import com.hkust.marketplace.models.UserRole;
 import com.hkust.marketplace.utils.DummyDataService;
 import com.hkust.marketplace.utils.RegistrationService;
 import com.hkust.marketplace.utils.PasswordHasher;
+import com.hkust.marketplace.utils.PasswordVisibility;
 import com.hkust.marketplace.utils.SceneManager;
 import com.hkust.marketplace.utils.UserStore;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.GridPane;
 
 import java.util.EnumMap;
@@ -24,6 +26,8 @@ public class SellerRegisterController {
     @FXML private TextField fullNameField;
     @FXML private PasswordField passwordField;
     @FXML private PasswordField confirmPasswordField;
+    @FXML private HBox passwordRow;
+    @FXML private HBox confirmPasswordRow;
     @FXML private GridPane meetupGrid;
     @FXML private TextArea bioArea;
     @FXML private Label errorLabel;
@@ -34,6 +38,8 @@ public class SellerRegisterController {
     /** Fills the multi-select meet-up location choices. */
     @FXML
     public void initialize() {
+        PasswordVisibility.attach(passwordField, passwordRow);
+        PasswordVisibility.attach(confirmPasswordField, confirmPasswordRow);
         int i = 0;
         for (Location location : Location.values()) {
             CheckBox box = new CheckBox(location.getLabel());
