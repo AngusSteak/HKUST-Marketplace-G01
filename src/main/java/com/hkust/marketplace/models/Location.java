@@ -8,7 +8,7 @@ public enum Location {
     NORTH_GATE("North Gate"),
     SOUTH_GATE("South Gate"),
     SHAW_AUDITORIUM("Shaw Auditorium"),
-    COFFEE_SHOP_LG5("Coffee Shop (LG5)"),
+    COFFEE_SHOP_LG5("McDonald's (LG5)"),   // name kept: saved data stores it
     SPORTS_HALL("Sports Hall"),
     UG_HALL_I("UG Hall I"),
     UG_HALL_II("UG Hall II"),
