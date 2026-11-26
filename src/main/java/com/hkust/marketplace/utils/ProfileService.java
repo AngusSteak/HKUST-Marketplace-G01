@@ -118,7 +118,9 @@ public final class ProfileService {
             throw new IllegalArgumentException(BIO_TOO_LONG);
         }
         final String normalizedBio = trimmedBio;
-        Set<Location> meetups = meetup == null ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(meetup);
+        // EnumSet.copyOf throws on an empty set that is not already an EnumSet (e.g. Set.of()).
+        Set<Location> meetups = meetup == null || meetup.isEmpty()
+                ? EnumSet.noneOf(Location.class) : EnumSet.copyOf(meetup);
 
         boolean changePassword = !isBlank(currentPassword) || !isBlank(newPassword) || !isBlank(confirmPassword);
         if (changePassword) {
