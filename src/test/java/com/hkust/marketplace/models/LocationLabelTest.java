@@ -16,7 +16,7 @@ class LocationLabelTest {
 
     private static final List<String> CANONICAL_LABELS = List.of(
             "Academic Building", "Library", "Student Centre", "North Gate", "South Gate",
-            "Shaw Auditorium", "Coffee Shop (LG5)", "Sports Hall",
+            "Shaw Auditorium", "McDonald's (LG5)", "Sports Hall",
             "UG Hall I", "UG Hall II", "UG Hall III", "UG Hall IV",
             "UG Hall V", "UG Hall VI", "UG Hall VII", "UG Hall VIII",
             "PG Hall", "Off-campus");
