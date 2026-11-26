@@ -77,8 +77,25 @@ public final class ChatViewBuilder {
         banner.setManaged(offersClosed);
         root.getChildren().add(banner);
 
-        root.getChildren().add(searchPanel(chatService, currentUser, () -> refresh[0].run(),
-                onViewRequest));
+        // Search looks only inside this thread (SRS UC-1.5 step 3.3); matches replace the
+        // message list until the search is cleared.
+        TextField keyword = new TextField();
+        ComboBox<MessageSearchFilter> kind = new ComboBox<>(
+                FXCollections.observableArrayList(MessageSearchFilter.values()));
+        Label searchStatus = new Label();
+        searchStatus.getStyleClass().add("subtitle-label");
+        Hyperlink clearSearch = new Hyperlink("Clear");
+        HBox searchInfo = new HBox(6, searchStatus, clearSearch);
+        searchInfo.setAlignment(Pos.CENTER_LEFT);
+        searchInfo.setVisible(false);
+        searchInfo.setManaged(false);
+        root.getChildren().add(searchPanel(keyword, kind, () -> refresh[0].run()));
+        root.getChildren().add(searchInfo);
+        clearSearch.setOnAction(e -> {
+            keyword.clear();
+            kind.setValue(MessageSearchFilter.ALL);
+            refresh[0].run();
+        });
 
         VBox messageList = new VBox(8);
         messageList.setPadding(new Insets(4));
@@ -88,14 +105,29 @@ public final class ChatViewBuilder {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         root.getChildren().add(scroll);
 
-        HBox composerRow = composer(chatService, currentUser, thread, () -> refresh[0].run());
+        // Sending clears any search, so the new message is never hidden by it.
+        HBox composerRow = composer(chatService, currentUser, thread, () -> {
+            keyword.clear();
+            kind.setValue(MessageSearchFilter.ALL);
+            refresh[0].run();
+        });
         root.getChildren().add(composerRow);
 
         Runnable rerender = () -> {
             messageList.getChildren().clear();
-            List<Message> history = chatService.history(thread);
+            String query = keyword.getText() == null ? "" : keyword.getText().trim();
+            boolean searching = !query.isEmpty() || kind.getValue() != MessageSearchFilter.ALL;
+            List<Message> history = searching
+                    ? chatService.searchThread(currentUser, thread, query, kind.getValue())
+                    : chatService.history(thread);
+            searchInfo.setVisible(searching);
+            searchInfo.setManaged(searching);
+            if (searching) {
+                searchStatus.setText(searchSummary(history.size(), query, kind.getValue()));
+            }
             if (history.isEmpty()) {
-                Label empty = new Label("No messages yet.");
+                // A3: nothing in this thread matches the search.
+                Label empty = new Label(searching ? "No messages found." : "No messages yet.");
                 empty.getStyleClass().add("subtitle-label");
                 messageList.getChildren().add(empty);
             } else {
@@ -266,62 +298,40 @@ public final class ChatViewBuilder {
         };
     }
 
-    private static VBox searchPanel(ChatService chatService, User currentUser, Runnable refresh,
-                                    Consumer<DealRequest> onViewRequest) {
+    private static VBox searchPanel(TextField keyword, ComboBox<MessageSearchFilter> kind, Runnable refresh) {
         VBox panel = new VBox(8);
         panel.getStyleClass().add("card");
         panel.setPadding(new Insets(10));
 
-        TextField keyword = new TextField();
-        keyword.setPromptText("Search all my chats...");
+        keyword.setPromptText("Search this chat...");
         HBox.setHgrow(keyword, Priority.ALWAYS);
-
-        ComboBox<MessageSearchFilter> filter = new ComboBox<>(
-                FXCollections.observableArrayList(MessageSearchFilter.values()));
-        filter.setValue(MessageSearchFilter.ALL);
+        kind.setValue(MessageSearchFilter.ALL);
 
         Button search = new Button("Search");
         search.getStyleClass().addAll("btn-primary", "btn-sm");
 
-        HBox controls = new HBox(8, keyword, filter, search);
+        HBox controls = new HBox(8, keyword, kind, search);
         controls.setAlignment(Pos.CENTER_LEFT);
 
-        VBox results = new VBox(8);
-        ScrollPane resultsScroll = new ScrollPane(results);
-        resultsScroll.setFitToWidth(true);
-        resultsScroll.setPrefViewportHeight(200);
-        resultsScroll.setVisible(false);
-        resultsScroll.setManaged(false);
+        search.setOnAction(e -> refresh.run());
+        keyword.setOnAction(e -> refresh.run());
+        kind.setOnAction(e -> refresh.run());
 
-        Runnable[] searchAgain = new Runnable[1];
-        Runnable runSearch = () -> {
-            results.getChildren().clear();
-            List<Message> matches =
-                    chatService.search(currentUser, keyword.getText(), filter.getValue());
-            resultsScroll.setVisible(true);
-            resultsScroll.setManaged(true);
-            if (matches.isEmpty()) {
-                Label empty = new Label("No matching messages.");
-                empty.getStyleClass().add("subtitle-label");
-                results.getChildren().add(empty);
-            } else {
-                for (Message message : matches) {
-                    results.getChildren().add(messageRow(message, currentUser, chatService,
-                            () -> {
-                                refresh.run();
-                                searchAgain[0].run();
-                            }, onViewRequest));
-                }
-            }
-        };
-        searchAgain[0] = runSearch;
-
-        search.setOnAction(e -> runSearch.run());
-        keyword.setOnAction(e -> runSearch.run());
-        filter.setOnAction(e -> runSearch.run());
-
-        panel.getChildren().addAll(controls, resultsScroll);
+        panel.getChildren().add(controls);
         return panel;
+    }
+
+    /** E.g. "2 messages match 'lamp'" or "1 offer in this chat". */
+    static String searchSummary(int count, String query, MessageSearchFilter kind) {
+        String noun = switch (kind) {
+            case OFFERS_ONLY -> count == 1 ? "offer" : "offers";
+            case TEXT_ONLY -> count == 1 ? "text message" : "text messages";
+            case ALL -> count == 1 ? "message" : "messages";
+        };
+        if (query.isEmpty()) {
+            return count + " " + noun + " in this chat";
+        }
+        return count + " " + noun + (count == 1 ? " matches '" : " match '") + query + "'";
     }
 
     private static final String MAKE_OFFER_ID = "chat-make-offer";
