@@ -118,7 +118,21 @@ The app uses a local **SQLite** file database through `sqlite-jdbc` (a normal Ma
 
 ## Screenshots
 
-Every screen per portal is in [`docs/screenshots/`](docs/screenshots). The images were rendered from the FXML views with the seeded demo data.
+Every screen per portal is in [`docs/screenshots/`](docs/screenshots). The images were rendered from the FXML views with the seeded demo data. The login, registration and create-listing screens show sample values typed into the form.
+
+The flows below were run in the app with sample input. Each row pairs the input with the screen the app produced.
+
+| Flow | Sample input | Output |
+|------|--------------|--------|
+| Buyer login | [Login form filled: `alice` / `password1`](docs/screenshots/buyer-login.png) | [Buyer Browse dashboard](docs/screenshots/buyer-browse.png) |
+| Buyer search | [Typed "MacBook" in Browse](docs/screenshots/samples/buyer-search.png) | 1 matching listing, same screen |
+| Buyer price offer | [Offer dialog: HK$ 200](docs/screenshots/samples/buyer-offer-dialog.png) | [My Deals shows the pending HK$ 200 offer](docs/screenshots/samples/buyer-my-deals.png) |
+| Buyer registration | [Registration form filled](docs/screenshots/buyer-register.png) | [Registration successful](docs/screenshots/samples/buyer-register-success.png) |
+| Seller create listing | [Create Listing form filled](docs/screenshots/seller-create-listing.png) | [Listing submitted](docs/screenshots/samples/seller-listing-submitted.png), then [My Listings shows Desk Lamp](docs/screenshots/samples/seller-my-listings.png) |
+| Admin approve listing | [Listing Review: Mini Fridge pending](docs/screenshots/admin-review.png) | [All Listings: Mini Fridge now Live](docs/screenshots/samples/admin-all-listings.png) |
+| Admin filter users | [Typed "alice" in Manage Users](docs/screenshots/samples/admin-users-filter.png) | Alice Chan is the only row, same screen |
+
+The raw flow images are in [`docs/screenshots/samples/`](docs/screenshots/samples). All of the images are also collected in one PDF: [`docs/screenshots.pdf`](docs/screenshots.pdf). An additional sample input/output pack is at [`docs/Sample_input_output.pdf`](docs/Sample_input_output.pdf).
 
 | Portal | Screens |
 |--------|---------|
@@ -173,7 +187,7 @@ All state is reached through `DummyDataService` and its per-area stores, backed 
 
 | Required item | Where it is |
 | --- | --- |
-| Screenshots of execution | [`docs/screenshots/`](docs/screenshots/) (every screen, seeded demo data) |
+| Screenshots of execution | [`docs/screenshots/`](docs/screenshots/) (every screen and the sample input/output flows); single PDF: [`docs/screenshots.pdf`](docs/screenshots.pdf) |
 | Unit test report (100% pass) | [`docs/reports/unit-tests.md`](docs/reports/unit-tests.md) — 665 tests, 0 failures |
 | Coverage report (>65% branch) | [`docs/reports/coverage.md`](docs/reports/coverage.md) and [`docs/reports/coverage/index.html`](docs/reports/coverage/index.html) — 76.2% branch, controllers included |
 | JavaDoc | [`docs/javadoc/index.html`](docs/javadoc/index.html) |
@@ -198,7 +212,7 @@ HKUST-Marketplace/
         ├── fxml/
         ├── css/styles.css
         └── images/hkust_logo.png
-docs/screenshots/            ← one PNG per screen, per portal
+docs/screenshots/            ← one PNG per screen, per portal; samples/ holds the input → output flows
 ```
 
 ## Troubleshooting
