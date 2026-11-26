@@ -143,11 +143,16 @@ public class BuyerDashboardController {
         ComboBox<ListingSearch.SortOrder> sortBox =
                 new ComboBox<>(FXCollections.observableArrayList(ListingSearch.SortOrder.values()));
         sortBox.getSelectionModel().select(ListingSearch.SortOrder.NEWEST);
-        HBox filterBar = new HBox(10,
-                categoryFilter, typeFilter, conditionFilter,
-                new Label("Price:"), minPrice, new Label("\u2013"), maxPrice,
-                new Label("Sort:"), sortBox);
+        // Wraps onto a second line in a narrow window instead of squeezing the controls to "...".
+        // The price range and the sort each stay together as one group.
+        HBox priceGroup = filterGroup(new Label("Price:"), minPrice, new Label("\u2013"), maxPrice);
+        HBox sortGroup = filterGroup(new Label("Sort:"), sortBox);
+        FlowPane filterBar = new FlowPane(10, 8, categoryFilter, typeFilter, conditionFilter, priceGroup, sortGroup);
         filterBar.setAlignment(Pos.CENTER_LEFT);
+        filterBar.prefWrapLengthProperty().bind(contentPane.widthProperty().subtract(40));
+        for (javafx.scene.Node n : List.of(categoryFilter, typeFilter, conditionFilter, sortBox)) {
+            ((Region) n).setMinWidth(Region.USE_PREF_SIZE);
+        }
 
         Label error = new Label();
         error.setStyle("-fx-text-fill: #c0392b; -fx-font-size: 13px;");
@@ -207,6 +212,18 @@ public class BuyerDashboardController {
         scroll.setFitToWidth(true);
         scroll.setStyle("-fx-background-color: transparent;");
         contentPane.getChildren().add(scroll);
+    }
+
+    /** Controls kept on one line at their natural width, so none of them is cut short. */
+    private static HBox filterGroup(javafx.scene.Node... nodes) {
+        HBox group = new HBox(8, nodes);
+        group.setAlignment(Pos.CENTER_LEFT);
+        for (javafx.scene.Node n : nodes) {
+            if (n instanceof Region r) {
+                r.setMinWidth(Region.USE_PREF_SIZE);
+            }
+        }
+        return group;
     }
 
     private static TextField priceField(String prompt) {
