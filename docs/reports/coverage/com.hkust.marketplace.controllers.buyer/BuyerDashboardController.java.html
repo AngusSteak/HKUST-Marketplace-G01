@@ -455,18 +455,18 @@ import java.util.function.Supplier;
 <span class="fc" id="L455">                    ? &quot;\u2665 Favourited&quot; : &quot;\u2661 Favourite&quot;);</span>
 <span class="fc" id="L456">            showFav.run();</span>
 <span class="fc" id="L457">            favBtn.setOnAction(e -&gt; {</span>
-<span class="fc" id="L458">                data.favourites().toggleFavourite(buyer, listing);</span>
-<span class="fc" id="L459">                showFav.run();</span>
-<span class="fc" id="L460">            });</span>
+<span class="nc" id="L458">                data.favourites().toggleFavourite(buyer, listing);</span>
+<span class="nc" id="L459">                showFav.run();</span>
+<span class="nc" id="L460">            });</span>
 <span class="fc" id="L461">            Button followBtn = new Button();</span>
 <span class="fc" id="L462">            followBtn.getStyleClass().addAll(&quot;btn-outline&quot;, &quot;btn-sm&quot;);</span>
 <span class="fc bfc" id="L463" title="All 2 branches covered.">            Runnable showFollow = () -&gt; followBtn.setText(data.favourites().isFollowing(buyer, seller)</span>
 <span class="fc" id="L464">                    ? &quot;\u2713 Following &quot; + seller.getDisplayName() : &quot;Follow Seller&quot;);</span>
 <span class="fc" id="L465">            showFollow.run();</span>
 <span class="fc" id="L466">            followBtn.setOnAction(e -&gt; {</span>
-<span class="fc" id="L467">                data.favourites().toggleFollow(buyer, seller);</span>
-<span class="fc" id="L468">                showFollow.run();</span>
-<span class="fc" id="L469">            });</span>
+<span class="nc" id="L467">                data.favourites().toggleFollow(buyer, seller);</span>
+<span class="nc" id="L468">                showFollow.run();</span>
+<span class="nc" id="L469">            });</span>
 <span class="fc" id="L470">            actions.getChildren().addAll(favBtn, followBtn);</span>
         }
 

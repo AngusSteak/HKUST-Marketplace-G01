@@ -3,7 +3,7 @@
 Command: `mvnw.cmd test` (the JaCoCo 0.8.12 report is written during the same run).
 
 - **Branch coverage: 76.2%** (2,220 of 2,915 branches), above the 65% requirement. Every package is measured, including the JavaFX controllers.
-- **Line coverage: 84.9%** (6,479 of 7,627 lines).
+- **Line coverage: 84.9%** (6,473 of 7,627 lines).
 - Without the controllers (business logic only), branch coverage is 89.0%.
 - Full HTML report: [`coverage/index.html`](coverage/index.html).
 
@@ -12,7 +12,7 @@ Command: `mvnw.cmd test` (the JaCoCo 0.8.12 report is written during the same ru
 | `com.hkust.marketplace` | 0.0% | 0.0% |
 | `com.hkust.marketplace.controllers` | 100.0% | — |
 | `com.hkust.marketplace.controllers.admin` | 83.5% | 60.1% |
-| `com.hkust.marketplace.controllers.buyer` | 82.3% | 59.4% |
+| `com.hkust.marketplace.controllers.buyer` | 81.8% | 59.4% |
 | `com.hkust.marketplace.controllers.chat` | 60.1% | 65.4% |
 | `com.hkust.marketplace.controllers.common` | 70.1% | 34.4% |
 | `com.hkust.marketplace.controllers.notifications` | 93.8% | 66.7% |

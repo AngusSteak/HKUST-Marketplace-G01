@@ -94,7 +94,7 @@ HKUST Marketplace,com.hkust.marketplace.controllers.buyer,BuyerDashboardControll
 HKUST Marketplace,com.hkust.marketplace.controllers.buyer,BuyerRegisterController,6,248,2,12,3,61,3,13,1,8
 HKUST Marketplace,com.hkust.marketplace.controllers.buyer,BuyerDashboardController.new TableCell() {...},24,46,7,3,5,13,5,3,1,2
 HKUST Marketplace,com.hkust.marketplace.controllers.buyer,BuyerLoginController,2,88,2,9,2,26,3,11,1,5
-HKUST Marketplace,com.hkust.marketplace.controllers.buyer,BuyerDashboardController,1164,5372,143,201,201,877,145,194,34,127
+HKUST Marketplace,com.hkust.marketplace.controllers.buyer,BuyerDashboardController,1182,5354,143,201,207,871,147,192,36,125
 HKUST Marketplace,com.hkust.marketplace,MarketplaceApp,81,0,2,0,32,0,5,0,4,0
 HKUST Marketplace,com.hkust.marketplace.controllers.common,DateTimeInput,6,109,3,5,0,21,3,6,0,5
 HKUST Marketplace,com.hkust.marketplace.controllers.common,ListingDetailDialog,150,351,28,13,33,71,27,8,3,8

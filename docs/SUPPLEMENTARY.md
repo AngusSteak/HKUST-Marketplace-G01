@@ -39,7 +39,7 @@ Demo accounts: `admin / admin123`, buyers `alice` and `bob` / `password1`, selle
 - Screenshots of every portal screen: [`screenshots/`](screenshots/).
 - Demo script with a 15-minute and an 8-minute path: [`DEMO.md`](DEMO.md).
 
-JaCoCo excludes the JavaFX `controllers` package from the coverage figure because it is UI wiring with little branching logic; the excluded classes still have a few smoke tests.
+JaCoCo measures every package, including the JavaFX `controllers`. Screen tests open the buyer, seller and admin portals on an in-memory copy of the demo data and click through them; they need a display and are skipped without one.
 
 ## Assumptions and limitations
 
