@@ -48,7 +48,7 @@ public final class SellerProfileService {
             throw new IllegalArgumentException("No seller called @" + username);
         }
         List<Review> reviews = data.reviews().forSeller(seller.getUsername()).stream()
-                .sorted(Comparator.comparing(Review::getCreatedAt).reversed())
+                .sorted(ReviewStore.newestFirst())
                 .toList();
         List<Listing> live = data.listings().bySeller(seller.getUsername()).stream()
                 .filter(ListingSearch::isBrowsable)

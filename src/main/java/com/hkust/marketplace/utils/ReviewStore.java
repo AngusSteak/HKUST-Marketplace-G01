@@ -4,6 +4,7 @@ import com.hkust.marketplace.models.Review;
 import com.hkust.marketplace.persistence.Database;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalDouble;
@@ -81,8 +82,19 @@ public class ReviewStore {
     public synchronized List<Review> byBuyer(String username) {
         return reviews.stream()
                 .filter(r -> r.getBuyerUsername().equalsIgnoreCase(username))
-                .sorted(java.util.Comparator.comparing(Review::getCreatedAt).reversed())
+                .sorted(newestFirst())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Newest first. Reviews written within the same clock tick share a timestamp, so the later
+     * insert (higher {@code R} id) breaks the tie; without this, ties kept insertion order and
+     * showed the oldest review first.
+     */
+    public static Comparator<Review> newestFirst() {
+        return Comparator.comparing(Review::getCreatedAt)
+                .thenComparingInt(r -> Integer.parseInt(r.getId().substring(1)))
+                .reversed();
     }
 
     /** Saves a review's changeable fields: hidden (admin), flagged (seller) and the seller's reply. */
